@@ -20,6 +20,8 @@ var _reset_btn: Button
 var _delete_btn: Button
 var _close_btn: Button
 var _start_note: Label
+var _lead: Label
+var _mode_label: Label
 var _delete_mode := false
 
 
@@ -30,32 +32,40 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", UIKit.GAP)
 	add_child(root)
 
+	# 題は舞台の名前。設定ダイアログではなく、世界に言葉を与える場に見せる。
+	_title = UIKit.label("この世界の言葉", 22, UIKit.HEAD)
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_title)
+	_lead = UIKit.label("", 11, UIKit.TEXT_DIM)
+	_lead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_lead)
+
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
+	head.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(head)
-	_title = UIKit.label("この世界の言葉", 15, UIKit.TEXT)
-	head.add_child(_title)
+	_mode_label = UIKit.label("", 11, Color(0.72, 0.30, 0.20))
+	head.add_child(_mode_label)
 
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(gap)
 
-	_reset_btn = UIKit.button(head, "既定に戻す", _reset_all, 10)
-	_reset_btn.custom_minimum_size = Vector2(80, UIKit.ROW_H)
+	_reset_btn = UIKit.button(head, "はじめに戻す", _reset_all, 10)
+	_reset_btn.custom_minimum_size = Vector2(84, UIKit.ROW_H - 3)
 
-	_delete_btn = UIKit.trash_toggle(head, "削除モード")
+	_delete_btn = UIKit.trash_toggle(head, "消すものを選ぶ")
 	_delete_btn.toggled.connect(_on_delete_toggled)
 
-	_close_btn = UIKit.icon_button(head, "✕", "閉じる", _close, 26, UIKit.ROW_H, 13)
+	_close_btn = UIKit.icon_button(head, "✕", "閉じる", _close, 26, UIKit.ROW_H - 3, 13)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(_tabs)
 	_tabs.tab_changed.connect(_on_tab_changed)
 
-	_param_box = _make_tab("パラメータ")
-	_action_box = _make_tab("アクション")
-	_recipe_box = _make_tab("レシピ")
+	_param_box = _make_tab("ことば")
+	_action_box = _make_tab("ふるまい")
+	_recipe_box = _make_tab("つくりかた")
 	_world_box = _make_tab("世界")
 
 	_start_note = UIKit.label("始めると、ここで決めたことは変えられない。", 10, UIKit.TEXT_DIM)
@@ -75,7 +85,8 @@ func _ready() -> void:
 
 func set_editable(on: bool) -> void:
 	editable = on
-	_title.text = "この世界の言葉" if on else "この世界の言葉（もう変えられない）"
+	_lead.text = ("村人が使える言葉と、できることを決める。" if on
+		else "始まった世界の言葉は、もう変えられない。")
 	_start_btn.visible = on
 	_start_note.visible = on
 	_reset_btn.visible = on
@@ -83,6 +94,7 @@ func set_editable(on: bool) -> void:
 	if not on:
 		_delete_mode = false
 		_delete_btn.set_pressed_no_signal(false)
+		_mode_label.text = ""
 	_update_delete_btn()
 	_rebuild_params()
 	_rebuild_actions()
@@ -101,6 +113,7 @@ func _close() -> void:
 func _on_delete_toggled(on: bool) -> void:
 	_delete_mode = on
 	_delete_btn.modulate = Color(1.0, 0.55, 0.5) if on else Color.WHITE
+	_mode_label.text = "消すものを選んでいる" if on else ""
 	_rebuild_params()
 	_rebuild_actions()
 	_rebuild_recipes()
@@ -110,11 +123,19 @@ func _on_tab_changed(_i: int) -> void:
 	_update_delete_btn()
 
 
-## 世界タブには消せるものが無いので隠す
+## 世界タブには消せるものが無い。隠すと右上のボタンの位置が動いてしまうので、
+## 置いたまま効かなくする。
 func _update_delete_btn() -> void:
 	if _delete_btn == null or _tabs == null:
 		return
-	_delete_btn.visible = editable and _tabs.current_tab != 3
+	_delete_btn.visible = editable
+	var usable := _tabs.current_tab != 3
+	_delete_btn.disabled = not usable
+	_delete_btn.modulate = (Color(1.0, 0.55, 0.5) if _delete_mode
+		else Color(1, 1, 1, 1.0 if usable else 0.30))
+	if not usable and _delete_mode:
+		_delete_btn.set_pressed_no_signal(false)
+		_on_delete_toggled(false)
 
 
 func _can_delete() -> bool:
@@ -153,18 +174,28 @@ func _rebuild_params() -> void:
 		return
 	_clear(_param_box)
 	if editable:
-		UIKit.wrapped(_param_box, "村人が自分と他人について語れる言葉を決める。", 11, UIKit.TEXT_DIM)
+		UIKit.wrapped(_param_box, "村人が自分と他人について語れる言葉。", 11, UIKit.TEXT_DIM)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
-		_param_box.add_child(UIKit.label(
-			String(Schema.SCOPE_LABEL[sc]), 13, Color(0.34, 0.28, 0.20)))
+		# 束（カテゴリ）より一段上の区分。素のラベルだと注記に見えるので、
+		# 上に間を空けて罫を添え、見出しとして読ませる。
+		UIKit.spacer(_param_box, UIKit.GAP_S)
+		var sh := HBoxContainer.new()
+		sh.add_theme_constant_override("separation", UIKit.GAP_S)
+		_param_box.add_child(sh)
+		sh.add_child(UIKit.label(String(Schema.SCOPE_LABEL[sc]), 15, UIKit.HEAD))
+		var rule := HSeparator.new()
+		rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		sh.add_child(rule)
+		UIKit.spacer(_param_box, 2)
 
 		for cat in Schema.categories_in(sc):
 			_build_category(sc, String(cat))
 
 		if editable:
-			UIKit.add_button(_param_box, "＋ 束を追加", _add_category.bind(sc))
+			UIKit.add_button(_param_box, "＋ 束を増やす", _add_category.bind(sc))
 		UIKit.spacer(_param_box, 10)
 
 
@@ -205,7 +236,7 @@ func _build_category(scope: String, cat: String) -> void:
 
 	if editable:
 		UIKit.spacer(inner, 2)
-		UIKit.add_button(inner, "＋ ことば", _add_param.bind(scope, cat))
+		UIKit.add_button(inner, "＋ ことばを増やす", _add_param.bind(scope, cat))
 
 
 ## 見出し用の、枠を消した入力欄
@@ -258,7 +289,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	le.text_changed.connect(_set_label.bind(def))
 
 	UIKit.range_row(row, "", -100.0, 100.0, float(def["min"]), float(def["max"]), 1.0,
-		_set_range.bind(def), col, 0)
+		_set_range.bind(def), col, 0, "0〜100")
 
 	if _can_delete():
 		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
@@ -304,88 +335,97 @@ func _rebuild_actions() -> void:
 		return
 	_clear(_action_box)
 	if editable:
-		UIKit.wrapped(_action_box, "村人にできることを決める。", 11, UIKit.TEXT_DIM)
+		UIKit.wrapped(_action_box, "村人にできること。型と、その相手や道具の組み合わせ。", 11, UIKit.TEXT_DIM)
 
 	var kinds: Array = Schema.BEHAVIORS.keys()
-	var kind_labels: Array = []
+
+	# 型で束ねる。パラメータの束と同じ文法にして、画面をまたいで読み方を揃える。
 	for k in kinds:
-		kind_labels.append(Schema.behavior_label(String(k)))
-
-	# 一覧は1枚の表にする。行ごとにカードを積むと、同じ色の箱が階段状に並んで
-	# どこまでが1行なのか分からなくなる。
-	var sheet := UIKit.card(Color(0.94, 0.90, 0.82), UIKit.GAP_S)
-	_action_box.add_child(sheet)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 0)
-	sheet.add_child(rows)
-
-	var first := true
-	for a in Schema.actions:
-		var act: Dictionary = a
-		var aid := String(act["id"])
-		var kind := String(act["kind"])
-		if not first:
-			UIKit.hairline(rows)
-		first = false
-
-		var pad := MarginContainer.new()
-		pad.add_theme_constant_override("margin_top", 3)
-		pad.add_theme_constant_override("margin_bottom", 3)
-		rows.add_child(pad)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", UIKit.GAP_S)
-		pad.add_child(row)
-
-		if not editable:
-			var nm := UIKit.label(String(act["label"]), 12, UIKit.TEXT)
-			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(nm)
-			row.add_child(UIKit.label("%s ／ %s"
-				% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
-				10, UIKit.TEXT_DIM))
+		var kind := String(k)
+		var mine: Array = []
+		for a in Schema.actions:
+			if String(a["kind"]) == kind:
+				mine.append(a)
+		if mine.is_empty() and not editable:
 			continue
 
-		var le := LineEdit.new()
-		le.text = String(act["label"])
-		le.add_theme_font_size_override("font_size", 11)
-		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		le.custom_minimum_size = Vector2(90, UIKit.ROW_H)
-		row.add_child(le)
-		le.text_changed.connect(_set_a_label.bind(act))
+		var card := UIKit.card()
+		_action_box.add_child(card)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", UIKit.GAP_S)
+		card.add_child(box)
+		box.add_child(UIKit.label(Schema.behavior_label(kind), 13, UIKit.HEAD))
+		box.add_child(HSeparator.new())
 
-		var kind_opt := UIKit.dropdown(kinds, kind_labels, kind)
-		kind_opt.custom_minimum_size = Vector2(84, UIKit.ROW_H)
-		row.add_child(kind_opt)
-		kind_opt.item_selected.connect(func(i: int) -> void:
-			_set_kind(String(kinds[i]), act))
+		var rows := VBoxContainer.new()
+		rows.add_theme_constant_override("separation", 0)
+		box.add_child(rows)
 
-		var tkeys: Array = Schema.targets_of(kind).keys()
-		if tkeys.is_empty():
-			var none := UIKit.label("対象がない", 10, Color(0.72, 0.36, 0.18))
-			none.custom_minimum_size = Vector2(124, 0)
-			row.add_child(none)
-		else:
-			var tlabels: Array = []
-			for t in tkeys:
-				tlabels.append(Schema.target_label(kind, String(t)))
-			var t_opt := UIKit.dropdown(tkeys, tlabels, String(act["target"]))
-			t_opt.custom_minimum_size = Vector2(124, UIKit.ROW_H)
-			row.add_child(t_opt)
-			t_opt.item_selected.connect(func(i: int) -> void:
-				_set_target(String(tkeys[i]), act))
+		var first := true
+		for a2 in mine:
+			var act: Dictionary = a2
+			var aid := String(act["id"])
+			if not first:
+				UIKit.hairline(rows)
+			first = false
 
-		if _can_delete():
-			UIKit.icon_button(row, "✕", "%s を消す" % String(act["label"]),
-				_del_action.bind(aid), 26, UIKit.ROW_H, 13)
+			var pad := MarginContainer.new()
+			pad.add_theme_constant_override("margin_top", 3)
+			pad.add_theme_constant_override("margin_bottom", 3)
+			rows.add_child(pad)
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", UIKit.GAP_S)
+			pad.add_child(row)
 
-	if editable:
-		UIKit.spacer(_action_box, 4)
-		UIKit.add_button(_action_box, "＋ アクションを追加", _add_action)
+			if not editable:
+				var nm := UIKit.label(String(act["label"]), 12, UIKit.TEXT)
+				nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				row.add_child(nm)
+				row.add_child(UIKit.label(
+					Schema.target_label(kind, String(act["target"])), 10, UIKit.TEXT_DIM))
+				continue
+
+			var le := LineEdit.new()
+			le.text = String(act["label"])
+			le.add_theme_font_size_override("font_size", 11)
+			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			le.custom_minimum_size = Vector2(96, UIKit.ROW_H)
+			row.add_child(le)
+			le.text_changed.connect(_set_a_label.bind(act))
+
+			var tkeys: Array = Schema.targets_of(kind).keys()
+			if tkeys.is_empty():
+				var none := UIKit.label("相手がない", 10, Color(0.72, 0.36, 0.18))
+				none.custom_minimum_size = Vector2(136, 0)
+				row.add_child(none)
+			else:
+				var tlabels: Array = []
+				for t in tkeys:
+					tlabels.append(Schema.target_label(kind, String(t)))
+				var t_opt := UIKit.dropdown(tkeys, tlabels, String(act["target"]))
+				t_opt.custom_minimum_size = Vector2(136, UIKit.ROW_H)
+				row.add_child(t_opt)
+				t_opt.item_selected.connect(func(i: int) -> void:
+					_set_target(String(tkeys[i]), act))
+
+			if _can_delete():
+				UIKit.icon_button(row, "✕", "%s を消す" % String(act["label"]),
+					_del_action.bind(aid), 26, UIKit.ROW_H, 13)
+
+		if editable:
+			UIKit.spacer(rows, 2)
+			UIKit.add_button(rows, "＋ %sを増やす" % Schema.behavior_label(kind),
+				_add_action_of.bind(kind))
+
 	UIKit.spacer(_action_box, 10)
 
 
-func _add_action() -> void:
-	Schema.add_action()
+func _add_action_of(kind: String) -> void:
+	var a := Schema.add_action()
+	a["kind"] = kind
+	a["target"] = Schema.first_target(kind)
+	a["label"] = Schema.behavior_label(kind)
+	Schema.actions_changed.emit()
 
 
 func _del_action(aid: String) -> void:
@@ -394,12 +434,6 @@ func _del_action(aid: String) -> void:
 
 func _set_a_label(text: String, act: Dictionary) -> void:
 	act["label"] = text
-
-
-func _set_kind(key: String, act: Dictionary) -> void:
-	act["kind"] = key
-	act["target"] = Schema.first_target(key)
-	Schema.actions_changed.emit()
 
 
 func _set_target(key: String, act: Dictionary) -> void:
@@ -417,25 +451,56 @@ func _rebuild_world() -> void:
 		return
 	_clear(_world_box)
 	if editable:
-		UIKit.wrapped(_world_box, "世界そのものの速さと大きさを決める。", 11, UIKit.TEXT_DIM)
+		UIKit.wrapped(_world_box, "世界そのものの流れかた。", 11, UIKit.TEXT_DIM)
 
+	# 他のタブと同じく1枚の紙にまとめる。ここだけ素の行が並ぶと設定画面に戻ってしまう。
+	var card := UIKit.card()
+	_world_box.add_child(card)
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 0)
+	card.add_child(rows)
+
+	var first := true
 	for k in SimConfig.PARAM_DEF:
 		var key := String(k)
 		var d: Array = SimConfig.PARAM_DEF[key]
+		if not first:
+			UIKit.hairline(rows)
+		first = false
+		var pad := MarginContainer.new()
+		pad.add_theme_constant_override("margin_top", 3)
+		pad.add_theme_constant_override("margin_bottom", 3)
+		rows.add_child(pad)
+
 		if editable:
-			UIKit.slider_row(_world_box, String(d[3]), SimConfig.p(key),
+			UIKit.slider_row(pad, String(d[3]), SimConfig.p(key),
 				float(d[1]), float(d[2]), _step_for(float(d[1]), float(d[2])),
-				_set_world.bind(key), Color(0.55, 0.75, 0.95), 150)
+				_set_world.bind(key), UIKit.WOOD, 150, _world_text.bind(key))
 		else:
 			var row := HBoxContainer.new()
-			_world_box.add_child(row)
+			pad.add_child(row)
 			var nm := UIKit.label(String(d[3]), 11, UIKit.TEXT)
 			nm.custom_minimum_size = Vector2(150, 0)
 			row.add_child(nm)
-			row.add_child(UIKit.label(UIKit._fmt(SimConfig.p(key),
-				_step_for(float(d[1]), float(d[2]))), 11, UIKit.TEXT_DIM))
+			row.add_child(UIKit.label(_world_text(SimConfig.p(key), key), 11, UIKit.TEXT_DIM))
 
 	UIKit.spacer(_world_box, 10)
+
+
+## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
+func _world_text(v: float, key: String) -> String:
+	match key:
+		"day_length_sec":
+			return "%d秒" % int(v)
+		"night_starts_at":
+			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
+		"decision_interval":
+			return "%.1f秒" % v
+		"move_speed":
+			return "%.1fマス/秒" % v
+		"summaries_kept":
+			return "%d日" % int(v)
+	return UIKit._fmt(v, 1.0)
 
 
 func _set_world(x: float, key: String) -> void:
@@ -460,7 +525,7 @@ func _rebuild_recipes() -> void:
 		return
 	_clear(_recipe_box)
 	if editable:
-		UIKit.wrapped(_recipe_box, "材料を組み合わせて作れるものを決める。", 11, UIKit.TEXT_DIM)
+		UIKit.wrapped(_recipe_box, "材料を組み合わせて作れるもの。", 11, UIKit.TEXT_DIM)
 
 	for r in Schema.recipes:
 		var rec: Dictionary = r
@@ -489,6 +554,19 @@ func _rebuild_recipes() -> void:
 			UIKit.icon_button(head, "✕", "%s を消す" % String(rec["label"]),
 				_del_recipe.bind(rid), 26, UIKit.ROW_H, 13)
 
+		# 材料の増減だけだと在庫表に見える。何が何になるのかを1行の式で見せる
+		var formula := ""
+		for item in rec["inputs"]:
+			var n := int(rec["inputs"][item])
+			if n <= 0:
+				continue
+			if formula != "":
+				formula += "  ＋  "
+			formula += "%s×%d" % [Schema.item_label(String(item)), n]
+		formula = ("材料なし" if formula == "" else formula)
+		formula += "  →  " + String(rec["label"])
+		box.add_child(UIKit.label(formula, 11, UIKit.TEXT_DIM))
+
 		box.add_child(HSeparator.new())
 
 		var indent := MarginContainer.new()
@@ -504,9 +582,11 @@ func _rebuild_recipes() -> void:
 				var iid := String(item)
 				if iid == rid:
 					continue  # 自分自身は材料にできない
-				UIKit.stepper_row(inner, Schema.item_label(iid),
-					int(rec["inputs"].get(iid, 0)), 9,
-					_set_input.bind(rid, iid), 70)
+				# 使っていない材料は0のまま並ぶ。薄くして、実際の材料だけが読めるようにする
+				var n := int(rec["inputs"].get(iid, 0))
+				var srow := UIKit.stepper_row(inner, Schema.item_label(iid),
+					n, 9, _set_input.bind(rid, iid), 70)
+				srow.modulate = Color(1, 1, 1, 1.0 if n > 0 else 0.45)
 		else:
 			var mats := ""
 			for item in rec["inputs"]:
@@ -517,7 +597,7 @@ func _rebuild_recipes() -> void:
 
 	if editable:
 		UIKit.spacer(_recipe_box, 4)
-		UIKit.add_button(_recipe_box, "＋ レシピを追加", _add_recipe)
+		UIKit.add_button(_recipe_box, "＋ つくりかたを増やす", _add_recipe)
 	UIKit.spacer(_recipe_box, 10)
 
 

@@ -14,6 +14,7 @@ const BG := Color(0.95, 0.91, 0.82)       ## 紙
 const BG_SOFT := Color(0.90, 0.85, 0.74)  ## 紙の上に置く紙
 const TEXT := Color(0.20, 0.17, 0.13)     ## 墨
 const TEXT_DIM := Color(0.46, 0.41, 0.34)
+const PAGE := Color(0.98, 0.95, 0.89)
 const WOOD := Color(0.46, 0.33, 0.21)     ## 枠
 const HEAD := Color(0.36, 0.26, 0.16)     ## 見出し
 const INK := Color(0.30, 0.22, 0.14, 0.10)   ## 押せるものの下地
@@ -68,8 +69,22 @@ static func build_theme(font: Font) -> Theme:
 		th.set_color("font_pressed_color", t, Color(0.10, 0.08, 0.05))
 		th.set_color("font_disabled_color", t, Color(0.30, 0.26, 0.20, 0.4))
 
-	th.set_stylebox("normal", "LineEdit", flat.call(SUNK, 6, 8, 4))
-	th.set_stylebox("focus", "LineEdit", flat.call(Color(0.30, 0.22, 0.14, 0.22), 6, 8, 4))
+	# 名前欄はインクの罫線。箱で塗ると「無効になった入力欄」に見えて、
+	# 言葉を書き込む場所だと伝わらない。
+	var ruled := func(alpha: float, width: int) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.30, 0.22, 0.14, alpha)
+		sb.corner_radius_top_left = 4
+		sb.corner_radius_top_right = 4
+		sb.border_color = Color(0.46, 0.33, 0.21, 0.55)
+		sb.border_width_bottom = width
+		sb.content_margin_left = 6
+		sb.content_margin_right = 6
+		sb.content_margin_top = 4
+		sb.content_margin_bottom = 3
+		return sb
+	th.set_stylebox("normal", "LineEdit", ruled.call(0.04, 1))
+	th.set_stylebox("focus", "LineEdit", ruled.call(0.10, 2))
 	th.set_color("font_color", "LineEdit", TEXT)
 	th.set_color("font_placeholder_color", "LineEdit", Color(0.30, 0.26, 0.20, 0.45))
 	th.set_color("caret_color", "LineEdit", TEXT)
@@ -80,21 +95,45 @@ static func build_theme(font: Font) -> Theme:
 	th.set_stylebox("hover", "PopupMenu", flat.call(INK_HOVER, 5, 6, 3))
 
 	th.set_stylebox("panel", "TabContainer", StyleBoxEmpty.new())
-	# 選ばれているタブは木の色で塗り、紙の文字を乗せる。半端な濃さだと選択が読めない
+	# タブは紙の束の見出し。選ばれている紙だけが手前に来て、下の面と地続きになる。
+	# 独立した札にすると、中身とタブが別の部品に見えてしまう。
 	var tab_on := StyleBoxFlat.new()
-	tab_on.bg_color = WOOD
-	# 下だけ角が立っていると、中身の面に刺さって切れたように見える。札として全周を丸める
-	tab_on.set_corner_radius_all(7)
-	tab_on.content_margin_left = 14
-	tab_on.content_margin_right = 14
-	tab_on.content_margin_top = 6
-	tab_on.content_margin_bottom = 6
+	tab_on.bg_color = PAGE
+	tab_on.corner_radius_top_left = 8
+	tab_on.corner_radius_top_right = 8
+	tab_on.corner_radius_bottom_left = 0
+	tab_on.corner_radius_bottom_right = 0
+	tab_on.border_color = Color(0.46, 0.33, 0.21, 0.30)
+	tab_on.border_width_left = 1
+	tab_on.border_width_top = 1
+	tab_on.border_width_right = 1
+	tab_on.content_margin_left = 15
+	tab_on.content_margin_right = 15
+	tab_on.content_margin_top = 7
+	tab_on.content_margin_bottom = 7
+	# 下の面の縁を覆って、タブと紙をひと続きに見せる
+	tab_on.expand_margin_bottom = 3
 	th.set_stylebox("tab_selected", "TabContainer", tab_on)
-	th.set_stylebox("tab_unselected", "TabContainer",
-		flat.call(Color(0.30, 0.22, 0.14, 0.08), 7, 14, 6))
-	th.set_stylebox("tab_hovered", "TabContainer",
-		flat.call(Color(0.30, 0.22, 0.14, 0.16), 7, 14, 6))
-	th.set_color("font_selected_color", "TabContainer", Color(0.97, 0.94, 0.87))
+
+	# 奥の紙は少し沈めて、上端も一段下げる
+	var tab_off := StyleBoxFlat.new()
+	tab_off.bg_color = Color(0.90, 0.85, 0.76)
+	tab_off.corner_radius_top_left = 8
+	tab_off.corner_radius_top_right = 8
+	tab_off.border_color = Color(0.46, 0.33, 0.21, 0.18)
+	tab_off.border_width_left = 1
+	tab_off.border_width_top = 1
+	tab_off.border_width_right = 1
+	tab_off.content_margin_left = 15
+	tab_off.content_margin_right = 15
+	tab_off.content_margin_top = 9
+	tab_off.content_margin_bottom = 5
+	th.set_stylebox("tab_unselected", "TabContainer", tab_off)
+
+	var tab_hover := tab_off.duplicate() as StyleBoxFlat
+	tab_hover.bg_color = Color(0.94, 0.90, 0.82)
+	th.set_stylebox("tab_hovered", "TabContainer", tab_hover)
+	th.set_color("font_selected_color", "TabContainer", HEAD)
 	th.set_color("font_unselected_color", "TabContainer", TEXT_DIM)
 	th.set_color("font_hovered_color", "TabContainer", TEXT)
 
@@ -190,13 +229,13 @@ static func wrapped(parent: Node, text: String, size: int = 11, col: Color = TEX
 	return l
 
 
-## ラベル + スライダー + 数値。on_change(new_value) が呼ばれる。
+## ラベル + 積み木 + 数値。on_change(new_value) が呼ばれる。
 static func slider_row(
 	parent: Node, name_text: String, value: float,
 	vmin: float, vmax: float, step: float,
-	on_change: Callable, bar_color: Color = Color(0.5, 0.7, 0.95),
-	name_width: int = 62
-) -> HSlider:
+	on_change: Callable, bar_color: Color = Color(0.55, 0.42, 0.26),
+	name_width: int = 62, fmt: Callable = Callable()
+) -> BlockSlider:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
@@ -205,27 +244,22 @@ static func slider_row(
 	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
 
-	var s := HSlider.new()
-	s.min_value = vmin
-	s.max_value = vmax
-	s.step = step
-	s.value = clampf(value, vmin, vmax)
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	s.custom_minimum_size = Vector2(80, 18)
-	var grabber := StyleBoxFlat.new()
-	grabber.bg_color = bar_color
-	grabber.set_corner_radius_all(3)
-	s.add_theme_stylebox_override("grabber_area", grabber)
-	s.add_theme_stylebox_override("grabber_area_highlight", grabber)
-	row.add_child(s)
+	var show := func(x: float) -> String:
+		return String(fmt.call(x)) if fmt.is_valid() else _fmt(x, step)
 
-	var val := label(_fmt(s.value, step), 11, TEXT_DIM)
-	val.custom_minimum_size = Vector2(44, 0)
+	var val := label(show.call(value), 11, TEXT_DIM)
+	val.custom_minimum_size = Vector2(62, 0)
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(val)
 
-	s.value_changed.connect(func(x: float) -> void:
-		val.text = _fmt(x, step)
+	var s := BlockSlider.new()
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(s)
+	s.setup(value, vmin, vmax, step, bar_color)
+
+	s.changed.connect(func(x: float) -> void:
+		val.text = show.call(x)
 		on_change.call(x)
 	)
 	return s
@@ -295,9 +329,10 @@ static func add_button(parent: Node, text: String, on_press: Callable) -> Button
 ## めくって切り替えている感じになる。
 static func page_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.98, 0.95, 0.89)
+	sb.bg_color = PAGE
 	sb.set_corner_radius_all(8)
-	sb.corner_radius_top_left = 2
+	# 左上はタブが乗る側。角を落として、見出しから紙へ繋げる
+	sb.corner_radius_top_left = 0
 	sb.content_margin_left = PAD_S
 	sb.content_margin_right = PAD_S
 	sb.content_margin_top = PAD_S
@@ -495,7 +530,7 @@ static func check_row(parent: Node, name_text: String, value: bool, on_toggle: C
 ## 下限と上限を1本で決める行
 static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 		lo: float, hi: float, step: float, on_change: Callable, col: Color,
-		name_width: int = 62) -> RangeSlider:
+		name_width: int = 62, plain: String = "") -> RangeSlider:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
@@ -503,10 +538,16 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
 
-	var val := label("%d〜%d" % [int(lo), int(hi)], 11, TEXT_DIM)
+	# 手つかずの範囲は薄く。全行に同じ数字が並ぶと、読む値が無いのと同じになる
+	var faint := Color(0.30, 0.26, 0.20, 0.40)
+	var txt := func(l: float, h: float) -> String:
+		return "%d〜%d" % [int(l), int(h)]
+	var val := label(txt.call(lo, hi), 11, TEXT_DIM)
 	val.custom_minimum_size = Vector2(58, 0)
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(val)
+	if val.text == plain:
+		val.add_theme_color_override("font_color", faint)
 
 	var rs := RangeSlider.new()
 	rs.custom_minimum_size = Vector2(112, ROW_H)
@@ -514,7 +555,9 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	rs.setup(vmin, vmax, lo, hi, step, col)
 
 	rs.changed.connect(func(l: float, h: float) -> void:
-		val.text = "%d〜%d" % [int(l), int(h)]
+		val.text = txt.call(l, h)
+		val.add_theme_color_override("font_color",
+			faint if val.text == plain else TEXT_DIM)
 		on_change.call(l, h)
 	)
 	return rs
@@ -522,7 +565,7 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 
 ## ラベル + −/数/+ の行。on_change(new_count) が呼ばれる。
 static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
-		on_change: Callable, name_width: int = 62) -> void:
+		on_change: Callable, name_width: int = 62) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP_S)
 	parent.add_child(row)
@@ -555,6 +598,7 @@ static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
 		on_change.call(count[0])
 	minus.pressed.connect(func() -> void: apply.call(-1))
 	plus.pressed.connect(func() -> void: apply.call(1))
+	return row
 
 
 ## 折りたたみ。中身を入れる VBoxContainer を返す。

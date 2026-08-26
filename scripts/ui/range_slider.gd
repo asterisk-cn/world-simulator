@@ -4,8 +4,6 @@ extends Control
 
 signal changed(lo: float, hi: float)
 
-const PAD := 7.0
-
 var min_value := -100.0
 var max_value := 100.0
 var step := 1.0
@@ -17,7 +15,7 @@ var _drag := -1  ## -1 なし / 0 下限 / 1 上限
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(90, 20)
+	custom_minimum_size = Vector2(112, UIKit.ROW_H - 6)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	resized.connect(queue_redraw)
 
@@ -35,11 +33,11 @@ func setup(p_min: float, p_max: float, p_lo: float, p_hi: float,
 
 func _pos_of(v: float) -> float:
 	var t := (v - min_value) / maxf(max_value - min_value, 0.001)
-	return PAD + clampf(t, 0.0, 1.0) * maxf(size.x - PAD * 2.0, 1.0)
+	return clampf(t, 0.0, 1.0) * size.x
 
 
 func _value_at(x: float) -> float:
-	var t := clampf((x - PAD) / maxf(size.x - PAD * 2.0, 1.0), 0.0, 1.0)
+	var t := clampf(x / maxf(size.x, 1.0), 0.0, 1.0)
 	return snappedf(min_value + t * (max_value - min_value), step)
 
 
@@ -67,15 +65,28 @@ func _apply(x: float) -> void:
 	changed.emit(lo, hi)
 
 
+## 値を見せる側（PipBar）と同じ積み木で描く。
+## 決める側と見る側で形が違うと、自分が決めたものが村人の中で動いている感じが出ない。
+const BLOCKS := 10
+const BGAP := 3.0
+
+
 func _draw() -> void:
-	var y := size.y * 0.5
-	draw_line(Vector2(PAD, y), Vector2(size.x - PAD, y), Color(0.30, 0.22, 0.14, 0.16), 3.0)
-	draw_line(Vector2(_pos_of(lo), y), Vector2(_pos_of(hi), y), tint, 3.0)
-	# 0 の位置に目印
+	var span: float = maxf(max_value - min_value, 0.001)
+	var t0: float = (lo - min_value) / span
+	var t1: float = (hi - min_value) / span
+	var w := (size.x - BGAP * float(BLOCKS - 1)) / float(BLOCKS)
+	for i in range(BLOCKS):
+		var c := (float(i) + 0.5) / float(BLOCKS)
+		var x := float(i) * (w + BGAP)
+		var on := c >= t0 and c <= t1
+		draw_colored_polygon(Iso.rounded(PackedVector2Array([
+			Vector2(x, 0), Vector2(x + w, 0),
+			Vector2(x + w, size.y), Vector2(x, size.y),
+		]), 2.0), tint if on else Color(0.30, 0.22, 0.14, 0.13))
+
+	# 0 の位置に印。これが無いと「右半分が塗られている＝値が高い」に読めてしまう
 	if min_value < 0.0 and max_value > 0.0:
-		var zx := _pos_of(0.0)
-		draw_line(Vector2(zx, y - 5.0), Vector2(zx, y + 5.0), Color(0.30, 0.22, 0.14, 0.30), 1.0)
-	# つまみは塗りつぶす。透けると溝の色が乗って掴めるものに見えない
-	for x in [_pos_of(lo), _pos_of(hi)]:
-		draw_circle(Vector2(x, y), 6.0, UIKit.WOOD)
-		draw_circle(Vector2(x, y), 4.4, Color(0.98, 0.96, 0.90))
+		var zx: float = _pos_of(0.0)
+		draw_line(Vector2(zx, -1.0), Vector2(zx, size.y + 1.0),
+			Color(0.30, 0.22, 0.14, 0.40), 1.0)

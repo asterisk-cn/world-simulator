@@ -9,8 +9,6 @@ var world = null
 var subject = null
 
 var _body: VBoxContainer
-var _live := {}
-var _dragging := {}
 var _known_count := -1
 var _opened := {}  ## other_id -> 畳んでいないか
 var _refresh_accum := 0.0
@@ -42,24 +40,10 @@ func _process(delta: float) -> void:
 		rebuild()
 		return
 
-	for key in _live:
-		if _dragging.get(key, false):
-			continue
-		var entry: Dictionary = _live[key]
-		var s: HSlider = entry["slider"]
-		if not is_instance_valid(s):
-			continue
-		var nv: float = float(entry["get"].call())
-		if absf(s.value - nv) > 0.005:
-			s.set_value_no_signal(nv)
-			var lbl = entry.get("label", null)
-			if lbl != null and is_instance_valid(lbl):
-				lbl.text = UIKit._fmt(nv, s.step)
+	rebuild()
 
 
 func rebuild() -> void:
-	_live.clear()
-	_dragging.clear()
 	for c in _body.get_children():
 		_body.remove_child(c)
 		c.queue_free()
@@ -75,26 +59,6 @@ func rebuild() -> void:
 	_build_self_params()
 	_build_pairs()
 	_build_memory()
-
-
-func _live_slider(
-	parent: Node, key: String, name_text: String, getter: Callable, setter: Callable,
-	vmin: float, vmax: float, step: float, col: Color, name_width: int = 62
-) -> void:
-	var s := UIKit.slider_row(parent, name_text, float(getter.call()), vmin, vmax, step,
-		setter, col, name_width)
-	var val_label = s.get_parent().get_child(2)
-	_live[key] = {"slider": s, "get": getter, "label": val_label}
-	s.drag_started.connect(_on_drag_started.bind(key))
-	s.drag_ended.connect(_on_drag_ended.bind(key))
-
-
-func _on_drag_started(key: String) -> void:
-	_dragging[key] = true
-
-
-func _on_drag_ended(_changed: bool, key: String) -> void:
-	_dragging[key] = false
 
 
 # ---------------------------------------------------------------------------

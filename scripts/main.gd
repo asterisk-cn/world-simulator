@@ -201,6 +201,10 @@ func _process(_delta: float) -> void:
 	var night := Color(0.30, 0.36, 0.72)
 	modulate_node.color = Color.WHITE.lerp(night, d * 0.82)
 
+	# 始まる前の世界は、まだ言葉を持たない場所として沈めておく
+	if not started:
+		modulate_node.color = Color(0.44, 0.48, 0.62)
+
 	# 紙のUIは夜でも明るいままだと、観察したい世界より前に出てしまう
 	var dim := Color.WHITE.lerp(Color(0.80, 0.81, 0.88), d)
 	for c in hud.get_children():

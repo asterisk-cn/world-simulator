@@ -31,11 +31,11 @@ const SCOPE_LABEL := {
 
 const BEHAVIORS := {
 	"move": {"label": "動く"},
-	"gather": {"label": "採取"},
-	"craft": {"label": "制作"},
-	"build": {"label": "建設"},
-	"use": {"label": "使用"},
-	"social": {"label": "交流"},
+	"gather": {"label": "採る"},
+	"craft": {"label": "作る"},
+	"build": {"label": "建てる"},
+	"use": {"label": "使う"},
+	"social": {"label": "関わる"},
 }
 
 ## 型ごとに選べる対象。
@@ -75,8 +75,8 @@ const TARGETS := {
 ## 世界に元からある持ち物。採取で手に入る。
 const ITEMS := {
 	"food": "木の実",
-	"wood": "木材",
-	"stone": "石材",
+	"wood": "木",
+	"stone": "石",
 }
 
 var parameters: Array = []

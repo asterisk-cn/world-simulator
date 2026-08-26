@@ -1,10 +1,10 @@
 class_name HarvestNode
 extends Node2D
-## 採取対象。木の実（食料）・木（木材）・岩（石材）。
+## 採取対象。木の実・木・石。採ったものはそのまま同じ名前の持ち物になる。
 
 enum Kind { BERRY, TREE, ROCK }
 
-const KIND_NAME := {Kind.BERRY: "木の実", Kind.TREE: "木", Kind.ROCK: "岩"}
+const KIND_NAME := {Kind.BERRY: "木の実", Kind.TREE: "木", Kind.ROCK: "石"}
 const KIND_ITEM := {Kind.BERRY: "food", Kind.TREE: "wood", Kind.ROCK: "stone"}
 
 var kind: int = Kind.BERRY

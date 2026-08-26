@@ -15,6 +15,8 @@ var _world_box: VBoxContainer
 var _title: Label
 var _start_btn: Button
 var _reset_btn: Button
+var _delete_btn: Button
+var _delete_mode := false
 
 
 func _ready() -> void:
@@ -34,15 +36,30 @@ func _ready() -> void:
 	add_child(root)
 
 	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
 	root.add_child(head)
 	_title = UIKit.label("設定", 14, Color(0.85, 0.9, 0.98))
 	head.add_child(_title)
+
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(gap)
+
 	_reset_btn = UIKit.button(head, "既定に戻す", _reset_all, 10)
-	_reset_btn.custom_minimum_size = Vector2(90, 22)
+	_reset_btn.custom_minimum_size = Vector2(80, 22)
+
+	_delete_btn = Button.new()
+	_delete_btn.text = "削除"
+	_delete_btn.toggle_mode = true
+	_delete_btn.add_theme_font_size_override("font_size", 10)
+	_delete_btn.custom_minimum_size = Vector2(52, 22)
+	head.add_child(_delete_btn)
+	_delete_btn.toggled.connect(_on_delete_toggled)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(_tabs)
+	_tabs.tab_changed.connect(_on_tab_changed)
 
 	_param_box = _make_tab("パラメータ")
 	_action_box = _make_tab("アクション")
@@ -63,6 +80,10 @@ func set_editable(on: bool) -> void:
 	_title.text = "設定" if on else "設定（開始後は変更できない）"
 	_start_btn.visible = on
 	_reset_btn.visible = on
+	if not on:
+		_delete_mode = false
+		_delete_btn.set_pressed_no_signal(false)
+	_update_delete_btn()
 	_rebuild_params()
 	_rebuild_actions()
 	_rebuild_world()
@@ -70,6 +91,28 @@ func set_editable(on: bool) -> void:
 
 func _on_start() -> void:
 	started.emit()
+
+
+func _on_delete_toggled(on: bool) -> void:
+	_delete_mode = on
+	_delete_btn.modulate = Color(1.0, 0.55, 0.5) if on else Color.WHITE
+	_rebuild_params()
+	_rebuild_actions()
+
+
+func _on_tab_changed(_i: int) -> void:
+	_update_delete_btn()
+
+
+## 世界タブには消せるものが無いので隠す
+func _update_delete_btn() -> void:
+	if _delete_btn == null or _tabs == null:
+		return
+	_delete_btn.visible = editable and _tabs.current_tab != 2
+
+
+func _can_delete() -> bool:
+	return editable and _delete_mode
 
 
 func _make_tab(title: String) -> VBoxContainer:
@@ -126,32 +169,61 @@ func _build_category(scope: String, cat: String) -> void:
 	box.add_theme_constant_override("separation", 2)
 	card.add_child(box)
 
+	# 見出し
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	box.add_child(head)
-	head.add_child(UIKit.label("■", 13, col))
+	head.add_child(UIKit.label("■", 14, col))
 	if editable:
-		var le := LineEdit.new()
-		le.text = cat
-		le.add_theme_font_size_override("font_size", 12)
-		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		le.custom_minimum_size = Vector2(80, 22)
-		head.add_child(le)
-		le.text_submitted.connect(_rename_category.bind(scope, cat))
-		le.focus_exited.connect(func() -> void: _rename_category(le.text, scope, cat))
+		head.add_child(_flat_edit(cat, col, scope))
 	else:
-		head.add_child(UIKit.label(cat, 12, Color(0.9, 0.92, 0.98)))
+		head.add_child(UIKit.label(cat, 13, col))
+	if _can_delete():
+		var dc := UIKit.button(head, "×", _del_category.bind(scope, cat), 11)
+		dc.custom_minimum_size = Vector2(26, 22)
+
+	box.add_child(HSeparator.new())
+
+	# 中身は一段下げる
+	var indent := MarginContainer.new()
+	indent.add_theme_constant_override("margin_left", 14)
+	box.add_child(indent)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 2)
+	indent.add_child(inner)
 
 	for d in Schema.params_in(scope):
 		if String(d["category"]) != cat:
 			continue
-		_build_param(box, d)
+		_build_param(inner, d)
 
 	if editable:
-		UIKit.button(box, "＋ パラメータ", _add_param.bind(scope, cat), 10)
+		UIKit.button(inner, "＋ パラメータ", _add_param.bind(scope, cat), 10)
 
 
-func _build_param(box: VBoxContainer, def: Dictionary) -> void:
+## 見出し用の、枠を消した入力欄
+func _flat_edit(cat: String, col: Color, scope: String) -> LineEdit:
+	var le := LineEdit.new()
+	le.text = cat
+	le.add_theme_font_size_override("font_size", 13)
+	le.add_theme_color_override("font_color", col)
+	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	le.custom_minimum_size = Vector2(80, 24)
+	var flat := StyleBoxFlat.new()
+	flat.bg_color = Color(0, 0, 0, 0)
+	flat.content_margin_left = 2
+	le.add_theme_stylebox_override("normal", flat)
+	var focused := StyleBoxFlat.new()
+	focused.bg_color = Color(1, 1, 1, 0.06)
+	focused.set_corner_radius_all(3)
+	focused.content_margin_left = 2
+	le.add_theme_stylebox_override("focus", focused)
+	le.text_submitted.connect(_rename_category.bind(scope, cat))
+	le.focus_exited.connect(func() -> void: _rename_category(le.text, scope, cat))
+	return le
+
+
+func _build_param(box: Node, def: Dictionary) -> void:
 	var pid := String(def["id"])
 	var col := Schema.param_color(pid)
 
@@ -177,12 +249,17 @@ func _build_param(box: VBoxContainer, def: Dictionary) -> void:
 	UIKit.range_row(row, "", -100.0, 100.0, float(def["min"]), float(def["max"]), 1.0,
 		_set_range.bind(def), col, 0)
 
-	var del := UIKit.button(row, "×", _del_param.bind(pid), 11)
-	del.custom_minimum_size = Vector2(26, 22)
+	if _can_delete():
+		var del := UIKit.button(row, "×", _del_param.bind(pid), 11)
+		del.custom_minimum_size = Vector2(26, 22)
 
 
 func _add_category(scope: String) -> void:
 	Schema.add_category(scope)
+
+
+func _del_category(scope: String, cat: String) -> void:
+	Schema.remove_category(scope, cat)
 
 
 func _rename_category(new_name: String, scope: String, old_name: String) -> void:
@@ -231,23 +308,37 @@ func _rebuild_actions() -> void:
 		box.add_theme_constant_override("separation", 2)
 		card.add_child(box)
 
-		var head := HBoxContainer.new()
-		box.add_child(head)
-		head.add_child(UIKit.label(String(act["label"]), 13, Color(0.9, 0.92, 0.98)))
-		head.add_child(UIKit.label("  %s ／ %s"
-			% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
-			10, UIKit.TEXT_DIM))
 		if not editable:
+			var head := HBoxContainer.new()
+			head.add_theme_constant_override("separation", 8)
+			box.add_child(head)
+			head.add_child(UIKit.label(String(act["label"]), 13, Color(0.9, 0.92, 0.98)))
+			head.add_child(UIKit.label("%s ／ %s"
+				% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
+				10, UIKit.TEXT_DIM))
 			if not bool(act["enabled"]):
-				head.add_child(UIKit.label("  無効", 10, Color(0.85, 0.5, 0.45)))
+				head.add_child(UIKit.label("無効", 10, Color(0.85, 0.5, 0.45)))
 			continue
 
-		UIKit.check_row(head, "有効", bool(act["enabled"]), _set_enabled.bind(act))
-		var del := UIKit.button(head, "削除", _del_action.bind(aid), 10)
-		del.custom_minimum_size = Vector2(46, 22)
+		var name_row := HBoxContainer.new()
+		name_row.add_theme_constant_override("separation", 6)
+		box.add_child(name_row)
+		var nm := UIKit.label("名前", 11, UIKit.TEXT)
+		nm.custom_minimum_size = Vector2(48, 0)
+		name_row.add_child(nm)
+		var le := LineEdit.new()
+		le.text = String(act["label"])
+		le.add_theme_font_size_override("font_size", 11)
+		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		le.custom_minimum_size = Vector2(80, 22)
+		name_row.add_child(le)
+		le.text_changed.connect(_set_a_label.bind(act))
+		UIKit.check_row(name_row, "有効", bool(act["enabled"]), _set_enabled.bind(act))
+		if _can_delete():
+			var del := UIKit.button(name_row, "×", _del_action.bind(aid), 11)
+			del.custom_minimum_size = Vector2(26, 22)
 
-		UIKit.line_edit_row(box, "名前", String(act["label"]), _set_a_label.bind(act))
-		UIKit.option_row(box, "型", kinds, kind_labels, kind, _set_kind.bind(act))
+		UIKit.option_row(box, "タイプ", kinds, kind_labels, kind, _set_kind.bind(act), 48)
 
 		var tkeys: Array = Schema.targets_of(kind).keys()
 		if tkeys.is_empty():
@@ -257,7 +348,7 @@ func _rebuild_actions() -> void:
 			for t in tkeys:
 				tlabels.append(Schema.target_label(kind, String(t)))
 			UIKit.option_row(box, "対象", tkeys, tlabels, String(act["target"]),
-				_set_target.bind(act))
+				_set_target.bind(act), 48)
 
 	if editable:
 		UIKit.spacer(_action_box, 4)

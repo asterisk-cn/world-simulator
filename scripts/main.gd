@@ -69,8 +69,8 @@ func _show_setup(on: bool) -> void:
 	rules_panel.visible = on
 	if on:
 		rules_panel.set_anchors_preset(Control.PRESET_CENTER)
-		rules_panel.offset_left = -270
-		rules_panel.offset_right = 270
+		rules_panel.offset_left = -310
+		rules_panel.offset_right = 310
 		rules_panel.offset_top = -360
 		rules_panel.offset_bottom = 360
 	else:

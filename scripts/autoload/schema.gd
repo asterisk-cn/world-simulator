@@ -243,6 +243,16 @@ func add_category(scope: String) -> String:
 	return cat
 
 
+func remove_category(scope: String, cat: String) -> void:
+	var kept: Array = []
+	for d in parameters:
+		if String(d["scope"]) == scope and String(d["category"]) == cat:
+			continue
+		kept.append(d)
+	parameters = kept
+	parameters_changed.emit()
+
+
 func rename_category(scope: String, old_name: String, new_name: String) -> void:
 	if new_name.strip_edges() == "":
 		return

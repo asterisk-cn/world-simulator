@@ -56,6 +56,10 @@ func _draw() -> void:
 	Iso.draw_block(self, 44.0, 22.0, 24.0, Color(0.86, 0.79, 0.66), center, 6.0)
 	Iso.draw_block(self, 50.0, 25.0, 16.0, owner_color, center + Vector2(0, -24.0), 7.0)
 
+	# 屋根の上に持ち主の色の目印。誰の家かが遠目に分かる
+	Iso.draw_block(self, 3.0, 1.5, 9.0, owner_color.lightened(0.25),
+		center + Vector2(0, -40.0), 1.5)
+
 	# 窓。夜は灯りがともり、村人が帰っていることが遠目にも分かる
 	var window := Iso.rounded(PackedVector2Array([
 		Vector2(5, -15), Vector2(19, -22), Vector2(19, -5), Vector2(5, 2)

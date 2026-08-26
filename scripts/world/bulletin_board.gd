@@ -84,6 +84,20 @@ func _depth() -> Vector2:
 	return Vector2(Iso.HALF_W, -Iso.HALF_H) * THICK
 
 
+var _flash := 0.0
+var _seen := 0
+
+
+func _process(delta: float) -> void:
+	# 貼り紙が増えたら世界の側で光る。神が触れたことが世界に見えるように。
+	if posts.size() != _seen:
+		_seen = posts.size()
+		_flash = 1.0
+	if _flash > 0.0:
+		_flash = maxf(0.0, _flash - delta * 0.8)
+		queue_redraw()
+
+
 func _draw() -> void:
 	Iso.draw_shadow(self, 0.8, 0.2)
 
@@ -107,6 +121,12 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([hi0, hi1, hi1 + back, hi0 + back]),
 		base.lightened(0.12))
 	draw_colored_polygon(Iso.rounded(PackedVector2Array([lo0, lo1, hi1, hi0]), 2.5), base)
+
+	if _flash > 0.0:
+		var glow := Iso.rounded(PackedVector2Array([
+			lo0 + Vector2(-6, 6), lo1 + Vector2(6, 6),
+			hi1 + Vector2(6, -6), hi0 + Vector2(-6, -6)]), 6.0)
+		draw_colored_polygon(glow, Color(1.0, 0.88, 0.50, 0.42 * _flash))
 
 	# 貼り紙は手前の面に貼る
 	var n: int = mini(posts.size(), 6)

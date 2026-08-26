@@ -93,4 +93,5 @@ scripts/
   ui/        ui_kit / range_slider / inspector / roster_panel / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
 ```
 
-Godot 4.7.2 を `mise.toml` で固定。作業の経緯は [LOG.md](LOG.md)。
+Godot 4.7.2 を `mise.toml` で固定。作業の経緯は [LOG.md](LOG.md)、
+デザインレビューの観点と回し方は [REVIEW.md](REVIEW.md)。

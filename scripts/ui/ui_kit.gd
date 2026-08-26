@@ -185,47 +185,20 @@ static func slider_row(
 	return s
 
 
-## 読み取り専用のバー表示。下限が負のパラメータもあるので、
-## バーの伸び方は下限から測り、数字は実際の値を出す。
+## 読み取り専用の値表示。積み木を並べて見せる。
 static func bar_row(parent: Node, name_text: String, value: float,
 		vmin: float, vmax: float, col: Color) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", GAP)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(62, 0)
 	row.add_child(nm)
-	var pb := ProgressBar.new()
-	pb.min_value = vmin
-	pb.max_value = vmax
-	pb.value = clampf(value, vmin, vmax)
-	pb.show_percentage = false
-	pb.custom_minimum_size = Vector2(90, BAR_H)
-	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# 行の高さに引き延ばされると場所によって太さが変わるので、中央に固定する
-	pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = col
-	fill.set_corner_radius_all(3)
-	pb.add_theme_stylebox_override("fill", fill)
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.30, 0.22, 0.14, 0.14)
-	bg.set_corner_radius_all(3)
-	pb.add_theme_stylebox_override("background", bg)
-	row.add_child(pb)
-	# 下限が負のパラメータは、0 の位置に印を置いて振れ幅の向きが分かるようにする
-	if vmin < 0.0:
-		var mark := ColorRect.new()
-		mark.color = Color(0.30, 0.22, 0.14, 0.35)
-		mark.custom_minimum_size = Vector2(1, BAR_H)
-		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		pb.add_child(mark)
-		var t := (0.0 - vmin) / maxf(vmax - vmin, 0.001)
-		mark.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-		mark.anchor_left = t
-		mark.anchor_right = t
-		mark.offset_left = 0
-		mark.offset_right = 1
+	var pips := PipBar.new()
+	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(pips)
+	pips.setup(value, vmin, vmax, col)
 
 
 static func button(parent: Node, text: String, on_press: Callable, size: int = 11) -> Button:
@@ -295,7 +268,7 @@ static func toggle_button(parent: Node, text: String, tip: String, on_press: Cal
 	b.add_theme_font_size_override("font_size", size)
 	b.custom_minimum_size = Vector2(w, ROW_H)
 	var on := StyleBoxFlat.new()
-	on.bg_color = ACCENT
+	on.bg_color = WOOD
 	on.set_corner_radius_all(6)
 	on.content_margin_left = 8
 	on.content_margin_right = 8
@@ -303,8 +276,8 @@ static func toggle_button(parent: Node, text: String, tip: String, on_press: Cal
 	on.content_margin_bottom = 4
 	b.add_theme_stylebox_override("pressed", on)
 	b.add_theme_stylebox_override("hover_pressed", on)
-	b.add_theme_color_override("font_pressed_color", Color(0.99, 0.96, 0.90))
-	b.add_theme_color_override("font_hover_pressed_color", Color(1, 1, 1))
+	b.add_theme_color_override("font_pressed_color", Color(0.97, 0.94, 0.87))
+	b.add_theme_color_override("font_hover_pressed_color", Color(1, 0.99, 0.95))
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b

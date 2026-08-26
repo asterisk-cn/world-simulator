@@ -115,7 +115,7 @@ func _build_header() -> void:
 		carried = "手ぶら"
 	_body.add_child(UIKit.label("%s　%s"
 		% [carried, "家なし" if subject.home == null else "家あり"], 11, UIKit.TEXT_DIM))
-	UIKit.wrapped(_body, "いま：%s" % subject.action_label(), 11, Color(0.85, 0.9, 0.95))
+	UIKit.wrapped(_body, "いま：%s" % subject.action_label(), 12, UIKit.TEXT)
 
 
 func _build_self_params() -> void:

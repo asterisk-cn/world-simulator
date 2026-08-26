@@ -79,14 +79,44 @@ static func build_theme(font: Font) -> Theme:
 	th.set_stylebox("hover", "PopupMenu", flat.call(INK_HOVER, 5, 6, 3))
 
 	th.set_stylebox("panel", "TabContainer", StyleBoxEmpty.new())
-	th.set_stylebox("tab_selected", "TabContainer", flat.call(INK_ACTIVE, 6, 12, 5))
-	th.set_stylebox("tab_unselected", "TabContainer", flat.call(Color(0.30, 0.22, 0.14, 0.05), 6, 12, 5))
-	th.set_stylebox("tab_hovered", "TabContainer", flat.call(INK_HOVER, 6, 12, 5))
-	th.set_color("font_selected_color", "TabContainer", Color(0.10, 0.08, 0.05))
+	# 選ばれているタブは木の色で塗り、紙の文字を乗せる。半端な濃さだと選択が読めない
+	var tab_on := StyleBoxFlat.new()
+	tab_on.bg_color = WOOD
+	tab_on.corner_radius_top_left = 7
+	tab_on.corner_radius_top_right = 7
+	tab_on.content_margin_left = 14
+	tab_on.content_margin_right = 14
+	tab_on.content_margin_top = 6
+	tab_on.content_margin_bottom = 6
+	th.set_stylebox("tab_selected", "TabContainer", tab_on)
+	th.set_stylebox("tab_unselected", "TabContainer",
+		flat.call(Color(0.30, 0.22, 0.14, 0.08), 7, 14, 6))
+	th.set_stylebox("tab_hovered", "TabContainer",
+		flat.call(Color(0.30, 0.22, 0.14, 0.16), 7, 14, 6))
+	th.set_color("font_selected_color", "TabContainer", Color(0.97, 0.94, 0.87))
 	th.set_color("font_unselected_color", "TabContainer", TEXT_DIM)
+	th.set_color("font_hovered_color", "TabContainer", TEXT)
 
 	th.set_color("separator", "HSeparator", Color(0.30, 0.22, 0.14, 0.22))
 	th.set_constant("separation", "HSeparator", 6)
+
+	# スクロールバー。既定のままだと紙の上で黒い棒に見える
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.30, 0.22, 0.14, 0.07)
+	track.set_corner_radius_all(4)
+	track.content_margin_left = 3
+	track.content_margin_right = 3
+	var grab := StyleBoxFlat.new()
+	grab.bg_color = Color(0.46, 0.33, 0.21, 0.45)
+	grab.set_corner_radius_all(4)
+	var grab_on := StyleBoxFlat.new()
+	grab_on.bg_color = Color(0.46, 0.33, 0.21, 0.70)
+	grab_on.set_corner_radius_all(4)
+	for t in ["VScrollBar", "HScrollBar"]:
+		th.set_stylebox("scroll", t, track)
+		th.set_stylebox("grabber", t, grab)
+		th.set_stylebox("grabber_highlight", t, grab_on)
+		th.set_stylebox("grabber_pressed", t, grab_on)
 	return th
 
 
@@ -406,15 +436,15 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
 
+	var val := label("%d〜%d" % [int(lo), int(hi)], 11, TEXT_DIM)
+	val.custom_minimum_size = Vector2(58, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(val)
+
 	var rs := RangeSlider.new()
 	rs.custom_minimum_size = Vector2(112, ROW_H)
 	row.add_child(rs)
 	rs.setup(vmin, vmax, lo, hi, step, col)
-
-	var val := label("%d〜%d" % [int(lo), int(hi)], 11, TEXT_DIM)
-	val.custom_minimum_size = Vector2(56, 0)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(val)
 
 	rs.changed.connect(func(l: float, h: float) -> void:
 		val.text = "%d〜%d" % [int(l), int(h)]

@@ -214,6 +214,25 @@ func free_cell_around(house_cell: Vector2i) -> Vector2i:
 # クエリ（村人の知覚）
 # ---------------------------------------------------------------------------
 
+## その場所を村人の言葉で言う。「(10,14)」のような生の座標は
+## 村人の発話としても神の読み物としても浮くので、掲示板や記録には出さない。
+const COMPASS := ["北", "北東", "東", "南東", "南", "南西", "西", "北西"]
+
+
+func place_name(cell: Vector2i) -> String:
+	var origin := Vector2(GRID_W, GRID_H) * 0.5
+	if board != null:
+		origin = Vector2(board.cell)
+	var d := Vector2(cell) - origin
+	if d.length() < 4.0:
+		return "村の真ん中"
+	# 画面の上が北。セル座標では -x-y の向き。
+	var ang := atan2(d.x + d.y, d.y - d.x)
+	var i := int(round(ang / (TAU / 8.0))) % 8
+	var near := "" if d.length() > 10.0 else "すぐ"
+	return "%s村の%s%s" % [near, COMPASS[(i + 8) % 8], "のはずれ" if d.length() > 10.0 else ""]
+
+
 func in_bounds(c: Vector2i) -> bool:
 	return c.x >= 0 and c.y >= 0 and c.x < GRID_W and c.y < GRID_H
 

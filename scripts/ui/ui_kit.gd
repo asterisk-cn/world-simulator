@@ -166,8 +166,9 @@ static func label(text: String, size: int = 12, col: Color = TEXT) -> Label:
 	return l
 
 
+## 章の見出し（強）。この下にカテゴリ（中）、その下に行（弱）が来る。
 static func section(parent: Node, text: String, col: Color = HEAD) -> Label:
-	var l := label(text, 12, col)
+	var l := label(text, 13, col)
 	l.add_theme_constant_override("line_spacing", 2)
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 12)
@@ -230,16 +231,40 @@ static func slider_row(
 	return s
 
 
+## 両極の値。ゲージの左右に、どちらへ寄っているかの言葉を置く。
+static func pole_row(parent: Node, left: String, right: String, value: float) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", GAP_INLINE)
+	parent.add_child(row)
+
+	var l := label(left, 10, TEXT if value < 0.45 else TEXT_DIM)
+	l.custom_minimum_size = Vector2(46, 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(l)
+
+	var pips := PipBar.new()
+	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(pips)
+	pips.setup(value * 100.0, 0.0, 100.0, Color(0.48, 0.36, 0.66))
+
+	var r := label(right, 10, TEXT if value > 0.55 else TEXT_DIM)
+	r.custom_minimum_size = Vector2(46, 0)
+	row.add_child(r)
+
+
 ## 読み取り専用の値表示。積み木を並べて見せる。
 static func bar_row(parent: Node, name_text: String, value: float,
-		vmin: float, vmax: float, col: Color) -> void:
+		vmin: float, vmax: float, col: Color, idle: bool = false) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP)
 	parent.add_child(row)
-	var nm := label(name_text, 11, TEXT)
+	var nm := label(name_text, 11, TEXT_DIM if idle else TEXT)
 	nm.custom_minimum_size = Vector2(62, 0)
 	row.add_child(nm)
 	var pips := PipBar.new()
+	if idle:
+		pips.modulate = Color(1, 1, 1, 0.5)
 	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(pips)

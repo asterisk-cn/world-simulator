@@ -3,7 +3,7 @@ extends Control
 ## 削除モードの目印。× だと「閉じる」に見えてしまうので、ゴミ箱を描く。
 ## 角は世界のブロックと同じ Iso.rounded で丸める。
 
-var tint := Color(0.88, 0.90, 0.94)
+var tint := UIKit.TEXT
 
 
 func _ready() -> void:

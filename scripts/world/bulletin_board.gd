@@ -1,13 +1,8 @@
 class_name BulletinBoard
 extends Node2D
-## 村の掲示板。村人が情報・主張・告発を貼り出し、通りかかった者が読む。
+## 村の掲示板。村人が貼り出し、通りかかった者が読む。
 ## 集合知は存在しないので、これと直接の会話だけが情報伝達の経路になる。
 ## プレイヤーもここに書き込める（＝世界への干渉手段のひとつ）。
-
-const KIND_INFO := "情報"
-const KIND_CLAIM := "主張"
-const KIND_ACCUSE := "告発"
-const KIND_OFFER := "取引"
 
 const MAX_POSTS := 12
 
@@ -25,15 +20,13 @@ func setup(p_cell: Vector2i) -> void:
 
 
 ## author_id が -1 のときはプレイヤー（村人から見て「誰が書いたか分からない張り紙」）
-func post(author_id: int, author_name: String, kind: String, text: String, payload: Dictionary = {}) -> Dictionary:
+func post(author_id: int, author_name: String, text: String) -> Dictionary:
 	var entry := {
 		"id": _next_post_id,
 		"author_id": author_id,
 		"author_name": author_name,
-		"kind": kind,
 		"text": text,
 		"day": SimClock.day,
-		"payload": payload.duplicate(),
 	}
 	_next_post_id += 1
 	posts.append(entry)

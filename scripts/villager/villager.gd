@@ -259,7 +259,6 @@ func _do_talk(other) -> void:
 	other.memory.record("会話：%s と話した" % vname)
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
 	other.say("social", "talk", 2.2)
-	EventLog.social("%s と %s が話した" % [vname, other.vname])
 
 
 ## 掲示板に貼る。いまは観測した事実だけを貼る。
@@ -272,11 +271,11 @@ func _do_post() -> void:
 	var berry = world.nearest_harvest(cell, HarvestNode.Kind.BERRY)
 	if berry == null:
 		return
-	var text := "(%d,%d) に木の実がある" % [berry.cell.x, berry.cell.y]
+	var text := "%s に木の実がある" % world.place_name(berry.cell)
 	for e in board.posts:
 		if int(e["author_id"]) == id and String(e["text"]) == text:
 			return
-	board.post(id, vname, BulletinBoard.KIND_INFO, text, {"food_cell": berry.cell})
+	board.post(id, vname, text)
 	memory.record("掲示：掲示板に貼り紙をした")
 
 
@@ -333,13 +332,16 @@ func _draw() -> void:
 	Iso.draw_block(self, 9.0, 4.5, 17.0, body, up, 3.5)
 	Iso.draw_block(self, 7.0, 3.5, 11.0, head, up + Vector2(0, -17.0), 3.5)
 
-	for i in range(_bubbles.size()):
-		_bubbles[i].draw_on(self, Vector2(0, -46 - lift - float(i) * 18.0))
+	# 集まったときが一番見たい瞬間なのに、そこで名前が重なって読めなくなる。
+	# 近くに誰かいるときは段をずらし、選んでいない村人は薄くして譲る。
+	var crowd: int = world.neighbors_within(cell, 2.2, id).size()
+	var tier := float(id % 3) * 9.0 if crowd > 0 else 0.0
+	var alpha := 0.95 if selected else (0.52 if crowd > 0 else 0.78)
 
-	# 名前は常に、いま何をしているかは選んでいる村人だけ。並ぶと読めなくなるので。
-	# 昼夜どちらでも読めるよう、縁取りを付ける。
-	_label(font, vname, Vector2(-40, -30 - lift), 80, 11,
-		Color(1, 1, 1, 0.95 if selected else 0.78))
+	for i in range(_bubbles.size()):
+		_bubbles[i].draw_on(self, Vector2(0, -48 - lift - tier - float(i) * 18.0))
+
+	_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, alpha))
 	if selected:
 		_label(font, action_label(), Vector2(-55, 16), 110, 10, Color(1.0, 0.93, 0.62))
 

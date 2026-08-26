@@ -76,10 +76,19 @@ func _rebuild() -> void:
 		doing.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(doing)
 
-		var have := UIKit.label("", 10, UIKit.TEXT_DIM)
-		have.custom_minimum_size = Vector2(150, 0)
-		have.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		# 持ち物は品目ごとに列を固定する。羅列だと誰が富んでいるか比べられない。
+		var have := HBoxContainer.new()
+		have.add_theme_constant_override("separation", UIKit.GAP_S)
 		row.add_child(have)
+		for item in Schema.all_items():
+			var cell := UIKit.label("", 10, UIKit.TEXT_DIM)
+			cell.custom_minimum_size = Vector2(34, 0)
+			cell.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			cell.tooltip_text = Schema.item_label(String(item))
+			have.add_child(cell)
+		var home := UIKit.label("", 10, UIKit.TEXT_DIM)
+		home.custom_minimum_size = Vector2(22, 0)
+		row.add_child(home)
 
 
 func _refresh() -> void:
@@ -94,17 +103,15 @@ func _refresh() -> void:
 		var row: HBoxContainer = _rows.get_child(i)
 		(row.get_child(1) as Label).text = v.action_label()
 
-		var carried := ""
-		for item in Schema.all_items():
-			var n: int = v.item_count(String(item))
-			if n <= 0:
-				continue
-			if carried != "":
-				carried += " "
-			carried += "%s%d" % [Schema.item_label(String(item)), n]
-		if v.home != null:
-			carried += "　家"
-		(row.get_child(2) as Label).text = carried
+		var have: HBoxContainer = row.get_child(2)
+		var items := Schema.all_items()
+		for k in range(mini(have.get_child_count(), items.size())):
+			var n: int = v.item_count(String(items[k]))
+			var cell: Label = have.get_child(k)
+			cell.text = "" if n <= 0 else "%s%d" % [Schema.item_label(String(items[k])).substr(0, 1), n]
+			cell.add_theme_color_override("font_color",
+				UIKit.TEXT if n > 0 else Color(0, 0, 0, 0.18))
+		(row.get_child(3) as Label).text = "家" if v.home != null else ""
 
 
 func _jump(vid: int) -> void:

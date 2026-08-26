@@ -101,7 +101,7 @@ func _on_drag_ended(_changed: bool, key: String) -> void:
 
 func _build_header() -> void:
 	_body.add_child(UIKit.label(subject.vname, 17, subject.color.darkened(0.35)))
-	_body.add_child(UIKit.label(subject.personality.describe(), 11, UIKit.TEXT_DIM))
+	_body.add_child(UIKit.label(subject.personality.quirk, 11, UIKit.TEXT_DIM))
 	UIKit.spacer(_body, 2)
 
 	var carried := ""
@@ -116,7 +116,15 @@ func _build_header() -> void:
 		carried = "手ぶら"
 	_body.add_child(UIKit.label("%s　%s"
 		% [carried, "家なし" if subject.home == null else "家あり"], 11, UIKit.TEXT_DIM))
-	UIKit.wrapped(_body, "いま：%s" % subject.action_label(), 12, UIKit.TEXT)
+	# この村人について分単位で変わるのはここだけ。パネルで一番強くする。
+	UIKit.spacer(_body, 2)
+	var now := UIKit.card(Color(0.87, 0.81, 0.68), UIKit.GAP_S)
+	_body.add_child(now)
+	var now_box := VBoxContainer.new()
+	now_box.add_theme_constant_override("separation", 1)
+	now.add_child(now_box)
+	now_box.add_child(UIKit.label("いま", 10, UIKit.TEXT_DIM))
+	UIKit.wrapped(now_box, subject.action_label(), 14, UIKit.TEXT)
 
 
 func _build_self_params() -> void:
@@ -125,7 +133,7 @@ func _build_self_params() -> void:
 		_body.add_child(UIKit.label("　定義されていない", 11, UIKit.TEXT_DIM))
 		return
 	for cat in Schema.categories_in(Schema.SCOPE_SELF):
-		_body.add_child(UIKit.label("　" + String(cat), 10, _category_color(String(cat)).darkened(0.32)))
+		_body.add_child(UIKit.label("　" + String(cat), 11, _category_color(String(cat)).darkened(0.30)))
 		for d in Schema.self_params():
 			if String(d["category"]) != String(cat):
 				continue
@@ -141,10 +149,10 @@ func _category_color(cat: String) -> Color:
 
 func _build_personality() -> void:
 	UIKit.section(_body, "性格")
+	# どちらへ寄っているかは、ゲージの両端に言葉を置けば読める
 	for a in Personality.AXES:
-		UIKit.bar_row(_body, String(a[1]),
-			subject.personality.axis(String(a[0])) * 100.0, 0.0, 100.0, Color(0.48, 0.36, 0.66))
-	_body.add_child(UIKit.label("　一言個性　%s" % subject.personality.quirk, 11, UIKit.TEXT_DIM))
+		UIKit.pole_row(_body, String(a[2]), String(a[3]),
+			subject.personality.axis(String(a[0])))
 
 
 # ---------------------------------------------------------------------------

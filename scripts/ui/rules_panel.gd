@@ -150,7 +150,7 @@ func _rebuild_params() -> void:
 		return
 	_clear(_param_box)
 	if editable:
-		UIKit.wrapped(_param_box, "村人が自分について語れる言葉を決める。", 11, UIKit.ACCENT)
+		UIKit.wrapped(_param_box, "村人が自分について語れる言葉を決める。", 11, UIKit.TEXT_DIM)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
@@ -296,7 +296,7 @@ func _rebuild_actions() -> void:
 		return
 	_clear(_action_box)
 	if editable:
-		UIKit.wrapped(_action_box, "村人にできることを決める。", 11, UIKit.ACCENT)
+		UIKit.wrapped(_action_box, "村人にできることを決める。", 11, UIKit.TEXT_DIM)
 
 	var kinds: Array = Schema.BEHAVIORS.keys()
 	var kind_labels: Array = []
@@ -398,7 +398,7 @@ func _rebuild_world() -> void:
 		return
 	_clear(_world_box)
 	if editable:
-		UIKit.wrapped(_world_box, "世界そのものの速さと大きさを決める。", 11, UIKit.ACCENT)
+		UIKit.wrapped(_world_box, "世界そのものの速さと大きさを決める。", 11, UIKit.TEXT_DIM)
 
 	for k in SimConfig.PARAM_DEF:
 		var key := String(k)
@@ -441,7 +441,7 @@ func _rebuild_recipes() -> void:
 		return
 	_clear(_recipe_box)
 	if editable:
-		UIKit.wrapped(_recipe_box, "材料を組み合わせて作れるものを決める。", 11, UIKit.ACCENT)
+		UIKit.wrapped(_recipe_box, "材料を組み合わせて作れるものを決める。", 11, UIKit.TEXT_DIM)
 
 	for r in Schema.recipes:
 		var rec: Dictionary = r

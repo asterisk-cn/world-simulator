@@ -8,8 +8,6 @@ var _pop_label: Label
 var _log: RichTextLabel
 var _board_list: VBoxContainer
 var _post_text: LineEdit
-var _post_kind: OptionButton
-var _post_target: OptionButton
 var _board_panel: PanelContainer
 var _top_bar: PanelContainer
 var _pause_btn: Button
@@ -205,8 +203,8 @@ func _build_board_panel() -> void:
 	_board_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_board_panel.offset_left = 12
 	_board_panel.offset_right = 472
-	_board_panel.offset_top = 64
-	_board_panel.offset_bottom = 400
+	_board_panel.offset_top = 78
+	_board_panel.offset_bottom = 414
 	add_child(_board_panel)
 
 	var box := VBoxContainer.new()
@@ -221,7 +219,6 @@ func _build_board_panel() -> void:
 	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
 	card.add_child(form_box)
 	form_box.add_child(UIKit.label("村に言葉を落とす", 13, UIKit.ACCENT))
-	UIKit.wrapped(form_box, "誰が書いたかは村人に分からない。信じるかどうかは読んだ側が決める。", 10)
 
 	_post_text = LineEdit.new()
 	_post_text.placeholder_text = "貼り紙の文面"
@@ -233,21 +230,11 @@ func _build_board_panel() -> void:
 	var form := HBoxContainer.new()
 	form.add_theme_constant_override("separation", UIKit.GAP_S)
 	form_box.add_child(form)
-
-	var kinds := [BulletinBoard.KIND_INFO, BulletinBoard.KIND_CLAIM,
-		BulletinBoard.KIND_ACCUSE, BulletinBoard.KIND_OFFER]
-	_post_kind = UIKit.dropdown(kinds, kinds, String(kinds[0]))
-	form.add_child(_post_kind)
-
-	_post_target = UIKit.dropdown([], [], "")
-	form.add_child(_post_target)
-
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form.add_child(gap)
-
 	var submit := UIKit.accent_button(form, "貼る", _submit_post)
-	submit.custom_minimum_size = Vector2(84, UIKit.ROW_H + 4)
+	submit.custom_minimum_size = Vector2(96, UIKit.ROW_H + 4)
 
 	# --- いま貼られているもの ---
 	UIKit.section(box, "貼られているもの")
@@ -260,27 +247,6 @@ func _build_board_panel() -> void:
 	_board_list.add_theme_constant_override("separation", UIKit.GAP_S)
 	scroll.add_child(_board_list)
 
-	_refresh_targets()
-
-
-func _refresh_targets() -> void:
-	if _post_target == null or world == null:
-		return
-	var prev := _post_target.selected
-	_post_target.clear()
-	_post_target.add_item("対象なし")
-	_post_target.set_item_metadata(0, -1)
-	var pop := _post_target.get_popup()
-	pop.set_item_as_radio_checkable(0, false)
-	pop.set_item_as_checkable(0, false)
-	var i := 1
-	for v in world.villagers:
-		_post_target.add_item(v.vname)
-		_post_target.set_item_metadata(i, v.id)
-		pop.set_item_as_radio_checkable(i, false)
-		pop.set_item_as_checkable(i, false)
-		i += 1
-	_post_target.select(clampi(prev, 0, _post_target.item_count - 1))
 
 
 func _submit_post() -> void:
@@ -289,19 +255,7 @@ func _submit_post() -> void:
 	var text := _post_text.text.strip_edges()
 	if text == "":
 		return
-	var kind: String = _post_kind.get_item_text(_post_kind.selected)
-	var tid: int = -1
-	if _post_target.selected > 0:
-		tid = int(_post_target.get_item_metadata(_post_target.selected))
-	var payload := {}
-	match kind:
-		BulletinBoard.KIND_ACCUSE:
-			payload = {"about": tid, "grudge_kind": "中傷", "severity": 40.0}
-		BulletinBoard.KIND_CLAIM:
-			payload = {"claimant": tid}
-		BulletinBoard.KIND_OFFER:
-			payload = {"giver": tid}
-	world.board.post(-1, "差出人不明", kind, text, payload)
+	world.board.post(-1, "差出人不明", text)
 	_post_text.text = ""
 
 
@@ -310,7 +264,6 @@ func _refresh_board() -> void:
 		return
 	for c in _board_list.get_children():
 		c.queue_free()
-	_refresh_targets()
 	if world == null or world.board == null:
 		return
 	if world.board.posts.is_empty():
@@ -319,10 +272,9 @@ func _refresh_board() -> void:
 	var posts: Array = world.board.posts
 	for i in range(posts.size() - 1, -1, -1):
 		var e: Dictionary = posts[i]
-		var col := Color(0.86, 0.60, 0.18) if int(e["author_id"]) == -1 else UIKit.TEXT
-		var readers := 0
-		for v in world.villagers:
-			if v.memory.has_read_post(int(e["id"])):
-				readers += 1
-		UIKit.wrapped(_board_list, "[%s] %s：「%s」　%d日目・既読%d人"
-			% [String(e["kind"]), String(e["author_name"]), String(e["text"]), int(e["day"]), readers], 11, col)
+		# 日付・文面・（分かれば）書いた人。それ以上は紙に書いていない
+		var by_god: bool = int(e["author_id"]) == -1
+		var col := Color(0.86, 0.60, 0.18) if by_god else UIKit.TEXT
+		var who := "" if by_god else "　—— %s" % String(e["author_name"])
+		UIKit.wrapped(_board_list, "%d日目　「%s」%s"
+			% [int(e["day"]), String(e["text"]), who], 11, col)

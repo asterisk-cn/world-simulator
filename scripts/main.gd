@@ -82,8 +82,8 @@ func _show_setup(on: bool) -> void:
 		rules_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		rules_panel.offset_left = 12
 		rules_panel.offset_right = 500
-		rules_panel.offset_top = 64
-		rules_panel.offset_bottom = 700
+		rules_panel.offset_top = 78
+		rules_panel.offset_bottom = 714
 	hud.set_play_ui_visible(not on)
 
 
@@ -143,8 +143,8 @@ func _setup_ui() -> void:
 	roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	roster.offset_left = 12
 	roster.offset_right = 452
-	roster.offset_top = 64
-	roster.offset_bottom = 420
+	roster.offset_top = 78
+	roster.offset_bottom = 434
 	roster.visible = false
 	hud.add_child(roster)
 	hud.roster_panel = roster
@@ -156,7 +156,7 @@ func _setup_ui() -> void:
 	matrix.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	matrix.offset_left = 12
 	matrix.offset_right = 620
-	matrix.offset_top = 64
+	matrix.offset_top = 78
 	matrix.offset_bottom = 72
 	matrix.closed.connect(hud.close_panels)
 	matrix.visible = false
@@ -175,8 +175,8 @@ func _setup_ui() -> void:
 	dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	dbg.offset_left = 12
 	dbg.offset_right = 392
-	dbg.offset_top = 64
-	dbg.offset_bottom = 380
+	dbg.offset_top = 78
+	dbg.offset_bottom = 394
 	dbg.closed.connect(hud.close_panels)
 	dbg.visible = false
 	hud.add_child(dbg)

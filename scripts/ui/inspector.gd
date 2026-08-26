@@ -77,8 +77,9 @@ func rebuild() -> void:
 		_body.remove_child(c)
 		c.queue_free()
 
-	if subject == null or not is_instance_valid(subject):
-		_build_placeholder()
+	# 見せるものが無いときはパネルごと消す
+	visible = subject != null and is_instance_valid(subject)
+	if not visible:
 		return
 
 	_known_count = subject.pairs.size()
@@ -211,9 +212,3 @@ func _build_memory() -> void:
 		UIKit.wrapped(_body, "　・" + String(e), 10, Color(0.66, 0.70, 0.78))
 	UIKit.spacer(_body, 14)
 
-
-# ---------------------------------------------------------------------------
-
-func _build_placeholder() -> void:
-	_body.add_child(UIKit.label("村人を選ぶ", 15, Color(0.80, 0.85, 0.95)))
-	UIKit.wrapped(_body, "クリックするとその村人の内側が出る。", 11)

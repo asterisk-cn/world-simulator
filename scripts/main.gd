@@ -80,7 +80,6 @@ func _show_setup(on: bool) -> void:
 		rules_panel.offset_top = -330
 		rules_panel.offset_bottom = 330
 	hud.set_play_ui_visible(not on)
-	inspector.visible = not on
 
 
 func _setup_font() -> void:

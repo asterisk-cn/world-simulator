@@ -69,11 +69,13 @@ func _apply(x: float) -> void:
 
 func _draw() -> void:
 	var y := size.y * 0.5
-	draw_line(Vector2(PAD, y), Vector2(size.x - PAD, y), Color(1, 1, 1, 0.12), 3.0)
+	draw_line(Vector2(PAD, y), Vector2(size.x - PAD, y), Color(0.30, 0.22, 0.14, 0.16), 3.0)
 	draw_line(Vector2(_pos_of(lo), y), Vector2(_pos_of(hi), y), tint, 3.0)
 	# 0 の位置に目印
 	if min_value < 0.0 and max_value > 0.0:
 		var zx := _pos_of(0.0)
-		draw_line(Vector2(zx, y - 5.0), Vector2(zx, y + 5.0), Color(1, 1, 1, 0.22), 1.0)
+		draw_line(Vector2(zx, y - 5.0), Vector2(zx, y + 5.0), Color(0.30, 0.22, 0.14, 0.30), 1.0)
+	# つまみは塗りつぶす。透けると溝の色が乗って掴めるものに見えない
 	for x in [_pos_of(lo), _pos_of(hi)]:
-		draw_circle(Vector2(x, y), 5.5, Color(0.92, 0.94, 0.98))
+		draw_circle(Vector2(x, y), 6.0, UIKit.WOOD)
+		draw_circle(Vector2(x, y), 4.4, Color(0.98, 0.96, 0.90))

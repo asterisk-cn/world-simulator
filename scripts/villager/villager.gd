@@ -70,6 +70,12 @@ func knows(other_id: int) -> bool:
 	return pairs.has(other_id)
 
 
+## 覗くだけ。pair_to と違って、無ければ作らない。
+## 見ただけで「会ったことがある」が生まれてしまうのを防ぐ。
+func pair_peek(other_id: int) -> PairParams:
+	return pairs.get(other_id, null)
+
+
 func item_count(item: String) -> int:
 	return int(inventory.get(item, 0))
 
@@ -342,8 +348,6 @@ func _draw() -> void:
 		_bubbles[i].draw_on(self, Vector2(0, -48 - lift - tier - float(i) * 18.0))
 
 	_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, alpha))
-	if selected:
-		_label(font, action_label(), Vector2(-55, 16), 110, 10, Color(1.0, 0.93, 0.62))
 
 
 ## 世界の上に置く文字。縁取りがないと昼は白飛び、夜は沈んで読めない。

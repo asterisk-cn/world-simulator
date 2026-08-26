@@ -83,8 +83,8 @@ static func build_theme(font: Font) -> Theme:
 	# 選ばれているタブは木の色で塗り、紙の文字を乗せる。半端な濃さだと選択が読めない
 	var tab_on := StyleBoxFlat.new()
 	tab_on.bg_color = WOOD
-	tab_on.corner_radius_top_left = 7
-	tab_on.corner_radius_top_right = 7
+	# 下だけ角が立っていると、中身の面に刺さって切れたように見える。札として全周を丸める
+	tab_on.set_corner_radius_all(7)
 	tab_on.content_margin_left = 14
 	tab_on.content_margin_right = 14
 	tab_on.content_margin_top = 6
@@ -289,6 +289,33 @@ static func add_button(parent: Node, text: String, on_press: Callable) -> Button
 	b.custom_minimum_size = Vector2(0, ROW_H - 3)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	return b
+
+
+## タブの中身を一枚の紙として見せる。札（タブ）と紙が繋がって、
+## めくって切り替えている感じになる。
+static func page_style() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.98, 0.95, 0.89)
+	sb.set_corner_radius_all(8)
+	sb.corner_radius_top_left = 2
+	sb.content_margin_left = PAD_S
+	sb.content_margin_right = PAD_S
+	sb.content_margin_top = PAD_S
+	sb.content_margin_bottom = PAD_S
+	sb.border_color = Color(0.46, 0.33, 0.21, 0.30)
+	sb.set_border_width_all(1)
+	sb.shadow_color = Color(0, 0, 0, 0.10)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2(0, 2)
+	return sb
+
+
+## 一覧の行と行を分ける細い線
+static func hairline(parent: Node) -> void:
+	var l := ColorRect.new()
+	l.color = Color(0.46, 0.33, 0.21, 0.13)
+	l.custom_minimum_size = Vector2(0, 1)
+	parent.add_child(l)
 
 
 ## 縦スクロールする中身を包み、スクロールバーとの余白を作る。

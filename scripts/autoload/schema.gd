@@ -17,8 +17,8 @@ const SCOPE_SELF := "self"
 const SCOPE_PAIR := "pair"
 
 const SCOPE_LABEL := {
-	SCOPE_SELF: "個人パラメータ",
-	SCOPE_PAIR: "関係パラメータ",
+	SCOPE_SELF: "胸のうち",
+	SCOPE_PAIR: "間柄",
 }
 
 # ---------------------------------------------------------------------------

@@ -92,7 +92,7 @@ func _build_top_bar() -> void:
 	_win_btns = {
 		"roster": UIKit.toggle_button(row, "☷", "村人", _toggle_roster, 30, 15),
 		"board": UIKit.toggle_button(row, "▤", "掲示板", _toggle_board, 30, 15),
-		"matrix": UIKit.toggle_button(row, "▦", "関係マトリクス", _toggle_matrix, 30, 15),
+		"matrix": UIKit.toggle_button(row, "▦", "間柄", _toggle_matrix, 30, 15),
 		"rules": UIKit.toggle_button(row, "⚙", "この世界の言葉", _toggle_rules, 30, 15),
 		"debug": UIKit.toggle_button(row, "☰", "デバッグ", _toggle_debug, 30, 15),
 	}

@@ -89,9 +89,10 @@ func _show_setup(on: bool) -> void:
 
 func _setup_font() -> void:
 	var sf := SystemFont.new()
+	# 角丸のブロックと紙の世界なので、字も丸みのあるものを先に探す
 	sf.font_names = PackedStringArray([
-		"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
-		"Noto Sans CJK JP", "Meiryo", "Sans-Serif",
+		"Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro",
+		"YuGothic", "Hiragino Sans", "Noto Sans CJK JP", "Meiryo", "Sans-Serif",
 	])
 	sf.allow_system_fallback = true
 	SimConfig.ui_font = sf

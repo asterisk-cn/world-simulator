@@ -124,9 +124,12 @@ func _can_delete() -> bool:
 func _make_tab(title: String) -> VBoxContainer:
 	var holder := MarginContainer.new()
 	holder.name = title
-	holder.add_theme_constant_override("margin_top", UIKit.GAP)
+	holder.add_theme_constant_override("margin_top", 2)
 	_tabs.add_child(holder)
-	return UIKit.scroll_body(holder)
+	var page := PanelContainer.new()
+	page.add_theme_stylebox_override("panel", UIKit.page_style())
+	holder.add_child(page)
+	return UIKit.scroll_body(page)
 
 
 func _reset_all() -> void:
@@ -150,7 +153,7 @@ func _rebuild_params() -> void:
 		return
 	_clear(_param_box)
 	if editable:
-		UIKit.wrapped(_param_box, "村人が自分について語れる言葉を決める。", 11, UIKit.TEXT_DIM)
+		UIKit.wrapped(_param_box, "村人が自分と他人について語れる言葉を決める。", 11, UIKit.TEXT_DIM)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
@@ -161,7 +164,7 @@ func _rebuild_params() -> void:
 			_build_category(sc, String(cat))
 
 		if editable:
-			UIKit.add_button(_param_box, "＋ カテゴリを追加", _add_category.bind(sc))
+			UIKit.add_button(_param_box, "＋ 束を追加", _add_category.bind(sc))
 		UIKit.spacer(_param_box, 10)
 
 
@@ -187,21 +190,22 @@ func _build_category(scope: String, cat: String) -> void:
 
 	box.add_child(HSeparator.new())
 
-	# 中身は一段下げる
-	var indent := MarginContainer.new()
-	indent.add_theme_constant_override("margin_left", UIKit.PAD)
-	box.add_child(indent)
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", UIKit.GAP_S)
-	indent.add_child(inner)
+	inner.add_theme_constant_override("separation", 0)
+	box.add_child(inner)
 
+	var first := true
 	for d in Schema.params_in(scope):
 		if String(d["category"]) != cat:
 			continue
+		if not first:
+			UIKit.hairline(inner)
+		first = false
 		_build_param(inner, d)
 
 	if editable:
-		UIKit.add_button(inner, "＋ パラメータ", _add_param.bind(scope, cat))
+		UIKit.spacer(inner, 2)
+		UIKit.add_button(inner, "＋ ことば", _add_param.bind(scope, cat))
 
 
 ## 見出し用の、枠を消した入力欄
@@ -230,9 +234,13 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	var pid := String(def["id"])
 	var col := Schema.param_color(pid)
 
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_top", 3)
+	pad.add_theme_constant_override("margin_bottom", 3)
+	box.add_child(pad)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	box.add_child(row)
+	row.add_theme_constant_override("separation", UIKit.GAP_S)
+	pad.add_child(row)
 	row.add_child(UIKit.label("●", 12, col.darkened(0.25)))
 
 	if not editable:
@@ -303,30 +311,39 @@ func _rebuild_actions() -> void:
 	for k in kinds:
 		kind_labels.append(Schema.behavior_label(String(k)))
 
+	# 一覧は1枚の表にする。行ごとにカードを積むと、同じ色の箱が階段状に並んで
+	# どこまでが1行なのか分からなくなる。
+	var sheet := UIKit.card(Color(0.94, 0.90, 0.82), UIKit.GAP_S)
+	_action_box.add_child(sheet)
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 0)
+	sheet.add_child(rows)
+
+	var first := true
 	for a in Schema.actions:
 		var act: Dictionary = a
 		var aid := String(act["id"])
 		var kind := String(act["kind"])
-		var card := UIKit.card()
-		_action_box.add_child(card)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", UIKit.GAP_S)
-		card.add_child(box)
+		if not first:
+			UIKit.hairline(rows)
+		first = false
+
+		var pad := MarginContainer.new()
+		pad.add_theme_constant_override("margin_top", 3)
+		pad.add_theme_constant_override("margin_bottom", 3)
+		rows.add_child(pad)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", UIKit.GAP_S)
+		pad.add_child(row)
 
 		if not editable:
-			var head := HBoxContainer.new()
-			head.add_theme_constant_override("separation", 8)
-			box.add_child(head)
-			head.add_child(UIKit.label(String(act["label"]), 13, UIKit.TEXT))
-			head.add_child(UIKit.label("%s ／ %s"
+			var nm := UIKit.label(String(act["label"]), 12, UIKit.TEXT)
+			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(nm)
+			row.add_child(UIKit.label("%s ／ %s"
 				% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
 				10, UIKit.TEXT_DIM))
 			continue
-
-		# 名前・タイプ・対象を1行に。ラベルが縦に繰り返されると視線が戻され続ける
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", UIKit.GAP_S)
-		box.add_child(row)
 
 		var le := LineEdit.new()
 		le.text = String(act["label"])
@@ -337,20 +354,22 @@ func _rebuild_actions() -> void:
 		le.text_changed.connect(_set_a_label.bind(act))
 
 		var kind_opt := UIKit.dropdown(kinds, kind_labels, kind)
-		kind_opt.custom_minimum_size = Vector2(78, UIKit.ROW_H)
+		kind_opt.custom_minimum_size = Vector2(84, UIKit.ROW_H)
 		row.add_child(kind_opt)
 		kind_opt.item_selected.connect(func(i: int) -> void:
 			_set_kind(String(kinds[i]), act))
 
 		var tkeys: Array = Schema.targets_of(kind).keys()
 		if tkeys.is_empty():
-			row.add_child(UIKit.label("対象がない", 10, Color(0.72, 0.36, 0.18)))
+			var none := UIKit.label("対象がない", 10, Color(0.72, 0.36, 0.18))
+			none.custom_minimum_size = Vector2(124, 0)
+			row.add_child(none)
 		else:
 			var tlabels: Array = []
 			for t in tkeys:
 				tlabels.append(Schema.target_label(kind, String(t)))
 			var t_opt := UIKit.dropdown(tkeys, tlabels, String(act["target"]))
-			t_opt.custom_minimum_size = Vector2(112, UIKit.ROW_H)
+			t_opt.custom_minimum_size = Vector2(124, UIKit.ROW_H)
 			row.add_child(t_opt)
 			t_opt.item_selected.connect(func(i: int) -> void:
 				_set_target(String(tkeys[i]), act))

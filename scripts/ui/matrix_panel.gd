@@ -27,7 +27,7 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", UIKit.GAP)
 	add_child(root)
 
-	var head := UIKit.window_header(root, "関係マトリクス", _close)
+	var head := UIKit.window_header(root, "間柄", _close)
 	_param_opt = UIKit.dropdown([], [], "")
 	_param_opt.custom_minimum_size = Vector2(110, UIKit.ROW_H)
 	head.add_child(_param_opt)
@@ -212,7 +212,10 @@ func _on_cell_pressed(from_id: int, to_id: int) -> void:
 
 func _get_cell(key: String) -> float:
 	var f = world.villager_by_id(_sel_from)
-	return 0.0 if f == null else f.pair_to(_sel_to).get_v(key)
+	if f == null:
+		return 0.0
+	var pp = f.pair_peek(_sel_to)
+	return 0.0 if pp == null else pp.get_v(key)
 
 
 func _swap_pair() -> void:
@@ -235,8 +238,11 @@ func _build_detail() -> void:
 		return
 
 	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", UIKit.GAP)
 	_detail.add_child(head)
 	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, UIKit.TEXT))
+	if f.pair_peek(_sel_to) == null:
+		head.add_child(UIKit.label("まだ会っていない", 10, UIKit.TEXT_DIM))
 	var sw := UIKit.button(head, "向きを反転", _swap_pair, 10)
 	sw.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 

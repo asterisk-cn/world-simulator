@@ -128,7 +128,7 @@ func _build_header() -> void:
 
 
 func _build_self_params() -> void:
-	UIKit.section(_body, "個人パラメータ")
+	UIKit.section(_body, "胸のうち")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("　定義されていない", 11, UIKit.TEXT_DIM))
 		return
@@ -158,10 +158,10 @@ func _build_personality() -> void:
 # ---------------------------------------------------------------------------
 
 func _build_pairs() -> void:
-	UIKit.section(_body, "関係パラメータ")
+	UIKit.section(_body, "間柄")
 
 	if subject.pairs.is_empty():
-		_body.add_child(UIKit.label("　まだ誰とも接していない", 11, UIKit.TEXT_DIM))
+		_body.add_child(UIKit.label("　まだ誰とも会っていない", 11, UIKit.TEXT_DIM))
 		return
 
 	for oid in subject.pairs.keys():
@@ -196,8 +196,10 @@ func _build_pairs() -> void:
 		head.add_child(fold)
 		fold.pressed.connect(_toggle_pair.bind(target_id, body, fold, String(other.vname)))
 
-		var jump := UIKit.button(head, "この人を見る", _jump_to.bind(target_id), 10)
-		jump.custom_minimum_size = Vector2(84, UIKit.ROW_H - 3)
+		var jump := EyeButton.new()
+		jump.tooltip_text = "%s を見る" % other.vname
+		head.add_child(jump)
+		jump.pressed.connect(_jump_to.bind(target_id))
 
 		box.add_child(body)
 		for d in Schema.pair_params():

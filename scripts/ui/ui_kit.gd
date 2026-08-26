@@ -98,8 +98,10 @@ static func slider_row(
 	return s
 
 
-## 読み取り専用のバー表示
-static func bar_row(parent: Node, name_text: String, value: float, vmax: float, col: Color) -> void:
+## 読み取り専用のバー表示。下限が負のパラメータもあるので、
+## バーの伸び方は下限から測り、数字は実際の値を出す。
+static func bar_row(parent: Node, name_text: String, value: float,
+		vmin: float, vmax: float, col: Color) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	parent.add_child(row)
@@ -107,9 +109,9 @@ static func bar_row(parent: Node, name_text: String, value: float, vmax: float, 
 	nm.custom_minimum_size = Vector2(62, 0)
 	row.add_child(nm)
 	var pb := ProgressBar.new()
-	pb.min_value = 0
+	pb.min_value = vmin
 	pb.max_value = vmax
-	pb.value = value
+	pb.value = clampf(value, vmin, vmax)
 	pb.show_percentage = false
 	pb.custom_minimum_size = Vector2(90, 12)
 	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL

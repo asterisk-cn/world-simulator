@@ -12,6 +12,7 @@ var _body: VBoxContainer
 var _live := {}
 var _dragging := {}
 var _known_count := -1
+var _opened := {}  ## other_id -> 畳んでいないか
 var _refresh_accum := 0.0
 
 
@@ -87,8 +88,8 @@ func rebuild() -> void:
 
 	_known_count = subject.pairs.size()
 	_build_header()
-	_build_self_params()
 	_build_personality()
+	_build_self_params()
 	_build_pairs()
 	_build_memory()
 
@@ -144,9 +145,8 @@ func _build_self_params() -> void:
 		for d in Schema.self_params():
 			if String(d["category"]) != String(cat):
 				continue
-			UIKit.bar_row(_body, String(d["label"]),
-				subject.params.get_v(String(d["id"])) - float(d["min"]),
-				maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
+			UIKit.bar_row(_body, String(d["label"]), subject.params.get_v(String(d["id"])),
+				float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
 
 
 func _category_color(cat: String) -> Color:
@@ -159,7 +159,7 @@ func _build_personality() -> void:
 	UIKit.section(_body, "性格")
 	for a in Personality.AXES:
 		UIKit.bar_row(_body, String(a[1]),
-			subject.personality.axis(String(a[0])) * 100.0, 100.0, Color(0.75, 0.65, 0.95))
+			subject.personality.axis(String(a[0])) * 100.0, 0.0, 100.0, Color(0.75, 0.65, 0.95))
 	_body.add_child(UIKit.label("　一言個性　%s" % subject.personality.quirk, 11, UIKit.TEXT_DIM))
 
 
@@ -185,19 +185,42 @@ func _build_pairs() -> void:
 		card.add_child(box)
 
 		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 4)
 		box.add_child(head)
-		head.add_child(UIKit.label("→ " + String(other.vname), 12, other.color.lightened(0.3)))
-		var gap := Control.new()
-		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		head.add_child(gap)
+
+		# 人数ぶん並ぶと長いので、相手ごとに畳んでおく
+		var body := VBoxContainer.new()
+		body.add_theme_constant_override("separation", 2)
+		body.visible = _opened.get(target_id, false)
+
+		var fold := Button.new()
+		fold.text = ("▼ " if body.visible else "▶ ") + String(other.vname)
+		fold.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		fold.flat = true
+		fold.add_theme_font_size_override("font_size", 12)
+		fold.add_theme_color_override("font_color", other.color.lightened(0.3))
+		fold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fold.custom_minimum_size = Vector2(0, UIKit.ROW_H)
+		head.add_child(fold)
+		fold.pressed.connect(_toggle_pair.bind(target_id, body, fold, String(other.vname)))
+
 		UIKit.icon_button(head, "→", "%s を見る" % other.vname,
 			_jump_to.bind(target_id), 26, UIKit.ROW_H, 14)
 
+		box.add_child(body)
 		for d in Schema.pair_params():
-			UIKit.bar_row(box, String(d["label"]),
-				subject.pair_to(target_id).get_v(String(d["id"])) - float(d["min"]),
-				maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
+			UIKit.bar_row(body, String(d["label"]),
+				subject.pair_to(target_id).get_v(String(d["id"])),
+				float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
 
+
+
+## 畳んだ状態は村人を選び直しても覚えておく
+func _toggle_pair(target_id: int, body: VBoxContainer, fold: Button, oname: String) -> void:
+	var open := not body.visible
+	body.visible = open
+	_opened[target_id] = open
+	fold.text = ("▼ " if open else "▶ ") + oname
 
 
 func _jump_to(target_id: int) -> void:

@@ -235,13 +235,12 @@ func _build_detail() -> void:
 	_detail.add_child(head)
 	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, Color(0.9, 0.92, 0.98)))
 	var sw := UIKit.button(head, "向きを反転", _swap_pair, 10)
-	sw.custom_minimum_size = Vector2(80, 22)
+	sw.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 
 	for d in Schema.pair_params():
 		var key := String(d["id"])
-		UIKit.bar_row(_detail, String(d["label"]),
-			_get_cell(key) - float(d["min"]),
-			maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
+		UIKit.bar_row(_detail, String(d["label"]), _get_cell(key),
+			float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
 
 	var line := ""
 	for d2 in Schema.pair_params():

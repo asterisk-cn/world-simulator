@@ -13,6 +13,10 @@ var _post_target: OptionButton
 var _board_panel: PanelContainer
 var _top_bar: PanelContainer
 var _pause_btn: Button
+var _speed_btns: Array = []
+var _win_btns := {}
+
+const SPEEDS := [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 var _log_panel: PanelContainer
 
 var roster_panel = null
@@ -38,6 +42,7 @@ func _process(_delta: float) -> void:
 		_clock_label.text = "%d日目  %s  %s" % [SimClock.day, SimClock.clock_text(), phase]
 	if _pop_label and world:
 		_pop_label.text = "村人 %d" % world.villagers.size()
+	_refresh_state()
 
 
 # ---------------------------------------------------------------------------
@@ -79,36 +84,51 @@ func _build_top_bar() -> void:
 
 	row.add_child(VSeparator.new())
 
-	_pause_btn = UIKit.icon_button(row, "❚❚", "一時停止", _toggle_pause, 34, 24, 12)
-	for s in [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]:
+	_pause_btn = UIKit.toggle_button(row, "❚❚", "一時停止", _toggle_pause, 34, 12)
+	for s in SPEEDS:
 		var sp: float = s
-		var b := UIKit.button(row, "%dx" % int(sp), _set_speed.bind(sp))
-		b.custom_minimum_size = Vector2(34, 24)
+		_speed_btns.append(UIKit.toggle_button(row, "%dx" % int(sp), "%d倍速" % int(sp),
+			_set_speed.bind(sp)))
 
 	row.add_child(VSeparator.new())
-	UIKit.icon_button(row, "☷", "村人", _toggle_roster)
-	UIKit.icon_button(row, "▤", "掲示板", _toggle_board)
-	UIKit.icon_button(row, "▦", "関係マトリクス", _toggle_matrix)
-	UIKit.icon_button(row, "⚙", "設定", _toggle_rules)
-	UIKit.icon_button(row, "☰", "デバッグ", _toggle_debug)
+	_win_btns = {
+		"roster": UIKit.toggle_button(row, "☷", "村人", _toggle_roster, 30, 15),
+		"board": UIKit.toggle_button(row, "▤", "掲示板", _toggle_board, 30, 15),
+		"matrix": UIKit.toggle_button(row, "▦", "関係マトリクス", _toggle_matrix, 30, 15),
+		"rules": UIKit.toggle_button(row, "⚙", "この世界の言葉", _toggle_rules, 30, 15),
+		"debug": UIKit.toggle_button(row, "☰", "デバッグ", _toggle_debug, 30, 15),
+	}
+	_refresh_state()
 
 
 func _toggle_pause() -> void:
 	SimClock.paused = not SimClock.paused
-	_refresh_pause_btn()
-
-
-func _refresh_pause_btn() -> void:
-	if _pause_btn == null:
-		return
-	_pause_btn.text = "▶" if SimClock.paused else "❚❚"
-	_pause_btn.tooltip_text = "再開" if SimClock.paused else "一時停止"
+	_refresh_state()
 
 
 func _set_speed(sp: float) -> void:
 	SimClock.paused = false
 	SimClock.speed = sp
-	_refresh_pause_btn()
+	_refresh_state()
+
+
+## いま止まっているか、何倍速か、どの窓が開いているかをボタンに映す
+func _refresh_state() -> void:
+	if _pause_btn != null:
+		_pause_btn.set_pressed_no_signal(SimClock.paused)
+		_pause_btn.text = "▶" if SimClock.paused else "❚❚"
+		_pause_btn.tooltip_text = "再開" if SimClock.paused else "一時停止"
+	for i in range(_speed_btns.size()):
+		var b: Button = _speed_btns[i]
+		b.set_pressed_no_signal(
+			not SimClock.paused and is_equal_approx(SimClock.speed, float(SPEEDS[i])))
+	var panels := {
+		"roster": roster_panel, "board": _board_panel, "matrix": matrix_panel,
+		"rules": rules_panel, "debug": debug_panel,
+	}
+	for key in _win_btns:
+		var p = panels.get(key, null)
+		(_win_btns[key] as Button).set_pressed_no_signal(p != null and p.visible)
 
 
 ## 大きい窓は一度に1枚だけ。世界が見えなくなるのを防ぐ。
@@ -117,6 +137,7 @@ func _show_only(target) -> void:
 	for p in [roster_panel, _board_panel, matrix_panel, rules_panel, debug_panel]:
 		if p != null:
 			p.visible = (p == target) and want
+	_refresh_state()
 
 
 func close_panels() -> void:
@@ -127,6 +148,7 @@ func close_panels() -> void:
 func open_board() -> void:
 	if _board_panel != null and not _board_panel.visible:
 		_show_only(_board_panel)
+	_refresh_state()
 	if _post_text != null:
 		_post_text.grab_focus()
 
@@ -163,7 +185,12 @@ func _build_log() -> void:
 
 	var box := VBoxContainer.new()
 	panel.add_child(box)
-	box.add_child(UIKit.label("村の記録", 11, Color(0.72, 0.78, 0.9)))
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", UIKit.GAP)
+	box.add_child(head)
+	head.add_child(UIKit.label("村の記録", 11, Color(0.72, 0.78, 0.9)))
+	head.add_child(UIKit.label("● 村の変化", 9, Color(1.0, 0.78, 0.35)))
+	head.add_child(UIKit.label("● 人のあいだ", 9, Color(0.55, 0.85, 0.95)))
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true

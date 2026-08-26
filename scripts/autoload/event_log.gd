@@ -25,10 +25,11 @@ func add(text: String, color: Color = Color(0.85, 0.85, 0.88)) -> void:
 	entry_added.emit(line, color)
 
 
+## 村の姿が変わった出来事（家が建った、など）
 func notable(text: String) -> void:
 	add(text, Color(1.0, 0.78, 0.35))
 
 
-
+## 村人どうしのあいだで起きた出来事
 func social(text: String) -> void:
 	add(text, Color(0.55, 0.85, 0.95))

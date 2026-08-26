@@ -305,8 +305,15 @@ func _draw() -> void:
 	Iso.draw_block(self, 7.0, 3.5, 11.0, Color(0.95, 0.86, 0.74), up + Vector2(0, -17.0), 3.5)
 
 	# 名前は常に、いま何をしているかは選んでいる村人だけ。並ぶと読めなくなるので。
-	draw_string(font, Vector2(-40, -38 - lift), vname, HORIZONTAL_ALIGNMENT_CENTER, 80, 11,
-		Color(1, 1, 1, 0.88 if selected else 0.62))
+	# 昼夜どちらでも読めるよう、縁取りを付ける。
+	_label(font, vname, Vector2(-40, -38 - lift), 80, 11,
+		Color(1, 1, 1, 0.95 if selected else 0.78))
 	if selected:
-		draw_string(font, Vector2(-55, 16), action_label(), HORIZONTAL_ALIGNMENT_CENTER, 110, 10,
-			Color(1.0, 0.95, 0.65, 0.95))
+		_label(font, action_label(), Vector2(-55, 16), 110, 10, Color(1.0, 0.93, 0.62))
+
+
+## 世界の上に置く文字。縁取りがないと昼は白飛び、夜は沈んで読めない。
+func _label(font: Font, text: String, at: Vector2, w: int, size: int, col: Color) -> void:
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, size, 4,
+		Color(0.05, 0.06, 0.09, 0.75))
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, size, col)

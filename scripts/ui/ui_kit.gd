@@ -199,8 +199,20 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	bg.bg_color = Color(1, 1, 1, 0.08)
 	bg.set_corner_radius_all(3)
 	pb.add_theme_stylebox_override("background", bg)
-	# 値が下限に張り付いていても「バーがある」ことが分かるよう、下地に印を残す
 	row.add_child(pb)
+	# 下限が負のパラメータは、0 の位置に印を置いて振れ幅の向きが分かるようにする
+	if vmin < 0.0:
+		var mark := ColorRect.new()
+		mark.color = Color(1, 1, 1, 0.28)
+		mark.custom_minimum_size = Vector2(1, BAR_H)
+		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pb.add_child(mark)
+		var t := (0.0 - vmin) / maxf(vmax - vmin, 0.001)
+		mark.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+		mark.anchor_left = t
+		mark.anchor_right = t
+		mark.offset_left = 0
+		mark.offset_right = 1
 
 
 static func button(parent: Node, text: String, on_press: Callable, size: int = 11) -> Button:
@@ -254,6 +266,32 @@ static func icon_button(parent: Node, glyph: String, tip: String, on_press: Call
 	b.tooltip_text = tip
 	b.add_theme_font_size_override("font_size", size)
 	b.custom_minimum_size = Vector2(w, h)
+	parent.add_child(b)
+	b.pressed.connect(on_press)
+	return b
+
+
+## いま選ばれている／開いていることが見えるボタン。
+## 押せるだけで状態が見えないと、速度も窓の開閉も確かめようがない。
+static func toggle_button(parent: Node, text: String, tip: String, on_press: Callable,
+		w: int = 34, size: int = 11) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.tooltip_text = tip
+	b.toggle_mode = true
+	b.add_theme_font_size_override("font_size", size)
+	b.custom_minimum_size = Vector2(w, ROW_H)
+	var on := StyleBoxFlat.new()
+	on.bg_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.85)
+	on.set_corner_radius_all(6)
+	on.content_margin_left = 8
+	on.content_margin_right = 8
+	on.content_margin_top = 4
+	on.content_margin_bottom = 4
+	b.add_theme_stylebox_override("pressed", on)
+	b.add_theme_stylebox_override("hover_pressed", on)
+	b.add_theme_color_override("font_pressed_color", Color(0.12, 0.10, 0.06))
+	b.add_theme_color_override("font_hover_pressed_color", Color(0.12, 0.10, 0.06))
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b

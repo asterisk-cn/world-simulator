@@ -78,7 +78,7 @@ func rebuild() -> void:
 		c.queue_free()
 
 	if subject == null or not is_instance_valid(subject):
-		_build_world_rules()
+		_build_placeholder()
 		return
 
 	_known_count = subject.pairs.size()
@@ -214,39 +214,6 @@ func _build_memory() -> void:
 
 # ---------------------------------------------------------------------------
 
-func _get_global(key: String) -> float:
-	return SimConfig.p(key)
-
-
-func _set_global(x: float, key: String) -> void:
-	SimConfig.set_param(key, x)
-
-
-func _reset_globals() -> void:
-	SimConfig.reset_params()
-	rebuild()
-
-
-func _build_world_rules() -> void:
-	_body.add_child(UIKit.label("世界のルール", 17, Color(0.80, 0.85, 0.95)))
-	UIKit.wrapped(_body, "村人をクリックすると個体を編集できる。", 11)
-	UIKit.section(_body, "物理と時間")
-	for k in SimConfig.PARAM_DEF:
-		var key := String(k)
-		var d: Array = SimConfig.PARAM_DEF[key]
-		_live_slider(_body, "g:" + key, String(d[3]),
-			_get_global.bind(key), _set_global.bind(key),
-			float(d[1]), float(d[2]), _step_for(float(d[1]), float(d[2])),
-			Color(0.55, 0.75, 0.95), 148)
-	UIKit.spacer(_body, 6)
-	UIKit.button(_body, "既定値に戻す", _reset_globals)
-	UIKit.spacer(_body, 14)
-
-
-func _step_for(vmin: float, vmax: float) -> float:
-	var span := vmax - vmin
-	if span <= 2.0:
-		return 0.01
-	if span <= 20.0:
-		return 0.1
-	return 1.0
+func _build_placeholder() -> void:
+	_body.add_child(UIKit.label("村人を選ぶ", 15, Color(0.80, 0.85, 0.95)))
+	UIKit.wrapped(_body, "クリックするとその村人の内側が出る。", 11)

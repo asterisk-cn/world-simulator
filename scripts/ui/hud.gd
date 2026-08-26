@@ -88,7 +88,7 @@ func _build_top_bar() -> void:
 	board_btn.custom_minimum_size = Vector2(60, 24)
 	var mat_btn := UIKit.button(row, "関係マトリクス", _toggle_matrix)
 	mat_btn.custom_minimum_size = Vector2(96, 24)
-	var rules_btn := UIKit.button(row, "定義", _toggle_rules)
+	var rules_btn := UIKit.button(row, "設定", _toggle_rules)
 	rules_btn.custom_minimum_size = Vector2(48, 24)
 	var dbg_btn := UIKit.button(row, "デバッグ", _toggle_debug)
 	dbg_btn.custom_minimum_size = Vector2(66, 24)

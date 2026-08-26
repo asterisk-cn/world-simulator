@@ -45,8 +45,9 @@ AI村人が自律的に行動するのを、プレイヤーは**神の視点**�
 
 | できること | 場所 |
 |---|---|
-| パラメータの追加 / 削除 / 改名 / 対象範囲・カテゴリ・色・範囲の変更 | 定義パネル「パラメータ」 |
-| アクションの追加 / 削除 / 改名 / 動作の型の変更 / 有効・無効 | 定義パネル「アクション」 |
+| パラメータの追加 / 削除 / 改名 / カテゴリ・色・範囲の変更 | 設定「パラメータ」 |
+| アクションの追加 / 削除 / 改名 / 型と対象の変更 / 有効・無効 | 設定「アクション」 |
+| 世界のルール（1日の長さ、夜の割合、行動を選び直す間隔、移動速度、記憶の保持量） | 設定「世界」 |
 
 「この世界を始める」を押すと村人が置かれ、時間が動き出す。
 
@@ -54,11 +55,10 @@ AI村人が自律的に行動するのを、プレイヤーは**神の視点**�
 
 | できること | 場所 |
 |---|---|
-| 世界のルール（1日の長さ、夜の割合、行動を選び直す間隔、移動速度） | 右パネル（未選択時） |
 | 個体の値・性格の閲覧 | 村人をクリック |
 | n×n グリッドの閲覧（値表示 / 差分表示） | 上部「関係マトリクス」 |
 | 差出人不明の貼り紙 | 上部「掲示板」 |
-| 定義の閲覧 | 上部「定義」 |
+| 設定の閲覧（パラメータ / アクション / 世界） | 上部「設定」 |
 | デバッグ（在庫一覧・材料配布・家を建てる） | 上部「デバッグ」 |
 
 ## 実行
@@ -84,11 +84,11 @@ mise exec -- godot --headless --fixed-fps 60 --quit-after 40000 -- --echo-log --
 
 ```
 scripts/
-  autoload/  schema(定義) / sim_config(物理と時間) / sim_clock / event_log
+  autoload/  schema(定義) / sim_config(世界のルール) / sim_clock / event_log
   data/      self_params / pair_params / personality / memory / rules
   world/     world / iso(クォータービュー変換) / harvest_node / structure / bulletin_board
   villager/  villager(世界で何が起きたか) / brain(判断の置き場所)
-  ui/        ui_kit / inspector / matrix_panel(n×n) / rules_panel(定義) / debug_panel / hud
+  ui/        ui_kit / inspector / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
 ```
 
 Godot 4.7.2 を `mise.toml` で固定。作業の経緯は [LOG.md](LOG.md)。

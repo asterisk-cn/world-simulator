@@ -1,5 +1,5 @@
 extends PanelContainer
-## 定義エディタ。この世界にどんなパラメータとアクションが存在するかを神が決める。
+## 設定。この世界に何が存在し、どんな物理で動くかを神が決める。
 ##
 ## 編集できるのは開始前だけ。始まったあとは同じ画面が閲覧専用になる。
 
@@ -11,6 +11,7 @@ var editable := true
 var _tabs: TabContainer
 var _param_box: VBoxContainer
 var _action_box: VBoxContainer
+var _world_box: VBoxContainer
 var _title: Label
 var _start_btn: Button
 var _reset_btn: Button
@@ -34,7 +35,7 @@ func _ready() -> void:
 
 	var head := HBoxContainer.new()
 	root.add_child(head)
-	_title = UIKit.label("定義", 14, Color(0.85, 0.9, 0.98))
+	_title = UIKit.label("設定", 14, Color(0.85, 0.9, 0.98))
 	head.add_child(_title)
 	_reset_btn = UIKit.button(head, "既定に戻す", _reset_all, 10)
 	_reset_btn.custom_minimum_size = Vector2(90, 22)
@@ -45,6 +46,7 @@ func _ready() -> void:
 
 	_param_box = _make_tab("パラメータ")
 	_action_box = _make_tab("アクション")
+	_world_box = _make_tab("世界")
 
 	_start_btn = UIKit.button(root, "この世界を始める", _on_start, 13)
 	_start_btn.custom_minimum_size = Vector2(0, 32)
@@ -53,15 +55,17 @@ func _ready() -> void:
 	Schema.actions_changed.connect(_rebuild_actions)
 	_rebuild_params()
 	_rebuild_actions()
+	_rebuild_world()
 
 
 func set_editable(on: bool) -> void:
 	editable = on
-	_title.text = "定義" if on else "定義（開始後は変更できない）"
+	_title.text = "設定" if on else "設定（開始後は変更できない）"
 	_start_btn.visible = on
 	_reset_btn.visible = on
 	_rebuild_params()
 	_rebuild_actions()
+	_rebuild_world()
 
 
 func _on_start() -> void:
@@ -82,6 +86,8 @@ func _make_tab(title: String) -> VBoxContainer:
 
 func _reset_all() -> void:
 	Schema.reset_all()
+	SimConfig.reset_params()
+	_rebuild_world()
 
 
 func _clear(box: VBoxContainer) -> void:
@@ -252,3 +258,44 @@ func _set_target(key: String, act: Dictionary) -> void:
 
 func _set_enabled(on: bool, act: Dictionary) -> void:
 	act["enabled"] = on
+
+
+# ---------------------------------------------------------------------------
+# 世界（物理と時間）
+# ---------------------------------------------------------------------------
+
+func _rebuild_world() -> void:
+	if _world_box == null:
+		return
+	_clear(_world_box)
+
+	for k in SimConfig.PARAM_DEF:
+		var key := String(k)
+		var d: Array = SimConfig.PARAM_DEF[key]
+		if editable:
+			UIKit.slider_row(_world_box, String(d[3]), SimConfig.p(key),
+				float(d[1]), float(d[2]), _step_for(float(d[1]), float(d[2])),
+				_set_world.bind(key), Color(0.55, 0.75, 0.95), 150)
+		else:
+			var row := HBoxContainer.new()
+			_world_box.add_child(row)
+			var nm := UIKit.label(String(d[3]), 11, UIKit.TEXT)
+			nm.custom_minimum_size = Vector2(150, 0)
+			row.add_child(nm)
+			row.add_child(UIKit.label(UIKit._fmt(SimConfig.p(key),
+				_step_for(float(d[1]), float(d[2]))), 11, UIKit.TEXT_DIM))
+
+	UIKit.spacer(_world_box, 10)
+
+
+func _set_world(x: float, key: String) -> void:
+	SimConfig.set_param(key, x)
+
+
+func _step_for(vmin: float, vmax: float) -> float:
+	var span := vmax - vmin
+	if span <= 2.0:
+		return 0.01
+	if span <= 20.0:
+		return 0.1
+	return 1.0

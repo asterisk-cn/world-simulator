@@ -191,7 +191,7 @@ func _build_pairs() -> void:
 		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(gap)
 		UIKit.icon_button(head, "→", "%s を見る" % other.vname,
-			_jump_to.bind(target_id), 26, 22, 14)
+			_jump_to.bind(target_id), 26, UIKit.ROW_H, 14)
 
 		for d in Schema.pair_params():
 			UIKit.bar_row(box, String(d["label"]),

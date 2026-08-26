@@ -47,15 +47,9 @@ func _ready() -> void:
 	head.add_child(gap)
 
 	_reset_btn = UIKit.button(head, "既定に戻す", _reset_all, 10)
-	_reset_btn.custom_minimum_size = Vector2(80, 22)
+	_reset_btn.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 
-	_delete_btn = Button.new()
-	_delete_btn.text = "✕"
-	_delete_btn.tooltip_text = "削除モード"
-	_delete_btn.toggle_mode = true
-	_delete_btn.add_theme_font_size_override("font_size", 14)
-	_delete_btn.custom_minimum_size = Vector2(28, 24)
-	head.add_child(_delete_btn)
+	_delete_btn = UIKit.trash_toggle(head, "削除モード")
 	_delete_btn.toggled.connect(_on_delete_toggled)
 
 	_tabs = TabContainer.new()
@@ -186,7 +180,7 @@ func _build_category(scope: String, cat: String) -> void:
 	else:
 		head.add_child(UIKit.label(cat, 13, col))
 	if _can_delete():
-		UIKit.icon_button(head, "✕", "%s を消す" % cat, _del_category.bind(scope, cat), 26, 22, 13)
+		UIKit.icon_button(head, "✕", "%s を消す" % cat, _del_category.bind(scope, cat), 26, UIKit.ROW_H, 13)
 
 	box.add_child(HSeparator.new())
 
@@ -214,7 +208,7 @@ func _flat_edit(cat: String, col: Color, scope: String) -> LineEdit:
 	le.add_theme_font_size_override("font_size", 13)
 	le.add_theme_color_override("font_color", col)
 	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(80, 24)
+	le.custom_minimum_size = Vector2(80, UIKit.ROW_H + 2)
 	var flat := StyleBoxFlat.new()
 	flat.bg_color = Color(0, 0, 0, 0)
 	flat.content_margin_left = 2
@@ -248,7 +242,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	le.text = String(def["label"])
 	le.add_theme_font_size_override("font_size", 11)
 	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(70, 22)
+	le.custom_minimum_size = Vector2(70, UIKit.ROW_H)
 	row.add_child(le)
 	le.text_changed.connect(_set_label.bind(def))
 
@@ -257,7 +251,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 
 	if _can_delete():
 		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
-			_del_param.bind(pid), 26, 22, 13)
+			_del_param.bind(pid), 26, UIKit.ROW_H, 13)
 
 
 func _add_category(scope: String) -> void:
@@ -334,12 +328,12 @@ func _rebuild_actions() -> void:
 		le.text = String(act["label"])
 		le.add_theme_font_size_override("font_size", 11)
 		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		le.custom_minimum_size = Vector2(80, 22)
+		le.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 		name_row.add_child(le)
 		le.text_changed.connect(_set_a_label.bind(act))
 		if _can_delete():
 			UIKit.icon_button(name_row, "✕", "%s を消す" % String(act["label"]),
-				_del_action.bind(aid), 26, 22, 13)
+				_del_action.bind(aid), 26, UIKit.ROW_H, 13)
 
 		UIKit.option_row(box, "タイプ", kinds, kind_labels, kind, _set_kind.bind(act), 48)
 
@@ -451,14 +445,14 @@ func _rebuild_recipes() -> void:
 			le.text = String(rec["label"])
 			le.add_theme_font_size_override("font_size", 12)
 			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			le.custom_minimum_size = Vector2(80, 22)
+			le.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 			head.add_child(le)
 			le.text_changed.connect(_rename_recipe.bind(rid))
 		else:
 			head.add_child(UIKit.label(String(rec["label"]), 12, Color(0.9, 0.92, 0.98)))
 		if _can_delete():
 			UIKit.icon_button(head, "✕", "%s を消す" % String(rec["label"]),
-				_del_recipe.bind(rid), 26, 22, 13)
+				_del_recipe.bind(rid), 26, UIKit.ROW_H, 13)
 
 		box.add_child(HSeparator.new())
 

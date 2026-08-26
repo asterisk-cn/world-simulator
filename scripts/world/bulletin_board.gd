@@ -66,9 +66,9 @@ func unread_for(mem) -> Array:
 
 
 # 板の寸法。他のものと同じく角丸ブロックで組む。
-const PANEL_W := 26.0
-const PANEL_D := 4.5
-const PANEL_H := 27.0
+const PANEL_W := 27.0
+const PANEL_D := 2.2
+const PANEL_H := 26.0
 const PANEL_OFF := Vector2(0, -17.0)
 
 
@@ -81,7 +81,7 @@ func _draw() -> void:
 	Iso.draw_block(self, 3.2, 1.6, 19.0, post, Vector2(19.0, -2.0), 1.5)
 
 	# 板
-	Iso.draw_block(self, PANEL_W, PANEL_D, PANEL_H, Color(0.66, 0.49, 0.30), PANEL_OFF, 4.0)
+	Iso.draw_block(self, PANEL_W, PANEL_D, PANEL_H, Color(0.66, 0.49, 0.30), PANEL_OFF, 3.0)
 
 	# 貼り紙は板の手前の面に貼る
 	var n: int = mini(posts.size(), 6)

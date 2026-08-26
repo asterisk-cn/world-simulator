@@ -23,19 +23,10 @@ var _delete_mode := false
 
 
 func _ready() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UIKit.BG
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
-	sb.border_color = Color(1, 1, 1, 0.10)
-	sb.set_border_width_all(1)
-	add_theme_stylebox_override("panel", sb)
+	add_theme_stylebox_override("panel", UIKit.panel_style())
 
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 6)
+	root.add_theme_constant_override("separation", UIKit.GAP)
 	add_child(root)
 
 	var head := HBoxContainer.new()
@@ -126,15 +117,11 @@ func _can_delete() -> bool:
 
 
 func _make_tab(title: String) -> VBoxContainer:
-	var scroll := ScrollContainer.new()
-	scroll.name = title
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_tabs.add_child(scroll)
-	var box := VBoxContainer.new()
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 3)
-	scroll.add_child(box)
-	return box
+	var holder := MarginContainer.new()
+	holder.name = title
+	holder.add_theme_constant_override("margin_top", UIKit.GAP)
+	_tabs.add_child(holder)
+	return UIKit.scroll_body(holder)
 
 
 func _reset_all() -> void:
@@ -173,10 +160,10 @@ func _rebuild_params() -> void:
 
 func _build_category(scope: String, cat: String) -> void:
 	var col := Schema.category_color(cat)
-	var card := UIKit.panel(UIKit.BG_SOFT, 6)
+	var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
 	_param_box.add_child(card)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 2)
+	box.add_theme_constant_override("separation", UIKit.GAP_S)
 	card.add_child(box)
 
 	# 見出し
@@ -195,10 +182,10 @@ func _build_category(scope: String, cat: String) -> void:
 
 	# 中身は一段下げる
 	var indent := MarginContainer.new()
-	indent.add_theme_constant_override("margin_left", 14)
+	indent.add_theme_constant_override("margin_left", UIKit.PAD)
 	box.add_child(indent)
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 2)
+	inner.add_theme_constant_override("separation", UIKit.GAP_S)
 	indent.add_child(inner)
 
 	for d in Schema.params_in(scope):
@@ -311,10 +298,10 @@ func _rebuild_actions() -> void:
 		var act: Dictionary = a
 		var aid := String(act["id"])
 		var kind := String(act["kind"])
-		var card := UIKit.panel(UIKit.BG_SOFT, 6)
+		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
 		_action_box.add_child(card)
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 2)
+		box.add_theme_constant_override("separation", UIKit.GAP_S)
 		card.add_child(box)
 
 		if not editable:
@@ -439,10 +426,10 @@ func _rebuild_recipes() -> void:
 	for r in Schema.recipes:
 		var rec: Dictionary = r
 		var rid := String(rec["id"])
-		var card := UIKit.panel(UIKit.BG_SOFT, 6)
+		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
 		_recipe_box.add_child(card)
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 2)
+		box.add_theme_constant_override("separation", UIKit.GAP_S)
 		card.add_child(box)
 
 		var head := HBoxContainer.new()
@@ -466,10 +453,10 @@ func _rebuild_recipes() -> void:
 		box.add_child(HSeparator.new())
 
 		var indent := MarginContainer.new()
-		indent.add_theme_constant_override("margin_left", 14)
+		indent.add_theme_constant_override("margin_left", UIKit.PAD)
 		box.add_child(indent)
 		var inner := VBoxContainer.new()
-		inner.add_theme_constant_override("separation", 2)
+		inner.add_theme_constant_override("separation", UIKit.GAP_S)
 		indent.add_child(inner)
 
 		if editable:

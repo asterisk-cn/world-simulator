@@ -304,10 +304,6 @@ func _draw() -> void:
 	Iso.draw_block(self, 9.0, 4.5, 17.0, color, up, 3.5)
 	Iso.draw_block(self, 7.0, 3.5, 11.0, Color(0.95, 0.86, 0.74), up + Vector2(0, -17.0), 3.5)
 
-	var eye := Color(0.18, 0.16, 0.15)
-	draw_circle(Vector2(-2.6, -23.0) + up, 1.3, eye)
-	draw_circle(Vector2(2.6, -23.0) + up, 1.3, eye)
-
 	# 名前は常に、いま何をしているかは選んでいる村人だけ。並ぶと読めなくなるので。
 	draw_string(font, Vector2(-40, -38 - lift), vname, HORIZONTAL_ALIGNMENT_CENTER, 80, 11,
 		Color(1, 1, 1, 0.88 if selected else 0.62))

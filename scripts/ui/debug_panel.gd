@@ -11,19 +11,10 @@ var _accum := 0.0
 
 
 func _ready() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UIKit.BG
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
-	sb.border_color = Color(1, 1, 1, 0.10)
-	sb.set_border_width_all(1)
-	add_theme_stylebox_override("panel", sb)
+	add_theme_stylebox_override("panel", UIKit.panel_style())
 
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 4)
+	root.add_theme_constant_override("separation", UIKit.GAP_S)
 	add_child(root)
 
 	UIKit.window_header(root, "デバッグ", _close)

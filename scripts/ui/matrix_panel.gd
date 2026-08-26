@@ -21,24 +21,14 @@ signal closed
 
 
 func _ready() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UIKit.BG
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
-	sb.border_color = Color(1, 1, 1, 0.10)
-	sb.set_border_width_all(1)
-	add_theme_stylebox_override("panel", sb)
+	add_theme_stylebox_override("panel", UIKit.panel_style())
 
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 6)
+	root.add_theme_constant_override("separation", UIKit.GAP)
 	add_child(root)
 
 	var head := UIKit.window_header(root, "関係マトリクス", _close)
-	_param_opt = OptionButton.new()
-	_param_opt.add_theme_font_size_override("font_size", 11)
+	_param_opt = UIKit.dropdown([], [], "")
 	_param_opt.custom_minimum_size = Vector2(110, UIKit.ROW_H)
 	head.add_child(_param_opt)
 	head.move_child(_param_opt, 1)
@@ -55,7 +45,7 @@ func _ready() -> void:
 	scroll.add_child(_grid)
 
 	_detail = VBoxContainer.new()
-	_detail.add_theme_constant_override("separation", 2)
+	_detail.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(_detail)
 
 	Schema.parameters_changed.connect(_on_schema_changed)
@@ -80,8 +70,11 @@ func _refresh_param_options() -> void:
 		return
 	if not ids.has(_param_id):
 		_param_id = String(ids[0])
+	var pop := _param_opt.get_popup()
 	for i in range(ids.size()):
 		_param_opt.add_item(Schema.param_label(String(ids[i])), i)
+		pop.set_item_as_radio_checkable(i, false)
+		pop.set_item_as_checkable(i, false)
 		if String(ids[i]) == _param_id:
 			_param_opt.select(i)
 

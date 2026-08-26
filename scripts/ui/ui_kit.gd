@@ -2,30 +2,99 @@ class_name UIKit
 extends RefCounted
 ## コードから UI を組み立てるための小さなヘルパ群。
 
-const BG := Color(0.09, 0.10, 0.13, 0.94)
-const BG_SOFT := Color(0.14, 0.15, 0.19, 0.94)
+const BG := Color(0.10, 0.11, 0.14)
+const BG_SOFT := Color(0.15, 0.16, 0.20)
+const INK := Color(1, 1, 1, 0.07)      ## 押せるものの下地
+const INK_HOVER := Color(1, 1, 1, 0.14)
+const INK_ACTIVE := Color(1, 1, 1, 0.20)
+const SUNK := Color(0, 0, 0, 0.22)     ## 入力欄のくぼみ
 const TEXT := Color(0.88, 0.90, 0.94)
 const TEXT_DIM := Color(0.60, 0.63, 0.70)
 
 ## 日本語は英字より行が高い。入力欄やボタンをこれより低くすると文字の上下が切れる。
 const ROW_H := 27
 
+## 読み取り専用バーの太さ。場所によって変わらないよう1か所で決める。
+const BAR_H := 10
 
-static func panel(bg: Color = BG, radius: int = 8) -> PanelContainer:
-	var p := PanelContainer.new()
+## 縦スクロールする中身は、スクロールバーとこれだけ離す。
+const SCROLL_GUTTER := 12
+
+## 余白の基準。ここ以外に数字を置かない。
+const PAD := 14      ## パネルの内側
+const PAD_S := 10    ## パネルの中に置く小さなカードの内側
+const GAP := 8       ## まとまりどうしの間
+const GAP_S := 4     ## 並んだ行どうしの間
+
+
+## UI全体の見た目を1か所で決める。
+## これを敷かないと、ボタンや入力欄だけがエンジン既定の暗い箱を持ってしまい、
+## そこだけ影が差したように見える。
+static func build_theme(font: Font) -> Theme:
+	var th := Theme.new()
+	th.default_font = font
+	th.default_font_size = 12
+
+	var flat := func(col: Color, radius: int, pad_x: int, pad_y: int) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col
+		sb.set_corner_radius_all(radius)
+		sb.content_margin_left = pad_x
+		sb.content_margin_right = pad_x
+		sb.content_margin_top = pad_y
+		sb.content_margin_bottom = pad_y
+		return sb
+
+	for t in ["Button", "OptionButton", "MenuButton", "CheckBox"]:
+		th.set_stylebox("normal", t, flat.call(INK, 6, 8, 4))
+		th.set_stylebox("hover", t, flat.call(INK_HOVER, 6, 8, 4))
+		th.set_stylebox("pressed", t, flat.call(INK_ACTIVE, 6, 8, 4))
+		th.set_stylebox("focus", t, StyleBoxEmpty.new())
+		th.set_stylebox("disabled", t, flat.call(Color(1, 1, 1, 0.03), 6, 8, 4))
+		th.set_color("font_color", t, TEXT)
+		th.set_color("font_hover_color", t, Color(1, 1, 1, 0.98))
+		th.set_color("font_pressed_color", t, Color(1, 1, 1, 0.98))
+		th.set_color("font_disabled_color", t, Color(1, 1, 1, 0.28))
+
+	th.set_stylebox("normal", "LineEdit", flat.call(SUNK, 6, 8, 4))
+	th.set_stylebox("focus", "LineEdit", flat.call(Color(1, 1, 1, 0.10), 6, 8, 4))
+	th.set_color("font_color", "LineEdit", TEXT)
+	th.set_color("font_placeholder_color", "LineEdit", Color(1, 1, 1, 0.30))
+	th.set_color("caret_color", "LineEdit", TEXT)
+
+	th.set_stylebox("panel", "PopupMenu", flat.call(BG_SOFT, 8, 6, 6))
+	th.set_color("font_color", "PopupMenu", TEXT)
+	th.set_color("font_hover_color", "PopupMenu", Color(1, 1, 1, 0.98))
+	th.set_stylebox("hover", "PopupMenu", flat.call(INK_HOVER, 5, 6, 3))
+
+	th.set_stylebox("panel", "TabContainer", StyleBoxEmpty.new())
+	th.set_stylebox("tab_selected", "TabContainer", flat.call(INK_ACTIVE, 6, 12, 5))
+	th.set_stylebox("tab_unselected", "TabContainer", flat.call(Color(1, 1, 1, 0.03), 6, 12, 5))
+	th.set_stylebox("tab_hovered", "TabContainer", flat.call(INK_HOVER, 6, 12, 5))
+	th.set_color("font_selected_color", "TabContainer", Color(1, 1, 1, 0.98))
+	th.set_color("font_unselected_color", "TabContainer", TEXT_DIM)
+
+	th.set_color("separator", "HSeparator", Color(1, 1, 1, 0.08))
+	th.set_constant("separation", "HSeparator", 6)
+	return th
+
+
+static func panel_style(bg: Color = BG, radius: int = 10, pad: int = PAD) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.corner_radius_top_left = radius
-	sb.corner_radius_top_right = radius
-	sb.corner_radius_bottom_left = radius
-	sb.corner_radius_bottom_right = radius
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
+	sb.set_corner_radius_all(radius)
+	sb.content_margin_left = pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
 	sb.border_color = Color(1, 1, 1, 0.07)
 	sb.set_border_width_all(1)
-	p.add_theme_stylebox_override("panel", sb)
+	return sb
+
+
+static func panel(bg: Color = BG, radius: int = 10, pad: int = PAD) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", panel_style(bg, radius, pad))
 	return p
 
 
@@ -41,11 +110,14 @@ static func section(parent: Node, text: String, col: Color = Color(0.72, 0.78, 0
 	var l := label(text, 12, col)
 	l.add_theme_constant_override("line_spacing", 2)
 	var sp := Control.new()
-	sp.custom_minimum_size = Vector2(0, 6)
+	sp.custom_minimum_size = Vector2(0, 12)
 	parent.add_child(sp)
 	parent.add_child(l)
 	var sep := HSeparator.new()
 	parent.add_child(sep)
+	var sp2 := Control.new()
+	sp2.custom_minimum_size = Vector2(0, 2)
+	parent.add_child(sp2)
 	return l
 
 
@@ -113,8 +185,10 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	pb.max_value = vmax
 	pb.value = clampf(value, vmin, vmax)
 	pb.show_percentage = false
-	pb.custom_minimum_size = Vector2(90, 12)
+	pb.custom_minimum_size = Vector2(90, BAR_H)
 	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 行の高さに引き延ばされると場所によって太さが変わるので、中央に固定する
+	pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = col
 	fill.set_corner_radius_all(3)
@@ -124,10 +198,6 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	bg.set_corner_radius_all(3)
 	pb.add_theme_stylebox_override("background", bg)
 	row.add_child(pb)
-	var val := label("%d" % int(value), 11, TEXT_DIM)
-	val.custom_minimum_size = Vector2(34, 0)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(val)
 
 
 static func button(parent: Node, text: String, on_press: Callable, size: int = 11) -> Button:
@@ -138,6 +208,25 @@ static func button(parent: Node, text: String, on_press: Callable, size: int = 1
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b
+
+
+## 縦スクロールする中身を包み、スクロールバーとの余白を作る。
+static func scroll_body(parent: Node) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(scroll)
+
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_right", SCROLL_GUTTER)
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(pad)
+
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", GAP_S)
+	pad.add_child(box)
+	return box
 
 
 ## 浮いている窓の見出し。題名と閉じるボタンを揃える。
@@ -198,6 +287,24 @@ static func line_edit_row(parent: Node, name_text: String, value: String,
 	return le
 
 
+## 選択肢のラジオ印は要らないので、項目をアイコンなしのチェック表示にする。
+static func dropdown(keys: Array, labels: Array, current: String) -> OptionButton:
+	var opt := OptionButton.new()
+	opt.add_theme_font_size_override("font_size", 11)
+	opt.custom_minimum_size = Vector2(90, ROW_H)
+	opt.fit_to_longest_item = false
+	var pop := opt.get_popup()
+	pop.add_theme_font_size_override("font_size", 11)
+	pop.hide_on_checkable_item_selection = true
+	for i in range(keys.size()):
+		opt.add_item(String(labels[i]), i)
+		pop.set_item_as_radio_checkable(i, false)
+		pop.set_item_as_checkable(i, false)
+		if String(keys[i]) == current:
+			opt.select(i)
+	return opt
+
+
 ## keys と labels は同じ長さ。選ばれた key が on_change に渡る。
 static func option_row(parent: Node, name_text: String, keys: Array, labels: Array,
 		current: String, on_change: Callable, name_width: int = 62) -> OptionButton:
@@ -207,14 +314,8 @@ static func option_row(parent: Node, name_text: String, keys: Array, labels: Arr
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
-	var opt := OptionButton.new()
-	opt.add_theme_font_size_override("font_size", 11)
+	var opt := dropdown(keys, labels, current)
 	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	opt.custom_minimum_size = Vector2(90, ROW_H)
-	for i in range(keys.size()):
-		opt.add_item(String(labels[i]), i)
-		if String(keys[i]) == current:
-			opt.select(i)
 	row.add_child(opt)
 	opt.item_selected.connect(func(i: int) -> void: on_change.call(String(keys[i])))
 	return opt

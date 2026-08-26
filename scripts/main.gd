@@ -91,10 +91,7 @@ func _setup_font() -> void:
 	sf.allow_system_fallback = true
 	SimConfig.ui_font = sf
 
-	var th := Theme.new()
-	th.default_font = sf
-	th.default_font_size = 12
-	get_window().theme = th
+	get_window().theme = UIKit.build_theme(sf)
 
 
 func _spawn_villagers() -> void:

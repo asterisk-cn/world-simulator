@@ -172,7 +172,7 @@ func _build_board_panel() -> void:
 	add_child(_board_panel)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
+	box.add_theme_constant_override("separation", UIKit.GAP_S)
 	_board_panel.add_child(box)
 	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.95, 0.86, 0.6))
 	UIKit.wrapped(box, "貼り紙は差出人不明として扱われる。", 10)
@@ -190,14 +190,12 @@ func _build_board_panel() -> void:
 	form.add_theme_constant_override("separation", 4)
 	box.add_child(form)
 
-	_post_kind = OptionButton.new()
-	_post_kind.add_theme_font_size_override("font_size", 11)
-	for k in [BulletinBoard.KIND_INFO, BulletinBoard.KIND_CLAIM, BulletinBoard.KIND_ACCUSE, BulletinBoard.KIND_OFFER]:
-		_post_kind.add_item(k)
+	var kinds := [BulletinBoard.KIND_INFO, BulletinBoard.KIND_CLAIM,
+		BulletinBoard.KIND_ACCUSE, BulletinBoard.KIND_OFFER]
+	_post_kind = UIKit.dropdown(kinds, kinds, String(kinds[0]))
 	form.add_child(_post_kind)
 
-	_post_target = OptionButton.new()
-	_post_target.add_theme_font_size_override("font_size", 11)
+	_post_target = UIKit.dropdown([], [], "")
 	form.add_child(_post_target)
 
 	_post_text = LineEdit.new()
@@ -218,10 +216,15 @@ func _refresh_targets() -> void:
 	_post_target.clear()
 	_post_target.add_item("対象なし")
 	_post_target.set_item_metadata(0, -1)
+	var pop := _post_target.get_popup()
+	pop.set_item_as_radio_checkable(0, false)
+	pop.set_item_as_checkable(0, false)
 	var i := 1
 	for v in world.villagers:
 		_post_target.add_item(v.vname)
 		_post_target.set_item_metadata(i, v.id)
+		pop.set_item_as_radio_checkable(i, false)
+		pop.set_item_as_checkable(i, false)
 		i += 1
 	_post_target.select(clampi(prev, 0, _post_target.item_count - 1))
 

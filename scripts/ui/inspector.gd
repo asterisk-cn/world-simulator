@@ -18,26 +18,9 @@ var _refresh_accum := 0.0
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(334, 0)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UIKit.BG
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 6
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
-	sb.border_color = Color(1, 1, 1, 0.08)
-	sb.set_border_width_all(1)
-	add_theme_stylebox_override("panel", sb)
+	add_theme_stylebox_override("panel", UIKit.panel_style())
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(scroll)
-
-	_body = VBoxContainer.new()
-	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_body.add_theme_constant_override("separation", 3)
-	scroll.add_child(_body)
+	_body = UIKit.scroll_body(self)
 
 	Schema.parameters_changed.connect(rebuild)
 	rebuild()
@@ -178,10 +161,10 @@ func _build_pairs() -> void:
 		if other == null:
 			continue
 
-		var card := UIKit.panel(UIKit.BG_SOFT, 6)
+		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
 		_body.add_child(card)
 		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 2)
+		box.add_theme_constant_override("separation", UIKit.GAP_S)
 		card.add_child(box)
 
 		var head := HBoxContainer.new()

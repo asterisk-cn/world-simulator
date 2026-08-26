@@ -90,35 +90,43 @@ func reset_all() -> void:
 # パラメータ
 # ---------------------------------------------------------------------------
 
+## カテゴリの色。カテゴリを作った順に上から割り当てる。
+const CATEGORY_COLORS := [
+	Color(0.92, 0.42, 0.34),
+	Color(0.38, 0.72, 0.96),
+	Color(0.52, 0.84, 0.46),
+	Color(0.55, 0.85, 0.95),
+	Color(1.00, 0.78, 0.40),
+	Color(0.78, 0.62, 0.95),
+	Color(0.95, 0.62, 0.45),
+	Color(0.75, 0.78, 0.82),
+]
+
+
 func make_param(id: String, label: String, scope: String, category: String,
-		color: Color, vmin: float = 0.0, vmax: float = 100.0) -> Dictionary:
+		vmin: float = 0.0, vmax: float = 100.0) -> Dictionary:
 	return {
 		"id": id, "label": label, "scope": scope, "category": category,
-		"color": color, "min": vmin, "max": vmax,
+		"min": vmin, "max": vmax,
 	}
 
 
 func _default_parameters() -> void:
-	var survive := Color(0.92, 0.42, 0.34)
-	var curious := Color(0.38, 0.72, 0.96)
-	var social := Color(0.52, 0.84, 0.46)
-	var toward := Color(0.55, 0.85, 0.95)
-
 	parameters = [
-		make_param("hunger", "空腹", SCOPE_SELF, "生存", survive),
-		make_param("sleep", "睡眠", SCOPE_SELF, "生存", survive),
-		make_param("safety", "不安", SCOPE_SELF, "生存", survive),
-		make_param("home", "居住", SCOPE_SELF, "生存", survive),
-		make_param("boredom", "退屈", SCOPE_SELF, "好奇心", curious),
-		make_param("stagnation", "停滞", SCOPE_SELF, "好奇心", curious),
-		make_param("loneliness", "孤独", SCOPE_SELF, "共同体", social),
-		make_param("crowding", "過密", SCOPE_SELF, "共同体", social),
-		make_param("unfairness", "不公平", SCOPE_SELF, "共同体", social),
+		make_param("hunger", "空腹", SCOPE_SELF, "生存"),
+		make_param("sleep", "睡眠", SCOPE_SELF, "生存"),
+		make_param("safety", "不安", SCOPE_SELF, "生存"),
+		make_param("home", "居住", SCOPE_SELF, "生存"),
+		make_param("boredom", "退屈", SCOPE_SELF, "好奇心"),
+		make_param("stagnation", "停滞", SCOPE_SELF, "好奇心"),
+		make_param("loneliness", "孤独", SCOPE_SELF, "共同体"),
+		make_param("crowding", "過密", SCOPE_SELF, "共同体"),
+		make_param("unfairness", "不公平", SCOPE_SELF, "共同体"),
 
-		make_param("affinity", "好感", SCOPE_PAIR, "相手", toward, -100.0, 100.0),
-		make_param("trust", "信頼", SCOPE_PAIR, "相手", Color(0.52, 0.84, 0.46), -100.0, 100.0),
-		make_param("respect", "敬意", SCOPE_PAIR, "相手", Color(1.0, 0.78, 0.35)),
-		make_param("debt", "負い目", SCOPE_PAIR, "相手", Color(0.72, 0.62, 0.95), -100.0, 100.0),
+		make_param("affinity", "好感", SCOPE_PAIR, "親しみ", -100.0, 100.0),
+		make_param("trust", "信頼", SCOPE_PAIR, "親しみ", -100.0, 100.0),
+		make_param("respect", "敬意", SCOPE_PAIR, "評価"),
+		make_param("debt", "負い目", SCOPE_PAIR, "評価", -100.0, 100.0),
 	]
 
 
@@ -161,9 +169,37 @@ func param_label(id: String) -> String:
 	return id if d == null else String(d["label"])
 
 
+## 色はカテゴリで決まる。同じカテゴリの中では少しずつ明るさをずらして見分ける。
+func category_color(cat: String) -> Color:
+	var all := all_categories()
+	var i := all.find(cat)
+	if i < 0:
+		return Color(0.75, 0.78, 0.82)
+	return CATEGORY_COLORS[i % CATEGORY_COLORS.size()]
+
+
+func all_categories() -> Array:
+	var out: Array = []
+	for d in parameters:
+		var c := String(d["category"])
+		if not out.has(c):
+			out.append(c)
+	return out
+
+
 func param_color(id: String) -> Color:
 	var d = param_def(id)
-	return Color.WHITE if d == null else Color(d["color"])
+	if d == null:
+		return Color.WHITE
+	var cat := String(d["category"])
+	var base := category_color(cat)
+	var n := 0
+	for other in parameters:
+		if String(other["id"]) == id:
+			break
+		if String(other["category"]) == cat:
+			n += 1
+	return base.lightened(minf(float(n) * 0.14, 0.42))
 
 
 func param_min(id: String) -> float:
@@ -185,18 +221,35 @@ func categories_in(scope: String) -> Array:
 	return out
 
 
-func add_param(scope: String, label: String = "新パラメータ") -> Dictionary:
+## パラメータはカテゴリの中に足す。個々にカテゴリを選ばせない。
+func add_param(scope: String, category: String, label: String = "新パラメータ") -> Dictionary:
 	var taken: Array = []
 	for d in parameters:
 		taken.append(String(d["id"]))
-	var id := _unique_id("p", taken)
-	var cats := categories_in(scope)
-	var fallback: String = "相手" if scope == SCOPE_PAIR else "生存"
-	var cat: String = fallback if cats.is_empty() else String(cats[0])
-	var p := make_param(id, label, scope, cat, Color(0.7, 0.7, 0.75))
+	var p := make_param(_unique_id("p", taken), label, scope, category)
 	parameters.append(p)
 	parameters_changed.emit()
 	return p
+
+
+## 空のカテゴリは持てないので、カテゴリを作るときは中身を1つ添える
+func add_category(scope: String) -> String:
+	var taken := categories_in(scope)
+	var i := 1
+	while taken.has("新カテゴリ%d" % i):
+		i += 1
+	var cat := "新カテゴリ%d" % i
+	add_param(scope, cat)
+	return cat
+
+
+func rename_category(scope: String, old_name: String, new_name: String) -> void:
+	if new_name.strip_edges() == "":
+		return
+	for d in parameters:
+		if String(d["scope"]) == scope and String(d["category"]) == old_name:
+			d["category"] = new_name
+	parameters_changed.emit()
 
 
 func remove_param(id: String) -> void:

@@ -138,14 +138,11 @@ func _build_self_params() -> void:
 				continue
 			UIKit.bar_row(_body, String(d["label"]),
 				subject.params.get_v(String(d["id"])) - float(d["min"]),
-				maxf(float(d["max"]) - float(d["min"]), 1.0), Color(d["color"]))
+				maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
 
 
 func _category_color(cat: String) -> Color:
-	for d in Schema.self_params():
-		if String(d["category"]) == cat:
-			return Color(d["color"])
-	return Color.WHITE
+	return Schema.category_color(cat)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +185,7 @@ func _build_pairs() -> void:
 		for d in Schema.pair_params():
 			UIKit.bar_row(box, String(d["label"]),
 				subject.pair_to(target_id).get_v(String(d["id"])) - float(d["min"]),
-				maxf(float(d["max"]) - float(d["min"]), 1.0), Color(d["color"]))
+				maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
 
 		if other.knows(subject.id):
 			var line := ""

@@ -186,20 +186,32 @@ static func check_row(parent: Node, name_text: String, value: bool, on_toggle: C
 	return cb
 
 
-static func color_row(parent: Node, name_text: String, col: Color, on_change: Callable) -> ColorPickerButton:
+## 下限と上限を1本で決める行
+static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
+		lo: float, hi: float, step: float, on_change: Callable, col: Color,
+		name_width: int = 62) -> RangeSlider:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
-	nm.custom_minimum_size = Vector2(62, 0)
+	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
-	var cp := ColorPickerButton.new()
-	cp.color = col
-	cp.custom_minimum_size = Vector2(60, 22)
-	cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(cp)
-	cp.color_changed.connect(on_change)
-	return cp
+
+	var rs := RangeSlider.new()
+	rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(rs)
+	rs.setup(vmin, vmax, lo, hi, step, col)
+
+	var val := label("%d〜%d" % [int(lo), int(hi)], 11, TEXT_DIM)
+	val.custom_minimum_size = Vector2(60, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(val)
+
+	rs.changed.connect(func(l: float, h: float) -> void:
+		val.text = "%d〜%d" % [int(l), int(h)]
+		on_change.call(l, h)
+	)
+	return rs
 
 
 ## 折りたたみ。中身を入れる VBoxContainer を返す。

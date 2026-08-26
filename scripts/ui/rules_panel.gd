@@ -108,47 +108,90 @@ func _rebuild_params() -> void:
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
 		_param_box.add_child(UIKit.label(
-			String(Schema.SCOPE_LABEL[sc]), 12, Color(0.82, 0.87, 0.95)))
+			String(Schema.SCOPE_LABEL[sc]), 13, Color(0.82, 0.87, 0.95)))
 
-		for d in Schema.params_in(sc):
-			var def: Dictionary = d
-			var pid := String(def["id"])
-			var card := UIKit.panel(UIKit.BG_SOFT, 6)
-			_param_box.add_child(card)
-			var box := VBoxContainer.new()
-			box.add_theme_constant_override("separation", 2)
-			card.add_child(box)
-
-			var head := HBoxContainer.new()
-			box.add_child(head)
-			head.add_child(UIKit.label("●", 13, Color(def["color"])))
-			head.add_child(UIKit.label(String(def["label"]), 13, Color(0.9, 0.92, 0.98)))
-			head.add_child(UIKit.label("  %s  %d〜%d"
-				% [String(def["category"]), int(def["min"]), int(def["max"])], 10, UIKit.TEXT_DIM))
-			if not editable:
-				continue
-			var del := UIKit.button(head, "削除", _del_param.bind(pid), 10)
-			del.custom_minimum_size = Vector2(46, 22)
-
-			var body := UIKit.collapsible(box, "定義を開く")
-			UIKit.line_edit_row(body, "名前", String(def["label"]), _set_label.bind(def))
-			UIKit.line_edit_row(body, "カテゴリ", String(def["category"]), _set_category.bind(def))
-			UIKit.color_row(body, "色", Color(def["color"]), _set_color.bind(def))
-			UIKit.slider_row(body, "下限", float(def["min"]), -100.0, 0.0, 1.0,
-				_set_min.bind(def), Color(def["color"]))
-			UIKit.slider_row(body, "上限", float(def["max"]), 0.0, 100.0, 1.0,
-				_set_max.bind(def), Color(def["color"]))
+		for cat in Schema.categories_in(sc):
+			_build_category(sc, String(cat))
 
 		if editable:
-			UIKit.button(_param_box, "＋ %s を追加" % Schema.SCOPE_LABEL[sc],
-				_add_param.bind(sc))
-		UIKit.spacer(_param_box, 8)
-
-	UIKit.spacer(_param_box, 8)
+			UIKit.button(_param_box, "＋ カテゴリを追加", _add_category.bind(sc), 10)
+		UIKit.spacer(_param_box, 10)
 
 
-func _add_param(scope: String) -> void:
-	Schema.add_param(scope)
+func _build_category(scope: String, cat: String) -> void:
+	var col := Schema.category_color(cat)
+	var card := UIKit.panel(UIKit.BG_SOFT, 6)
+	_param_box.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	card.add_child(box)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	box.add_child(head)
+	head.add_child(UIKit.label("■", 13, col))
+	if editable:
+		var le := LineEdit.new()
+		le.text = cat
+		le.add_theme_font_size_override("font_size", 12)
+		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		le.custom_minimum_size = Vector2(80, 22)
+		head.add_child(le)
+		le.text_submitted.connect(_rename_category.bind(scope, cat))
+		le.focus_exited.connect(func() -> void: _rename_category(le.text, scope, cat))
+	else:
+		head.add_child(UIKit.label(cat, 12, Color(0.9, 0.92, 0.98)))
+
+	for d in Schema.params_in(scope):
+		if String(d["category"]) != cat:
+			continue
+		_build_param(box, d)
+
+	if editable:
+		UIKit.button(box, "＋ パラメータ", _add_param.bind(scope, cat), 10)
+
+
+func _build_param(box: VBoxContainer, def: Dictionary) -> void:
+	var pid := String(def["id"])
+	var col := Schema.param_color(pid)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	box.add_child(row)
+	row.add_child(UIKit.label("●", 12, col))
+
+	if not editable:
+		row.add_child(UIKit.label(String(def["label"]), 12, Color(0.9, 0.92, 0.98)))
+		row.add_child(UIKit.label("  %d〜%d" % [int(def["min"]), int(def["max"])],
+			10, UIKit.TEXT_DIM))
+		return
+
+	var le := LineEdit.new()
+	le.text = String(def["label"])
+	le.add_theme_font_size_override("font_size", 11)
+	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	le.custom_minimum_size = Vector2(70, 22)
+	row.add_child(le)
+	le.text_changed.connect(_set_label.bind(def))
+
+	UIKit.range_row(row, "", -100.0, 100.0, float(def["min"]), float(def["max"]), 1.0,
+		_set_range.bind(def), col, 0)
+
+	var del := UIKit.button(row, "×", _del_param.bind(pid), 11)
+	del.custom_minimum_size = Vector2(26, 22)
+
+
+func _add_category(scope: String) -> void:
+	Schema.add_category(scope)
+
+
+func _rename_category(new_name: String, scope: String, old_name: String) -> void:
+	if new_name != old_name:
+		Schema.rename_category(scope, old_name, new_name)
+
+
+func _add_param(scope: String, cat: String) -> void:
+	Schema.add_param(scope, cat)
 
 
 func _del_param(pid: String) -> void:
@@ -159,20 +202,9 @@ func _set_label(text: String, def: Dictionary) -> void:
 	def["label"] = text
 
 
-func _set_category(text: String, def: Dictionary) -> void:
-	def["category"] = text
-
-
-func _set_color(col: Color, def: Dictionary) -> void:
-	def["color"] = col
-
-
-func _set_min(x: float, def: Dictionary) -> void:
-	def["min"] = x
-
-
-func _set_max(x: float, def: Dictionary) -> void:
-	def["max"] = x
+func _set_range(lo: float, hi: float, def: Dictionary) -> void:
+	def["min"] = lo
+	def["max"] = hi
 
 
 # ---------------------------------------------------------------------------

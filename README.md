@@ -24,7 +24,7 @@ AI村人が自律的に行動するのを、プレイヤーは**神の視点**�
 - **個人パラメータ** — 一人につき1つ（空腹、睡眠、退屈、孤独…）
 - **関係パラメータ** — 相手1人につき1つ（好感、信頼、敬意、負い目…）。n人いれば n×n
 
-定義が持つのは 名前 / カテゴリ / 色 / 下限・上限 だけ。
+定義が持つのは 名前 / 範囲 だけ。カテゴリの中に足すので個別のカテゴリ欄はなく、色もカテゴリで決まる。
 値がどう動くかはAIが決めるので、定義側には何も要らない。
 
 ## アクション
@@ -45,7 +45,7 @@ AI村人が自律的に行動するのを、プレイヤーは**神の視点**�
 
 | できること | 場所 |
 |---|---|
-| パラメータの追加 / 削除 / 改名 / カテゴリ・色・範囲の変更 | 設定「パラメータ」 |
+| カテゴリとパラメータの追加 / 削除 / 改名、範囲の変更 | 設定「パラメータ」 |
 | アクションの追加 / 削除 / 改名 / 型と対象の変更 / 有効・無効 | 設定「アクション」 |
 | 世界のルール（1日の長さ、夜の割合、行動を選び直す間隔、移動速度、記憶の保持量） | 設定「世界」 |
 
@@ -88,7 +88,7 @@ scripts/
   data/      self_params / pair_params / personality / memory / rules
   world/     world / iso(クォータービュー変換) / harvest_node / structure / bulletin_board
   villager/  villager(世界で何が起きたか) / brain(判断の置き場所)
-  ui/        ui_kit / inspector / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
+  ui/        ui_kit / range_slider / inspector / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
 ```
 
 Godot 4.7.2 を `mise.toml` で固定。作業の経緯は [LOG.md](LOG.md)。

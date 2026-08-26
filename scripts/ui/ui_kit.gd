@@ -2,8 +2,9 @@ class_name UIKit
 extends RefCounted
 ## コードから UI を組み立てるための小さなヘルパ群。
 
-const BG := Color(0.10, 0.11, 0.14)
-const BG_SOFT := Color(0.15, 0.16, 0.20)
+## 世界の夜の色にわずかに寄せる。無彩色のままだと開発ツールの見た目になる。
+const BG := Color(0.09, 0.11, 0.17)
+const BG_SOFT := Color(0.14, 0.16, 0.24)
 const INK := Color(1, 1, 1, 0.07)      ## 押せるものの下地
 const INK_HOVER := Color(1, 1, 1, 0.14)
 const INK_ACTIVE := Color(1, 1, 1, 0.20)

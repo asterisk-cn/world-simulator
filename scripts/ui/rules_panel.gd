@@ -19,6 +19,7 @@ var _start_btn: Button
 var _reset_btn: Button
 var _delete_btn: Button
 var _close_btn: Button
+var _start_note: Label
 var _delete_mode := false
 
 
@@ -32,7 +33,7 @@ func _ready() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	root.add_child(head)
-	_title = UIKit.label("設定", 14, Color(0.85, 0.9, 0.98))
+	_title = UIKit.label("この世界の言葉", 15, Color(0.90, 0.93, 0.99))
 	head.add_child(_title)
 
 	var gap := Control.new()
@@ -57,8 +58,11 @@ func _ready() -> void:
 	_recipe_box = _make_tab("レシピ")
 	_world_box = _make_tab("世界")
 
-	_start_btn = UIKit.button(root, "この世界を始める", _on_start, 13)
-	_start_btn.custom_minimum_size = Vector2(0, 32)
+	_start_note = UIKit.label("始めると、ここで決めたことは変えられない。", 10, UIKit.TEXT_DIM)
+	_start_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_start_note)
+	_start_btn = UIKit.accent_button(root, "この世界を始める", _on_start, 14)
+	_start_btn.custom_minimum_size = Vector2(0, 38)
 
 	Schema.parameters_changed.connect(_rebuild_params)
 	Schema.actions_changed.connect(_rebuild_actions)
@@ -71,8 +75,9 @@ func _ready() -> void:
 
 func set_editable(on: bool) -> void:
 	editable = on
-	_title.text = "設定" if on else "設定（開始後は変更できない）"
+	_title.text = "この世界の言葉" if on else "この世界の言葉（もう変えられない）"
 	_start_btn.visible = on
+	_start_note.visible = on
 	_reset_btn.visible = on
 	_close_btn.visible = not on
 	if not on:
@@ -144,6 +149,8 @@ func _rebuild_params() -> void:
 	if _param_box == null:
 		return
 	_clear(_param_box)
+	if editable:
+		UIKit.wrapped(_param_box, "村人が自分について語れる言葉を決める。", 11, UIKit.ACCENT)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
@@ -288,6 +295,8 @@ func _rebuild_actions() -> void:
 	if _action_box == null:
 		return
 	_clear(_action_box)
+	if editable:
+		UIKit.wrapped(_action_box, "村人にできることを決める。", 11, UIKit.ACCENT)
 
 	var kinds: Array = Schema.BEHAVIORS.keys()
 	var kind_labels: Array = []
@@ -314,34 +323,41 @@ func _rebuild_actions() -> void:
 				10, UIKit.TEXT_DIM))
 			continue
 
-		var name_row := HBoxContainer.new()
-		name_row.add_theme_constant_override("separation", 6)
-		box.add_child(name_row)
-		var nm := UIKit.label("名前", 11, UIKit.TEXT)
-		nm.custom_minimum_size = Vector2(48, 0)
-		name_row.add_child(nm)
+		# 名前・タイプ・対象を1行に。ラベルが縦に繰り返されると視線が戻され続ける
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", UIKit.GAP_S)
+		box.add_child(row)
+
 		var le := LineEdit.new()
 		le.text = String(act["label"])
 		le.add_theme_font_size_override("font_size", 11)
 		le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		le.custom_minimum_size = Vector2(80, UIKit.ROW_H)
-		name_row.add_child(le)
+		le.custom_minimum_size = Vector2(90, UIKit.ROW_H)
+		row.add_child(le)
 		le.text_changed.connect(_set_a_label.bind(act))
-		if _can_delete():
-			UIKit.icon_button(name_row, "✕", "%s を消す" % String(act["label"]),
-				_del_action.bind(aid), 26, UIKit.ROW_H, 13)
 
-		UIKit.option_row(box, "タイプ", kinds, kind_labels, kind, _set_kind.bind(act), 48)
+		var kind_opt := UIKit.dropdown(kinds, kind_labels, kind)
+		kind_opt.custom_minimum_size = Vector2(78, UIKit.ROW_H)
+		row.add_child(kind_opt)
+		kind_opt.item_selected.connect(func(i: int) -> void:
+			_set_kind(String(kinds[i]), act))
 
 		var tkeys: Array = Schema.targets_of(kind).keys()
 		if tkeys.is_empty():
-			box.add_child(UIKit.label("　この型にはまだ対象がない", 10, Color(0.85, 0.6, 0.45)))
+			row.add_child(UIKit.label("対象がない", 10, Color(0.85, 0.6, 0.45)))
 		else:
 			var tlabels: Array = []
 			for t in tkeys:
 				tlabels.append(Schema.target_label(kind, String(t)))
-			UIKit.option_row(box, "対象", tkeys, tlabels, String(act["target"]),
-				_set_target.bind(act), 48)
+			var t_opt := UIKit.dropdown(tkeys, tlabels, String(act["target"]))
+			t_opt.custom_minimum_size = Vector2(112, UIKit.ROW_H)
+			row.add_child(t_opt)
+			t_opt.item_selected.connect(func(i: int) -> void:
+				_set_target(String(tkeys[i]), act))
+
+		if _can_delete():
+			UIKit.icon_button(row, "✕", "%s を消す" % String(act["label"]),
+				_del_action.bind(aid), 26, UIKit.ROW_H, 13)
 
 	if editable:
 		UIKit.spacer(_action_box, 4)
@@ -381,6 +397,8 @@ func _rebuild_world() -> void:
 	if _world_box == null:
 		return
 	_clear(_world_box)
+	if editable:
+		UIKit.wrapped(_world_box, "世界そのものの速さと大きさを決める。", 11, UIKit.ACCENT)
 
 	for k in SimConfig.PARAM_DEF:
 		var key := String(k)
@@ -422,6 +440,8 @@ func _rebuild_recipes() -> void:
 	if _recipe_box == null:
 		return
 	_clear(_recipe_box)
+	if editable:
+		UIKit.wrapped(_recipe_box, "材料を組み合わせて作れるものを決める。", 11, UIKit.ACCENT)
 
 	for r in Schema.recipes:
 		var rec: Dictionary = r

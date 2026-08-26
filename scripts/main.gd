@@ -37,6 +37,11 @@ func _ready() -> void:
 	modulate_node = CanvasModulate.new()
 	add_child(modulate_node)
 
+	# 島の外側も世界の一部として扱う
+	var sky = preload("res://scripts/world/sky.gd").new()
+	sky.name = "Sky"
+	add_child(sky)
+
 	_setup_camera()
 	_setup_ui()
 

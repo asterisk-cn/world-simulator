@@ -226,8 +226,9 @@ func _do_build() -> void:
 ## 会話。起きた事実だけを双方に記録する。
 ## 【AI差し替え口】何を話すか・何を伝えるか・相手をどう思うようになったかはAIの担当。
 func _do_talk(other) -> void:
-	pair_to(other.id).contacts += 1
-	other.pair_to(id).contacts += 1
+	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
+	pair_to(other.id)
+	other.pair_to(id)
 	memory.last_talk_day[other.id] = SimClock.day
 	other.memory.last_talk_day[id] = SimClock.day
 	memory.record("会話：%s と話した" % other.vname)

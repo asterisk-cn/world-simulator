@@ -71,9 +71,16 @@ func _refresh() -> void:
 	for i in range(world.villagers.size()):
 		var v = world.villagers[i]
 		var l: Label = _rows.get_child(i)
-		var inv: Dictionary = v.inventory
-		l.text = "%-4s 木%2d 石%2d 実%2d  %s  %s" % [
-			v.vname, inv["wood"], inv["stone"], inv["food"],
+		var carried := ""
+		for item in Schema.all_items():
+			var n: int = v.item_count(String(item))
+			if n <= 0:
+				continue
+			if carried != "":
+				carried += " "
+			carried += "%s%d" % [Schema.item_label(String(item)), n]
+		l.text = "%-4s %s  %s  %s" % [
+			v.vname, carried if carried != "" else "手ぶら",
 			"家○" if v.home != null else "家×",
 			v.action_label(),
 		]

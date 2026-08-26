@@ -9,7 +9,6 @@ extends RefCounted
 var target_id: int = -1
 var values := {}
 
-var contacts: int = 0
 var first_met_day: int = 1
 
 

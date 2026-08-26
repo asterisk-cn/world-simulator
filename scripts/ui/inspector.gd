@@ -187,8 +187,6 @@ func _build_pairs() -> void:
 		var head := HBoxContainer.new()
 		box.add_child(head)
 		head.add_child(UIKit.label("→ " + String(other.vname), 12, other.color.lightened(0.3)))
-		head.add_child(UIKit.label("　接触 %d回" % subject.pair_to(target_id).contacts,
-			10, UIKit.TEXT_DIM))
 		var gap := Control.new()
 		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(gap)

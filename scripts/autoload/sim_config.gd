@@ -22,6 +22,10 @@ var params := {}
 ## 日本語表示用フォント（main が起動時にセットする）
 var ui_font: Font = null
 
+## UI全体の見た目。CanvasLayer は Control ではないので Window のテーマが伝わらず、
+## 各パネルに直接あてる必要がある。
+var ui_theme: Theme = null
+
 
 func _ready() -> void:
 	for k in PARAM_DEF:

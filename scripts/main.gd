@@ -96,7 +96,8 @@ func _setup_font() -> void:
 	sf.allow_system_fallback = true
 	SimConfig.ui_font = sf
 
-	get_window().theme = UIKit.build_theme(sf)
+	SimConfig.ui_theme = UIKit.build_theme(sf)
+	get_window().theme = SimConfig.ui_theme
 
 
 func _spawn_villagers() -> void:
@@ -186,6 +187,11 @@ func _setup_ui() -> void:
 	rules_panel = rules
 	rules.started.connect(_start_world)
 	rules.closed.connect(hud.close_panels)
+
+	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。
+	for c in hud.get_children():
+		if c is Control:
+			(c as Control).theme = SimConfig.ui_theme
 
 
 func _process(_delta: float) -> void:

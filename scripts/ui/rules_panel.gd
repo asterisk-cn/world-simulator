@@ -161,7 +161,7 @@ func _rebuild_params() -> void:
 			_build_category(sc, String(cat))
 
 		if editable:
-			UIKit.button(_param_box, "＋ カテゴリを追加", _add_category.bind(sc), 10)
+			UIKit.add_button(_param_box, "＋ カテゴリを追加", _add_category.bind(sc))
 		UIKit.spacer(_param_box, 10)
 
 
@@ -201,7 +201,7 @@ func _build_category(scope: String, cat: String) -> void:
 		_build_param(inner, d)
 
 	if editable:
-		UIKit.button(inner, "＋ パラメータ", _add_param.bind(scope, cat), 10)
+		UIKit.add_button(inner, "＋ パラメータ", _add_param.bind(scope, cat))
 
 
 ## 見出し用の、枠を消した入力欄
@@ -245,7 +245,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	le.text = String(def["label"])
 	le.add_theme_font_size_override("font_size", 11)
 	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(70, UIKit.ROW_H)
+	le.custom_minimum_size = Vector2(96, UIKit.ROW_H)
 	row.add_child(le)
 	le.text_changed.connect(_set_label.bind(def))
 
@@ -361,7 +361,7 @@ func _rebuild_actions() -> void:
 
 	if editable:
 		UIKit.spacer(_action_box, 4)
-		UIKit.button(_action_box, "＋ アクションを追加", _add_action)
+		UIKit.add_button(_action_box, "＋ アクションを追加", _add_action)
 	UIKit.spacer(_action_box, 10)
 
 
@@ -498,7 +498,7 @@ func _rebuild_recipes() -> void:
 
 	if editable:
 		UIKit.spacer(_recipe_box, 4)
-		UIKit.button(_recipe_box, "＋ レシピを追加", _add_recipe)
+		UIKit.add_button(_recipe_box, "＋ レシピを追加", _add_recipe)
 	UIKit.spacer(_recipe_box, 10)
 
 

@@ -211,6 +211,16 @@ static func button(parent: Node, text: String, on_press: Callable, size: int = 1
 	return b
 
 
+## 「＋ なにか」の控えめな追加ボタン。幅いっぱいに伸ばさない。
+static func add_button(parent: Node, text: String, on_press: Callable) -> Button:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var b := button(row, text, on_press, 11)
+	b.custom_minimum_size = Vector2(0, ROW_H - 3)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	return b
+
+
 ## 縦スクロールする中身を包み、スクロールバーとの余白を作る。
 static func scroll_body(parent: Node) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
@@ -397,12 +407,12 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	row.add_child(nm)
 
 	var rs := RangeSlider.new()
-	rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rs.custom_minimum_size = Vector2(112, ROW_H)
 	row.add_child(rs)
 	rs.setup(vmin, vmax, lo, hi, step, col)
 
 	var val := label("%d〜%d" % [int(lo), int(hi)], 11, TEXT_DIM)
-	val.custom_minimum_size = Vector2(60, 0)
+	val.custom_minimum_size = Vector2(56, 0)
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(val)
 

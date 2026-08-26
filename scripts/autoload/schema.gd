@@ -275,7 +275,7 @@ func remove_param(id: String) -> void:
 # ---------------------------------------------------------------------------
 
 func make_action(id: String, label: String, kind: String, target: String) -> Dictionary:
-	return {"id": id, "label": label, "kind": kind, "target": target, "enabled": true}
+	return {"id": id, "label": label, "kind": kind, "target": target}
 
 
 func _default_actions() -> void:

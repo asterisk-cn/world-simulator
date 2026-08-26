@@ -42,8 +42,6 @@ func choose() -> Dictionary:
 func feasible() -> Array:
 	var out: Array = []
 	for a in Schema.actions:
-		if not bool(a["enabled"]):
-			continue
 		out.append_array(_candidates_for(a))
 	return out
 

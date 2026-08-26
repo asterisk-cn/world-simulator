@@ -316,8 +316,6 @@ func _rebuild_actions() -> void:
 			head.add_child(UIKit.label("%s ／ %s"
 				% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
 				10, UIKit.TEXT_DIM))
-			if not bool(act["enabled"]):
-				head.add_child(UIKit.label("無効", 10, Color(0.85, 0.5, 0.45)))
 			continue
 
 		var name_row := HBoxContainer.new()
@@ -333,7 +331,6 @@ func _rebuild_actions() -> void:
 		le.custom_minimum_size = Vector2(80, 22)
 		name_row.add_child(le)
 		le.text_changed.connect(_set_a_label.bind(act))
-		UIKit.check_row(name_row, "有効", bool(act["enabled"]), _set_enabled.bind(act))
 		if _can_delete():
 			var del := UIKit.button(name_row, "×", _del_action.bind(aid), 11)
 			del.custom_minimum_size = Vector2(26, 22)
@@ -378,9 +375,6 @@ func _set_target(key: String, act: Dictionary) -> void:
 	act["target"] = key
 	Schema.actions_changed.emit()
 
-
-func _set_enabled(on: bool, act: Dictionary) -> void:
-	act["enabled"] = on
 
 
 # ---------------------------------------------------------------------------

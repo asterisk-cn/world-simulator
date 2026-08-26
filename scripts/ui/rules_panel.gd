@@ -167,7 +167,7 @@ func _rebuild_params() -> void:
 
 func _build_category(scope: String, cat: String) -> void:
 	var col := Schema.category_color(cat)
-	var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
+	var card := UIKit.card()
 	_param_box.add_child(card)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -307,7 +307,7 @@ func _rebuild_actions() -> void:
 		var act: Dictionary = a
 		var aid := String(act["id"])
 		var kind := String(act["kind"])
-		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
+		var card := UIKit.card()
 		_action_box.add_child(card)
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -446,7 +446,7 @@ func _rebuild_recipes() -> void:
 	for r in Schema.recipes:
 		var rec: Dictionary = r
 		var rid := String(rec["id"])
-		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
+		var card := UIKit.card()
 		_recipe_box.add_child(card)
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", UIKit.GAP_S)

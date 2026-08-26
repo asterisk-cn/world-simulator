@@ -5,6 +5,10 @@ signal day_changed(day: int)
 signal night_started(day: int)
 signal morning_started(day: int)
 
+## 1日は夜明けから始まる。0時開始のままだと「00:07 昼」のような表示になり、
+## 現実の時刻感覚と衝突して不具合に見える。
+const DAY_STARTS_AT := 6.0
+
 var day: int = 1
 var time_of_day: float = 0.25  ## 0.0=夜明け前 .. 1.0
 var is_night: bool = false
@@ -22,7 +26,7 @@ func _process(delta: float) -> void:
 		day += 1
 		day_changed.emit(day)
 
-	var night_start := 1.0 - SimConfig.p("night_fraction")
+	var night_start := _night_start()
 	var now_night := time_of_day >= night_start
 	if now_night != is_night:
 		is_night = now_night
@@ -32,9 +36,15 @@ func _process(delta: float) -> void:
 			morning_started.emit(day)
 
 
+## 夜が始まる位置を 0..1 で。設定は時計と同じ「時刻」で持っているので、
+## いくつにすれば何時になるのかが設定画面から読める。
+func _night_start() -> float:
+	return clampf((SimConfig.p("night_starts_at") - DAY_STARTS_AT) / 24.0, 0.05, 0.95)
+
+
 ## 0.0(真昼) .. 1.0(真夜中) の暗さ
 func darkness() -> float:
-	var night_start := 1.0 - SimConfig.p("night_fraction")
+	var night_start := _night_start()
 	if time_of_day < night_start:
 		var t := time_of_day / maxf(night_start, 0.001)
 		return clampf(1.0 - sin(t * PI), 0.0, 1.0) * 0.45
@@ -43,5 +53,5 @@ func darkness() -> float:
 
 
 func clock_text() -> String:
-	var total_min := int(time_of_day * 24.0 * 60.0)
-	return "%02d:%02d" % [total_min / 60, total_min % 60]
+	var hours := fposmod(time_of_day * 24.0 + DAY_STARTS_AT, 24.0)
+	return "%02d:%02d" % [int(hours), int(fmod(hours * 60.0, 60.0))]

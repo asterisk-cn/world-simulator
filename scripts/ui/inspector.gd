@@ -102,6 +102,7 @@ func _on_drag_ended(_changed: bool, key: String) -> void:
 func _build_header() -> void:
 	_body.add_child(UIKit.label(subject.vname, 17, subject.color.darkened(0.35)))
 	_body.add_child(UIKit.label(subject.personality.describe(), 11, UIKit.TEXT_DIM))
+	UIKit.spacer(_body, 2)
 
 	var carried := ""
 	for item in Schema.all_items():
@@ -161,7 +162,7 @@ func _build_pairs() -> void:
 		if other == null:
 			continue
 
-		var card := UIKit.panel(UIKit.BG_SOFT, 8, UIKit.PAD_S)
+		var card := UIKit.card()
 		_body.add_child(card)
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -187,8 +188,8 @@ func _build_pairs() -> void:
 		head.add_child(fold)
 		fold.pressed.connect(_toggle_pair.bind(target_id, body, fold, String(other.vname)))
 
-		UIKit.icon_button(head, "→", "%s を見る" % other.vname,
-			_jump_to.bind(target_id), 26, UIKit.ROW_H, 14)
+		var jump := UIKit.button(head, "この人を見る", _jump_to.bind(target_id), 10)
+		jump.custom_minimum_size = Vector2(84, UIKit.ROW_H - 3)
 
 		box.add_child(body)
 		for d in Schema.pair_params():

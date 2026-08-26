@@ -34,8 +34,9 @@ const SCROLL_GUTTER := 12
 ## 余白の基準。ここ以外に数字を置かない。
 const PAD := 14      ## パネルの内側
 const PAD_S := 10    ## パネルの中に置く小さなカードの内側
-const GAP := 8       ## まとまりどうしの間
-const GAP_S := 4     ## 並んだ行どうしの間
+const GAP := 10      ## まとまりどうしの間
+const GAP_S := 6     ## 並んだ行どうしの間
+const GAP_INLINE := 10  ## 1行の中の、ラベルと中身の間
 
 
 ## UI全体の見た目を1か所で決める。
@@ -137,6 +138,20 @@ static func panel_style(bg: Color = BG, radius: int = 10, pad: int = PAD) -> Sty
 	return sb
 
 
+## パネルの中に置くカード。枠と影を持たせると、そこが一番強い要素になってしまう。
+static func card(bg: Color = BG_SOFT, pad: int = PAD_S) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(7)
+	sb.content_margin_left = pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+
 static func panel(bg: Color = BG, radius: int = 10, pad: int = PAD) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", panel_style(bg, radius, pad))
@@ -182,7 +197,7 @@ static func slider_row(
 	name_width: int = 62
 ) -> HSlider:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
 
 	var nm := label(name_text, 11, TEXT)
@@ -366,7 +381,7 @@ static func trash_toggle(parent: Node, tip: String) -> Button:
 static func line_edit_row(parent: Node, name_text: String, value: String,
 		on_change: Callable, name_width: int = 62) -> LineEdit:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)
@@ -403,7 +418,7 @@ static func dropdown(keys: Array, labels: Array, current: String) -> OptionButto
 static func option_row(parent: Node, name_text: String, keys: Array, labels: Array,
 		current: String, on_change: Callable, name_width: int = 62) -> OptionButton:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)
@@ -430,7 +445,7 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 		lo: float, hi: float, step: float, on_change: Callable, col: Color,
 		name_width: int = 62) -> RangeSlider:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", GAP_INLINE)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)
@@ -457,7 +472,7 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
 		on_change: Callable, name_width: int = 62) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+	row.add_theme_constant_override("separation", GAP_S)
 	parent.add_child(row)
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)

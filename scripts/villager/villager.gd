@@ -120,10 +120,14 @@ func _process(delta: float) -> void:
 
 
 ## 起きたことを世界の上で見せる。ログを読んでから探させない。
-func say(mark: String, span: float = 1.6, tint: Color = Color(0.99, 0.98, 0.94)) -> void:
+## 何を描くかはアクションの型と対象から引くので、ここで絵を選ばない。
+func say(kind: String, target: String, span: float = 1.8) -> void:
+	var b := Bubble.of(kind, target, span)
+	if b == null:
+		return
 	if _bubbles.size() >= 2:
 		_bubbles.pop_front()
-	_bubbles.append(Bubble.new(mark, span, tint))
+	_bubbles.append(b)
 
 
 func _decide() -> void:
@@ -173,6 +177,7 @@ func _complete_action() -> void:
 	var kind := String(current_action.get("kind", "move"))
 	var target := String(current_action.get("target", ""))
 	var obj = current_action.get("obj", null)
+	var before := carried()
 
 	match kind:
 		"move":
@@ -210,6 +215,10 @@ func _complete_action() -> void:
 				"read":
 					_do_read_board()
 
+	# 採取は空振りすることがあるので、実際に手に入ったときだけ見せる
+	if kind != "gather" or carried() > before:
+		say(kind, target)
+
 
 ## 材料を消して、できたものを1つ持つ
 func _do_craft(recipe_id: String) -> void:
@@ -223,7 +232,6 @@ func _do_craft(recipe_id: String) -> void:
 		add_item(String(item), -int(r["inputs"][item]))
 	add_item(recipe_id, 1)
 	memory.record("制作：%s を作った" % Schema.item_label(recipe_id))
-	say(Bubble.MADE, 2.0)
 
 
 func _do_build() -> void:
@@ -236,7 +244,6 @@ func _do_build() -> void:
 	add_item("stone", -Rules.BUILD_STONE)
 	home = world.add_structure(Structure.Kind.HOUSE, c, id, color)
 	memory.record("建築：自分の家を建てた")
-	say(Bubble.BUILT, 2.6, Color(1.0, 0.90, 0.62))
 	EventLog.notable("%s が家を建てた" % vname)
 
 
@@ -250,8 +257,8 @@ func _do_talk(other) -> void:
 	other.memory.last_talk_day[id] = SimClock.day
 	memory.record("会話：%s と話した" % other.vname)
 	other.memory.record("会話：%s と話した" % vname)
-	say(Bubble.TALK, 2.0, Color(0.86, 0.95, 1.0))
-	other.say(Bubble.TALK, 2.0, Color(0.86, 0.95, 1.0))
+	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
+	other.say("social", "talk", 2.2)
 	EventLog.social("%s と %s が話した" % [vname, other.vname])
 
 
@@ -285,7 +292,6 @@ func _do_read_board() -> void:
 	for e in unread:
 		memory.mark_post_read(int(e["id"]), 1.0)
 		memory.record("掲示板：%s の貼り紙を読んだ" % String(e["author_name"]))
-	say("✎", 1.6, Color(0.98, 0.94, 0.82))
 
 
 # ---------------------------------------------------------------------------
@@ -320,18 +326,15 @@ func _draw() -> void:
 		var ring := Iso.rounded(Iso.diamond(1.0), 6.0)
 		draw_polyline(ring + PackedVector2Array([ring[0]]), Color(1, 0.95, 0.5), 2.5)
 
-	# 胴の上に頭を積む。どちらも同じ角丸ブロック。
-	Iso.draw_block(self, 9.0, 4.5, 17.0, color, up, 3.5)
-	Iso.draw_block(self, 7.0, 3.5, 11.0, Color(0.95, 0.86, 0.74), up + Vector2(0, -17.0), 3.5)
-
-	# いま何をしているかを頭の上に1文字で。文字を読まなくても村の動きが分かる。
-	var kind := String(current_action.get("kind", ""))
-	if Bubble.MARKS.has(kind) and _bubbles.is_empty():
-		_label(font, String(Bubble.MARKS[kind]), Vector2(-20, -42 - lift), 40, 12,
-			Color(1, 1, 1, 0.55))
+	# 夜は世界全体が暗く落ちるので、村人だけ持ち上げて見失わないようにする
+	var night := SimClock.darkness()
+	var body := color.lerp(Color(1, 1, 1), night * 0.30)
+	var head := Color(0.95, 0.86, 0.74).lerp(Color(1, 1, 1), night * 0.30)
+	Iso.draw_block(self, 9.0, 4.5, 17.0, body, up, 3.5)
+	Iso.draw_block(self, 7.0, 3.5, 11.0, head, up + Vector2(0, -17.0), 3.5)
 
 	for i in range(_bubbles.size()):
-		_bubbles[i].draw_on(self, font, Vector2(0, -46 - lift - float(i) * 17.0))
+		_bubbles[i].draw_on(self, Vector2(0, -46 - lift - float(i) * 18.0))
 
 	# 名前は常に、いま何をしているかは選んでいる村人だけ。並ぶと読めなくなるので。
 	# 昼夜どちらでも読めるよう、縁取りを付ける。

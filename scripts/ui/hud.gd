@@ -71,15 +71,15 @@ func _build_top_bar() -> void:
 	add_child(panel)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", UIKit.GAP)
 	panel.add_child(row)
 
 	_clock_label = UIKit.label("1日目", 14)
-	_clock_label.custom_minimum_size = Vector2(150, 0)
+	_clock_label.custom_minimum_size = Vector2(142, 0)
 	row.add_child(_clock_label)
 
 	_pop_label = UIKit.label("村人 0", 12, UIKit.TEXT_DIM)
-	_pop_label.custom_minimum_size = Vector2(80, 0)
+	_pop_label.custom_minimum_size = Vector2(66, 0)
 	row.add_child(_pop_label)
 
 	row.add_child(VSeparator.new())

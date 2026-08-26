@@ -10,7 +10,7 @@ signal param_changed(key: String, value: float)
 ## key -> [既定値, 最小, 最大, 説明]
 const PARAM_DEF := {
 	"day_length_sec": [90.0, 20.0, 600.0, "1日の長さ（秒）"],
-	"night_fraction": [0.35, 0.0, 0.8, "夜が占める割合"],
+	"night_starts_at": [20.0, 13.0, 24.0, "夜になる時刻"],
 	"decision_interval": [1.1, 0.2, 6.0, "行動を選び直す間隔（秒）"],
 	"move_speed": [1.9, 0.2, 12.0, "移動速度（マス/秒）"],
 

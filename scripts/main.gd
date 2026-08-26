@@ -197,8 +197,14 @@ func _setup_ui() -> void:
 func _process(_delta: float) -> void:
 	# 夜は「暗い昼」ではなく色を青紫へ寄せる。暗くしすぎると角丸ブロックの色が濁る
 	var d := SimClock.darkness()
-	var night := Color(0.46, 0.52, 0.86)
-	modulate_node.color = Color.WHITE.lerp(night, d * 0.72)
+	var night := Color(0.30, 0.36, 0.72)
+	modulate_node.color = Color.WHITE.lerp(night, d * 0.82)
+
+	# 紙のUIは夜でも明るいままだと、観察したい世界より前に出てしまう
+	var dim := Color.WHITE.lerp(Color(0.80, 0.81, 0.88), d)
+	for c in hud.get_children():
+		if c is Control:
+			(c as Control).modulate = dim
 
 
 func _on_night(_day: int) -> void:

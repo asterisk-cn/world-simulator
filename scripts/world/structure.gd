@@ -65,10 +65,13 @@ func _draw() -> void:
 		Vector2(5, -15), Vector2(19, -22), Vector2(19, -5), Vector2(5, 2)
 	]), 3.0)
 	var lit := SimClock.darkness()
-	var col := Color(0.28, 0.19, 0.13).lerp(Color(1.0, 0.86, 0.48), lit)
+	if lit > 0.1:
+		# 灯りのにじみ。夜に画面でいちばん明るいのは世界の側であってほしい
+		for i in range(3):
+			var g := 1.0 + float(i) * 0.55
+			draw_colored_polygon(Iso._shift(Iso.rounded(PackedVector2Array([
+				Vector2(-4 - 10 * g, -18 - 8 * g), Vector2(24 + 10 * g, -32 - 8 * g),
+				Vector2(24 + 10 * g, 2 + 8 * g), Vector2(-4 - 10 * g, 10 + 8 * g),
+			]), 10.0), center), Color(1.0, 0.84, 0.42, 0.10 * lit))
+	var col := Color(0.28, 0.19, 0.13).lerp(Color(1.0, 0.94, 0.70), lit)
 	draw_colored_polygon(Iso._shift(window, center), col)
-	if lit > 0.15:
-		# 灯りのにじみ
-		draw_colored_polygon(Iso._shift(Iso.rounded(PackedVector2Array([
-			Vector2(0, -20), Vector2(24, -32), Vector2(24, 2), Vector2(0, 8)
-		]), 6.0), center), Color(1.0, 0.85, 0.45, 0.13 * lit))

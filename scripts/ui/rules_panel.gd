@@ -4,6 +4,7 @@ extends PanelContainer
 ## 編集できるのは開始前だけ。始まったあとは同じ画面が閲覧専用になる。
 
 signal started
+signal closed
 
 var world = null
 var editable := true
@@ -17,6 +18,7 @@ var _title: Label
 var _start_btn: Button
 var _reset_btn: Button
 var _delete_btn: Button
+var _close_btn: Button
 var _delete_mode := false
 
 
@@ -52,6 +54,8 @@ func _ready() -> void:
 	_delete_btn = UIKit.trash_toggle(head, "削除モード")
 	_delete_btn.toggled.connect(_on_delete_toggled)
 
+	_close_btn = UIKit.icon_button(head, "✕", "閉じる", _close, 26, UIKit.ROW_H, 13)
+
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(_tabs)
@@ -79,6 +83,7 @@ func set_editable(on: bool) -> void:
 	_title.text = "設定" if on else "設定（開始後は変更できない）"
 	_start_btn.visible = on
 	_reset_btn.visible = on
+	_close_btn.visible = not on
 	if not on:
 		_delete_mode = false
 		_delete_btn.set_pressed_no_signal(false)
@@ -91,6 +96,10 @@ func set_editable(on: bool) -> void:
 
 func _on_start() -> void:
 	started.emit()
+
+
+func _close() -> void:
+	closed.emit()
 
 
 func _on_delete_toggled(on: bool) -> void:

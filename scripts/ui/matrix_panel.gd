@@ -15,6 +15,9 @@ var _sel_from: int = -1
 var _sel_to: int = -1
 var _accum := 0.0
 var _param_opt: OptionButton
+var _scroll: ScrollContainer
+
+signal closed
 
 
 func _ready() -> void:
@@ -33,20 +36,18 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", 6)
 	add_child(root)
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	root.add_child(head)
-	head.add_child(UIKit.label("関係マトリクス", 14, Color(0.85, 0.9, 0.98)))
-
+	var head := UIKit.window_header(root, "関係マトリクス", _close)
 	_param_opt = OptionButton.new()
 	_param_opt.add_theme_font_size_override("font_size", 11)
+	_param_opt.custom_minimum_size = Vector2(110, UIKit.ROW_H)
 	head.add_child(_param_opt)
+	head.move_child(_param_opt, 1)
 	_param_opt.item_selected.connect(_on_param_selected)
 
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 240)
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_scroll)
+	var scroll := _scroll
 
 	_grid = GridContainer.new()
 	_grid.add_theme_constant_override("h_separation", 2)
@@ -60,6 +61,10 @@ func _ready() -> void:
 	Schema.parameters_changed.connect(_on_schema_changed)
 	_refresh_param_options()
 	rebuild()
+
+
+func _close() -> void:
+	closed.emit()
 
 
 func _on_schema_changed() -> void:
@@ -115,6 +120,10 @@ func rebuild() -> void:
 
 	var vs: Array = world.villagers
 	_grid.columns = vs.size() + 1
+	# 人数ぶんの高さを持たせる。増えすぎたら中でスクロールする。
+	if _scroll != null:
+		_scroll.custom_minimum_size = Vector2(0,
+			minf(float(vs.size() + 1) * (CELL_H + 2.0) + 6.0, 420.0))
 
 	var corner := UIKit.label("主体 ↓ ／ 相手 →", 9, UIKit.TEXT_DIM)
 	corner.custom_minimum_size = Vector2(HEAD_W, CELL_H)

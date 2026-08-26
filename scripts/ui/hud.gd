@@ -60,7 +60,6 @@ func _build_top_bar() -> void:
 	_top_bar = panel
 	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	panel.position = Vector2(12, 12)
-	panel.size = Vector2(920, 40)
 	add_child(panel)
 
 	var row := HBoxContainer.new()
@@ -108,23 +107,32 @@ func _set_speed(sp: float) -> void:
 	_refresh_pause_btn()
 
 
+## 大きい窓は一度に1枚だけ。世界が見えなくなるのを防ぐ。
+func _show_only(target) -> void:
+	var want: bool = target != null and not target.visible
+	for p in [_board_panel, matrix_panel, rules_panel, debug_panel]:
+		if p != null:
+			p.visible = (p == target) and want
+
+
+func close_panels() -> void:
+	_show_only(null)
+
+
 func _toggle_board() -> void:
-	_board_panel.visible = not _board_panel.visible
+	_show_only(_board_panel)
 
 
 func _toggle_matrix() -> void:
-	if matrix_panel != null:
-		matrix_panel.visible = not matrix_panel.visible
+	_show_only(matrix_panel)
 
 
 func _toggle_rules() -> void:
-	if rules_panel != null:
-		rules_panel.visible = not rules_panel.visible
+	_show_only(rules_panel)
 
 
 func _toggle_debug() -> void:
-	if debug_panel != null:
-		debug_panel.visible = not debug_panel.visible
+	_show_only(debug_panel)
 
 
 func _build_log() -> void:
@@ -132,8 +140,8 @@ func _build_log() -> void:
 	_log_panel = panel
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	panel.offset_left = 12
-	panel.offset_right = 472
-	panel.offset_top = -212
+	panel.offset_right = 420
+	panel.offset_top = -164
 	panel.offset_bottom = -12
 	add_child(panel)
 
@@ -156,17 +164,17 @@ func _on_log_entry(text: String, color: Color) -> void:
 
 func _build_board_panel() -> void:
 	_board_panel = UIKit.panel()
-	_board_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_board_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_board_panel.offset_left = 12
 	_board_panel.offset_right = 472
-	_board_panel.offset_top = -552
-	_board_panel.offset_bottom = -220
+	_board_panel.offset_top = 64
+	_board_panel.offset_bottom = 400
 	add_child(_board_panel)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	_board_panel.add_child(box)
-	box.add_child(UIKit.label("掲示板", 13, Color(0.95, 0.86, 0.6)))
+	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.95, 0.86, 0.6))
 	UIKit.wrapped(box, "貼り紙は差出人不明として扱われる。", 10)
 
 	var scroll := ScrollContainer.new()

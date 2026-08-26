@@ -74,11 +74,11 @@ func _show_setup(on: bool) -> void:
 		rules_panel.offset_top = -360
 		rules_panel.offset_bottom = 360
 	else:
-		rules_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+		rules_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		rules_panel.offset_left = 12
-		rules_panel.offset_right = 484
-		rules_panel.offset_top = -330
-		rules_panel.offset_bottom = 330
+		rules_panel.offset_right = 500
+		rules_panel.offset_top = 64
+		rules_panel.offset_bottom = 700
 	hud.set_play_ui_visible(not on)
 
 
@@ -137,11 +137,12 @@ func _setup_ui() -> void:
 
 	var matrix = preload("res://scripts/ui/matrix_panel.gd").new()
 	matrix.world = world
-	matrix.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	matrix.offset_left = -300
-	matrix.offset_right = 300
+	matrix.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	matrix.offset_left = 12
+	matrix.offset_right = 620
 	matrix.offset_top = 64
-	matrix.offset_bottom = 500
+	matrix.offset_bottom = 72
+	matrix.closed.connect(hud.close_panels)
 	matrix.visible = false
 	hud.add_child(matrix)
 	hud.matrix_panel = matrix
@@ -155,11 +156,12 @@ func _setup_ui() -> void:
 	rules.offset_bottom = 330
 	var dbg = preload("res://scripts/ui/debug_panel.gd").new()
 	dbg.world = world
-	dbg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	dbg.offset_left = -700
-	dbg.offset_right = -360
+	dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	dbg.offset_left = 12
+	dbg.offset_right = 392
 	dbg.offset_top = 64
-	dbg.offset_bottom = 320
+	dbg.offset_bottom = 380
+	dbg.closed.connect(hud.close_panels)
 	dbg.visible = false
 	hud.add_child(dbg)
 	hud.debug_panel = dbg
@@ -168,6 +170,7 @@ func _setup_ui() -> void:
 	hud.rules_panel = rules
 	rules_panel = rules
 	rules.started.connect(_start_world)
+	rules.closed.connect(hud.close_panels)
 
 
 func _process(_delta: float) -> void:

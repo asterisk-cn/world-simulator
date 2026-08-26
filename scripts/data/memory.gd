@@ -40,8 +40,6 @@ func nightly_compress(owner_name: String, day: int) -> String:
 func _summarize(owner_name: String, day: int) -> String:
 	if episodes.is_empty():
 		return "%d日目：特に何もなかった。" % day
-	var keep := int(SimConfig.p("episodes_kept"))
-	var tail: Array = episodes.slice(maxi(0, episodes.size() - keep))
 	var counts := {}
 	for e in episodes:
 		var head: String = String(e).split("：")[0]
@@ -52,12 +50,8 @@ func _summarize(owner_name: String, day: int) -> String:
 		if counts[k] > best:
 			best = counts[k]
 			busiest = k
-	var joined := ""
-	for e in tail:
-		if joined != "":
-			joined += " / "
-		joined += String(e)
-	return "%d日目：%s は主に「%s」をして過ごした。 %s" % [day, owner_name, busiest, joined]
+	# 出来事そのものは「今日の出来事」に並ぶので、要約は一行に留める
+	return "%d日目：%s は主に「%s」をして過ごした（%d件）" % [day, owner_name, busiest, episodes.size()]
 
 
 func recent_summary(n: int = 2) -> String:

@@ -140,6 +140,20 @@ static func button(parent: Node, text: String, on_press: Callable, size: int = 1
 	return b
 
 
+## 浮いている窓の見出し。題名と閉じるボタンを揃える。
+static func window_header(parent: Node, title: String, on_close: Callable,
+		col: Color = Color(0.85, 0.9, 0.98)) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+	row.add_child(label(title, 14, col))
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
+	icon_button(row, "✕", "閉じる", on_close, 26, ROW_H, 13)
+	return row
+
+
 ## アイコンだけのボタン。何のボタンかはツールチップで補う。
 static func icon_button(parent: Node, glyph: String, tip: String, on_press: Callable,
 		w: int = 28, h: int = ROW_H, size: int = 15) -> Button:

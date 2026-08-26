@@ -1,4 +1,6 @@
 extends PanelContainer
+
+signal closed
 ## デバッグ用の一覧。村人が何を持っていて、いま何をしていて、家が建ったかを一望する。
 
 var world = null
@@ -24,14 +26,15 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", 4)
 	add_child(root)
 
+	UIKit.window_header(root, "デバッグ", _close)
+
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
+	head.add_theme_constant_override("separation", 6)
 	root.add_child(head)
-	head.add_child(UIKit.label("デバッグ", 14, Color(0.85, 0.9, 0.98)))
 	var b1 := UIKit.button(head, "材料を配る", _give_materials, 10)
-	b1.custom_minimum_size = Vector2(88, 22)
+	b1.custom_minimum_size = Vector2(88, UIKit.ROW_H)
 	var b2 := UIKit.button(head, "全員に家", _give_houses, 10)
-	b2.custom_minimum_size = Vector2(76, 22)
+	b2.custom_minimum_size = Vector2(76, UIKit.ROW_H)
 
 	_summary = UIKit.label("", 11, Color(0.8, 0.85, 0.92))
 	root.add_child(_summary)
@@ -106,3 +109,7 @@ func _give_houses() -> void:
 			continue
 		v.home = world.add_structure(Structure.Kind.HOUSE, c, v.id, v.color)
 	EventLog.notable("神が家を建てた")
+
+
+func _close() -> void:
+	closed.emit()

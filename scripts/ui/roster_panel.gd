@@ -66,7 +66,7 @@ func _rebuild() -> void:
 		jump.flat = true
 		jump.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		jump.add_theme_font_size_override("font_size", 12)
-		jump.add_theme_color_override("font_color", v.color.lightened(0.3))
+		jump.add_theme_color_override("font_color", v.color.darkened(0.42))
 		jump.custom_minimum_size = Vector2(54, UIKit.ROW_H)
 		jump.tooltip_text = "%s を見る" % v.vname
 		row.add_child(jump)

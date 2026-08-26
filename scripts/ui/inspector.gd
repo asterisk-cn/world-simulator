@@ -100,7 +100,7 @@ func _on_drag_ended(_changed: bool, key: String) -> void:
 # ---------------------------------------------------------------------------
 
 func _build_header() -> void:
-	_body.add_child(UIKit.label(subject.vname, 17, subject.color.lightened(0.25)))
+	_body.add_child(UIKit.label(subject.vname, 17, subject.color.darkened(0.35)))
 	_body.add_child(UIKit.label(subject.personality.describe(), 11, UIKit.TEXT_DIM))
 
 	var carried := ""
@@ -124,7 +124,7 @@ func _build_self_params() -> void:
 		_body.add_child(UIKit.label("　定義されていない", 11, UIKit.TEXT_DIM))
 		return
 	for cat in Schema.categories_in(Schema.SCOPE_SELF):
-		_body.add_child(UIKit.label("　" + String(cat), 10, _category_color(String(cat))))
+		_body.add_child(UIKit.label("　" + String(cat), 10, _category_color(String(cat)).darkened(0.32)))
 		for d in Schema.self_params():
 			if String(d["category"]) != String(cat):
 				continue
@@ -142,7 +142,7 @@ func _build_personality() -> void:
 	UIKit.section(_body, "性格")
 	for a in Personality.AXES:
 		UIKit.bar_row(_body, String(a[1]),
-			subject.personality.axis(String(a[0])) * 100.0, 0.0, 100.0, Color(0.75, 0.65, 0.95))
+			subject.personality.axis(String(a[0])) * 100.0, 0.0, 100.0, Color(0.48, 0.36, 0.66))
 	_body.add_child(UIKit.label("　一言個性　%s" % subject.personality.quirk, 11, UIKit.TEXT_DIM))
 
 
@@ -181,7 +181,7 @@ func _build_pairs() -> void:
 		fold.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		fold.flat = true
 		fold.add_theme_font_size_override("font_size", 12)
-		fold.add_theme_color_override("font_color", other.color.lightened(0.3))
+		fold.add_theme_color_override("font_color", other.color.darkened(0.38))
 		fold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fold.custom_minimum_size = Vector2(0, UIKit.ROW_H)
 		head.add_child(fold)
@@ -214,7 +214,7 @@ func _jump_to(target_id: int) -> void:
 
 func _build_memory() -> void:
 	UIKit.section(_body, "記憶")
-	UIKit.wrapped(_body, subject.memory.recent_summary(2), 10, Color(0.72, 0.76, 0.84))
+	UIKit.wrapped(_body, subject.memory.recent_summary(2), 10, UIKit.TEXT_DIM)
 
 	_body.add_child(UIKit.label("　今日の出来事", 10, UIKit.TEXT_DIM))
 	var eps: Array = subject.memory.episodes
@@ -222,6 +222,6 @@ func _build_memory() -> void:
 	if tail.is_empty():
 		_body.add_child(UIKit.label("　（まだ何もない）", 10, UIKit.TEXT_DIM))
 	for e in tail:
-		UIKit.wrapped(_body, "　・" + String(e), 10, Color(0.66, 0.70, 0.78))
+		UIKit.wrapped(_body, "　・" + String(e), 10, UIKit.TEXT_DIM)
 	UIKit.spacer(_body, 14)
 

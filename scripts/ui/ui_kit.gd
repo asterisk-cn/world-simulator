@@ -2,16 +2,25 @@ class_name UIKit
 extends RefCounted
 ## コードから UI を組み立てるための小さなヘルパ群。
 
-## 世界の夜の色にわずかに寄せる。無彩色のままだと開発ツールの見た目になる。
-const BG := Color(0.09, 0.11, 0.17)
-const BG_SOFT := Color(0.14, 0.16, 0.24)
-const INK := Color(1, 1, 1, 0.07)      ## 押せるものの下地
-const INK_HOVER := Color(1, 1, 1, 0.14)
-const INK_ACTIVE := Color(1, 1, 1, 0.20)
-const SUNK := Color(0, 0, 0, 0.22)     ## 入力欄のくぼみ
-const ACCENT := Color(0.99, 0.80, 0.38) ## 神の手が届くところ。ここぞという1か所にだけ使う
-const TEXT := Color(0.88, 0.90, 0.94)
-const TEXT_DIM := Color(0.60, 0.63, 0.70)
+# ---------------------------------------------------------------------------
+# 紙と木。
+#
+# 神は紙に書いて板に貼る。世界はパステルの積み木でできている。
+# UIを無彩色のダークスレートにすると、そこだけ開発ツールになってしまうので、
+# 世界と同じ素材で作る。
+# ---------------------------------------------------------------------------
+
+const BG := Color(0.95, 0.91, 0.82)       ## 紙
+const BG_SOFT := Color(0.90, 0.85, 0.74)  ## 紙の上に置く紙
+const TEXT := Color(0.20, 0.17, 0.13)     ## 墨
+const TEXT_DIM := Color(0.46, 0.41, 0.34)
+const WOOD := Color(0.46, 0.33, 0.21)     ## 枠
+const HEAD := Color(0.36, 0.26, 0.16)     ## 見出し
+const INK := Color(0.30, 0.22, 0.14, 0.10)   ## 押せるものの下地
+const INK_HOVER := Color(0.30, 0.22, 0.14, 0.18)
+const INK_ACTIVE := Color(0.30, 0.22, 0.14, 0.28)
+const SUNK := Color(0.30, 0.22, 0.14, 0.13)  ## 入力欄のくぼみ
+const ACCENT := Color(0.86, 0.52, 0.18)   ## 神の手が届くところ。ここぞという1か所にだけ
 
 ## 日本語は英字より行が高い。入力欄やボタンをこれより低くすると文字の上下が切れる。
 const ROW_H := 27
@@ -52,31 +61,31 @@ static func build_theme(font: Font) -> Theme:
 		th.set_stylebox("hover", t, flat.call(INK_HOVER, 6, 8, 4))
 		th.set_stylebox("pressed", t, flat.call(INK_ACTIVE, 6, 8, 4))
 		th.set_stylebox("focus", t, StyleBoxEmpty.new())
-		th.set_stylebox("disabled", t, flat.call(Color(1, 1, 1, 0.03), 6, 8, 4))
+		th.set_stylebox("disabled", t, flat.call(Color(0.30, 0.22, 0.14, 0.04), 6, 8, 4))
 		th.set_color("font_color", t, TEXT)
-		th.set_color("font_hover_color", t, Color(1, 1, 1, 0.98))
-		th.set_color("font_pressed_color", t, Color(1, 1, 1, 0.98))
-		th.set_color("font_disabled_color", t, Color(1, 1, 1, 0.28))
+		th.set_color("font_hover_color", t, Color(0.10, 0.08, 0.05))
+		th.set_color("font_pressed_color", t, Color(0.10, 0.08, 0.05))
+		th.set_color("font_disabled_color", t, Color(0.30, 0.26, 0.20, 0.4))
 
 	th.set_stylebox("normal", "LineEdit", flat.call(SUNK, 6, 8, 4))
-	th.set_stylebox("focus", "LineEdit", flat.call(Color(1, 1, 1, 0.10), 6, 8, 4))
+	th.set_stylebox("focus", "LineEdit", flat.call(Color(0.30, 0.22, 0.14, 0.22), 6, 8, 4))
 	th.set_color("font_color", "LineEdit", TEXT)
-	th.set_color("font_placeholder_color", "LineEdit", Color(1, 1, 1, 0.30))
+	th.set_color("font_placeholder_color", "LineEdit", Color(0.30, 0.26, 0.20, 0.45))
 	th.set_color("caret_color", "LineEdit", TEXT)
 
 	th.set_stylebox("panel", "PopupMenu", flat.call(BG_SOFT, 8, 6, 6))
 	th.set_color("font_color", "PopupMenu", TEXT)
-	th.set_color("font_hover_color", "PopupMenu", Color(1, 1, 1, 0.98))
+	th.set_color("font_hover_color", "PopupMenu", Color(0.10, 0.08, 0.05))
 	th.set_stylebox("hover", "PopupMenu", flat.call(INK_HOVER, 5, 6, 3))
 
 	th.set_stylebox("panel", "TabContainer", StyleBoxEmpty.new())
 	th.set_stylebox("tab_selected", "TabContainer", flat.call(INK_ACTIVE, 6, 12, 5))
-	th.set_stylebox("tab_unselected", "TabContainer", flat.call(Color(1, 1, 1, 0.03), 6, 12, 5))
+	th.set_stylebox("tab_unselected", "TabContainer", flat.call(Color(0.30, 0.22, 0.14, 0.05), 6, 12, 5))
 	th.set_stylebox("tab_hovered", "TabContainer", flat.call(INK_HOVER, 6, 12, 5))
-	th.set_color("font_selected_color", "TabContainer", Color(1, 1, 1, 0.98))
+	th.set_color("font_selected_color", "TabContainer", Color(0.10, 0.08, 0.05))
 	th.set_color("font_unselected_color", "TabContainer", TEXT_DIM)
 
-	th.set_color("separator", "HSeparator", Color(1, 1, 1, 0.08))
+	th.set_color("separator", "HSeparator", Color(0.30, 0.22, 0.14, 0.22))
 	th.set_constant("separation", "HSeparator", 6)
 	return th
 
@@ -89,8 +98,12 @@ static func panel_style(bg: Color = BG, radius: int = 10, pad: int = PAD) -> Sty
 	sb.content_margin_right = pad
 	sb.content_margin_top = pad
 	sb.content_margin_bottom = pad
-	sb.border_color = Color(1, 1, 1, 0.07)
-	sb.set_border_width_all(1)
+	# 木の枠。世界の掲示板や木の幹と同じ色域なので浮かない
+	sb.border_color = WOOD
+	sb.set_border_width_all(3)
+	sb.shadow_color = Color(0, 0, 0, 0.30)
+	sb.shadow_size = 5
+	sb.shadow_offset = Vector2(0, 3)
 	return sb
 
 
@@ -108,7 +121,7 @@ static func label(text: String, size: int = 12, col: Color = TEXT) -> Label:
 	return l
 
 
-static func section(parent: Node, text: String, col: Color = Color(0.72, 0.78, 0.9)) -> Label:
+static func section(parent: Node, text: String, col: Color = HEAD) -> Label:
 	var l := label(text, 12, col)
 	l.add_theme_constant_override("line_spacing", 2)
 	var sp := Control.new()
@@ -196,14 +209,14 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	fill.set_corner_radius_all(3)
 	pb.add_theme_stylebox_override("fill", fill)
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.08)
+	bg.bg_color = Color(0.30, 0.22, 0.14, 0.14)
 	bg.set_corner_radius_all(3)
 	pb.add_theme_stylebox_override("background", bg)
 	row.add_child(pb)
 	# 下限が負のパラメータは、0 の位置に印を置いて振れ幅の向きが分かるようにする
 	if vmin < 0.0:
 		var mark := ColorRect.new()
-		mark.color = Color(1, 1, 1, 0.28)
+		mark.color = Color(0.30, 0.22, 0.14, 0.35)
 		mark.custom_minimum_size = Vector2(1, BAR_H)
 		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		pb.add_child(mark)
@@ -246,7 +259,7 @@ static func scroll_body(parent: Node) -> VBoxContainer:
 
 ## 浮いている窓の見出し。題名と閉じるボタンを揃える。
 static func window_header(parent: Node, title: String, on_close: Callable,
-		col: Color = Color(0.85, 0.9, 0.98)) -> HBoxContainer:
+		col: Color = HEAD) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
@@ -282,7 +295,7 @@ static func toggle_button(parent: Node, text: String, tip: String, on_press: Cal
 	b.add_theme_font_size_override("font_size", size)
 	b.custom_minimum_size = Vector2(w, ROW_H)
 	var on := StyleBoxFlat.new()
-	on.bg_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.85)
+	on.bg_color = ACCENT
 	on.set_corner_radius_all(6)
 	on.content_margin_left = 8
 	on.content_margin_right = 8
@@ -290,8 +303,8 @@ static func toggle_button(parent: Node, text: String, tip: String, on_press: Cal
 	on.content_margin_bottom = 4
 	b.add_theme_stylebox_override("pressed", on)
 	b.add_theme_stylebox_override("hover_pressed", on)
-	b.add_theme_color_override("font_pressed_color", Color(0.12, 0.10, 0.06))
-	b.add_theme_color_override("font_hover_pressed_color", Color(0.12, 0.10, 0.06))
+	b.add_theme_color_override("font_pressed_color", Color(0.99, 0.96, 0.90))
+	b.add_theme_color_override("font_hover_pressed_color", Color(1, 1, 1))
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b
@@ -306,7 +319,7 @@ static func accent_button(parent: Node, text: String, on_press: Callable,
 	b.custom_minimum_size = Vector2(0, ROW_H + 6)
 	var mk := func(a: float) -> StyleBoxFlat:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, a)
+		sb.bg_color = Color(ACCENT.r * a, ACCENT.g * a, ACCENT.b * a)
 		sb.set_corner_radius_all(6)
 		sb.content_margin_left = 12
 		sb.content_margin_right = 12
@@ -316,9 +329,9 @@ static func accent_button(parent: Node, text: String, on_press: Callable,
 	b.add_theme_stylebox_override("normal", mk.call(0.86))
 	b.add_theme_stylebox_override("hover", mk.call(1.0))
 	b.add_theme_stylebox_override("pressed", mk.call(0.72))
-	b.add_theme_color_override("font_color", Color(0.12, 0.10, 0.06))
-	b.add_theme_color_override("font_hover_color", Color(0.10, 0.08, 0.05))
-	b.add_theme_color_override("font_pressed_color", Color(0.10, 0.08, 0.05))
+	b.add_theme_color_override("font_color", Color(0.99, 0.96, 0.90))
+	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
+	b.add_theme_color_override("font_pressed_color", Color(0.99, 0.96, 0.90))
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b

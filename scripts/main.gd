@@ -66,7 +66,7 @@ func _start_world() -> void:
 	rules_panel.set_editable(false)
 	_spawn_villagers()
 	SimClock.paused = false
-	EventLog.add("村が始まった。%d人。" % VILLAGER_COUNT, Color(0.8, 0.9, 1.0))
+	EventLog.add("村が始まった。%d人。" % VILLAGER_COUNT, Color(0.30, 0.36, 0.52))
 
 
 ## セットアップ中は定義パネルを大きく中央に出し、他の面を隠す
@@ -198,7 +198,7 @@ func _process(_delta: float) -> void:
 func _on_night(_day: int) -> void:
 	for v in world.villagers:
 		v.on_night()
-	EventLog.add("夜になった。村人たちは記憶を整理している。", Color(0.6, 0.7, 0.95))
+	EventLog.add("夜になった。村人たちは記憶を整理している。", Color(0.30, 0.36, 0.58))
 
 
 # ---------------------------------------------------------------------------

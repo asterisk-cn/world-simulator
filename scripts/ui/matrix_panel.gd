@@ -122,13 +122,13 @@ func rebuild() -> void:
 	corner.custom_minimum_size = Vector2(HEAD_W, CELL_H)
 	_grid.add_child(corner)
 	for v in vs:
-		var h := UIKit.label(String(v.vname), 10, v.color.lightened(0.3))
+		var h := UIKit.label(String(v.vname), 10, v.color.darkened(0.38))
 		h.custom_minimum_size = Vector2(CELL_W, CELL_H)
 		h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_grid.add_child(h)
 
 	for a in vs:
-		var rh := UIKit.label(String(a.vname), 10, a.color.lightened(0.3))
+		var rh := UIKit.label(String(a.vname), 10, a.color.darkened(0.38))
 		rh.custom_minimum_size = Vector2(HEAD_W, CELL_H)
 		_grid.add_child(rh)
 		for b in vs:
@@ -160,7 +160,7 @@ func _update_cells() -> void:
 		var fid := int(parts[0])
 		var tid := int(parts[1])
 		if fid == tid:
-			_paint(btn, Color(0.18, 0.19, 0.23))
+			_paint(btn, Color(0.84, 0.79, 0.68))
 			continue
 		var from_v = world.villager_by_id(fid)
 		if from_v == null:
@@ -173,19 +173,19 @@ func _update_cells() -> void:
 		if not known:
 			# まだ会っていない相手は空欄。値0と見分けがつくようにする
 			btn.text = ""
-			_paint(btn, Color(0.13, 0.14, 0.17))
+			_paint(btn, Color(0.90, 0.86, 0.78))
 			continue
 		btn.text = "%d" % int(val)
 		_paint(btn, _value_color(val, lo, hi))
 
 
 func _value_color(val: float, lo: float, hi: float) -> Color:
-	var base := Color(0.18, 0.19, 0.23)
+	var base := Color(0.84, 0.79, 0.68)
 	var col := Schema.param_color(_param_id)
 	if lo < 0.0:
 		if val >= 0.0:
 			return base.lerp(col, clampf(val / maxf(hi, 1.0), 0.0, 1.0) * 0.85)
-		return base.lerp(Color(0.85, 0.30, 0.28), clampf(-val / maxf(-lo, 1.0), 0.0, 1.0) * 0.85)
+		return base.lerp(Color(0.78, 0.30, 0.26), clampf(-val / maxf(-lo, 1.0), 0.0, 1.0) * 0.85)
 	return base.lerp(col, clampf((val - lo) / maxf(hi - lo, 1.0), 0.0, 1.0) * 0.85)
 
 
@@ -236,7 +236,7 @@ func _build_detail() -> void:
 
 	var head := HBoxContainer.new()
 	_detail.add_child(head)
-	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, Color(0.9, 0.92, 0.98)))
+	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, UIKit.TEXT))
 	var sw := UIKit.button(head, "向きを反転", _swap_pair, 10)
 	sw.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 
@@ -251,4 +251,4 @@ func _build_detail() -> void:
 		if t.knows(f.id):
 			back = t.pair_to(f.id).get_v(String(d2["id"]))
 		line += "%s%d  " % [String(d2["label"]), int(back)]
-	UIKit.wrapped(_detail, "逆向き（%s → %s）：%s" % [t.vname, f.vname, line], 10, Color(0.66, 0.70, 0.78))
+	UIKit.wrapped(_detail, "逆向き（%s → %s）：%s" % [t.vname, f.vname, line], 10, UIKit.TEXT_DIM)

@@ -185,7 +185,7 @@ func _build_log() -> void:
 
 	var box := VBoxContainer.new()
 	panel.add_child(box)
-	box.add_child(UIKit.label("村の記録", 11, Color(0.72, 0.78, 0.9)))
+	box.add_child(UIKit.label("村の記録", 11, Color(0.34, 0.28, 0.20)))
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true
@@ -212,10 +212,10 @@ func _build_board_panel() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
 	_board_panel.add_child(box)
-	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.95, 0.86, 0.6))
+	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.62, 0.42, 0.14))
 
 	# --- 神が村に言葉を落とす場所。この窓の主役なので先頭に置く ---
-	var card := UIKit.panel(Color(0.20, 0.17, 0.10), 8, UIKit.PAD_S)
+	var card := UIKit.panel(Color(0.87, 0.80, 0.64), 8, UIKit.PAD_S)
 	box.add_child(card)
 	var form_box := VBoxContainer.new()
 	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -319,7 +319,7 @@ func _refresh_board() -> void:
 	var posts: Array = world.board.posts
 	for i in range(posts.size() - 1, -1, -1):
 		var e: Dictionary = posts[i]
-		var col := Color(0.99, 0.86, 0.55) if int(e["author_id"]) == -1 else Color(0.85, 0.88, 0.94)
+		var col := Color(0.86, 0.60, 0.18) if int(e["author_id"]) == -1 else UIKit.TEXT
 		var readers := 0
 		for v in world.villagers:
 			if v.memory.has_read_post(int(e["id"])):

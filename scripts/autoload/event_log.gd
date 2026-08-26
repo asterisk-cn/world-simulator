@@ -15,7 +15,7 @@ func _ready() -> void:
 	echo = OS.get_cmdline_user_args().has("--echo-log")
 
 
-func add(text: String, color: Color = Color(0.85, 0.85, 0.88)) -> void:
+func add(text: String, color: Color = Color(0.28, 0.24, 0.19)) -> void:
 	var line := "[%d日 %s] %s" % [SimClock.day, SimClock.clock_text(), text]
 	if echo:
 		print(line)
@@ -27,9 +27,9 @@ func add(text: String, color: Color = Color(0.85, 0.85, 0.88)) -> void:
 
 ## 村の姿が変わった出来事（家が建った、など）
 func notable(text: String) -> void:
-	add(text, Color(1.0, 0.78, 0.35))
+	add(text, Color(0.72, 0.44, 0.10))
 
 
 ## 村人どうしのあいだで起きた出来事
 func social(text: String) -> void:
-	add(text, Color(0.55, 0.85, 0.95))
+	add(text, Color(0.18, 0.44, 0.58))

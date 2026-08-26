@@ -33,7 +33,7 @@ func _ready() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	root.add_child(head)
-	_title = UIKit.label("この世界の言葉", 15, Color(0.90, 0.93, 0.99))
+	_title = UIKit.label("この世界の言葉", 15, UIKit.TEXT)
 	head.add_child(_title)
 
 	var gap := Control.new()
@@ -155,7 +155,7 @@ func _rebuild_params() -> void:
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
 		_param_box.add_child(UIKit.label(
-			String(Schema.SCOPE_LABEL[sc]), 13, Color(0.82, 0.87, 0.95)))
+			String(Schema.SCOPE_LABEL[sc]), 13, Color(0.34, 0.28, 0.20)))
 
 		for cat in Schema.categories_in(sc):
 			_build_category(sc, String(cat))
@@ -177,11 +177,11 @@ func _build_category(scope: String, cat: String) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	box.add_child(head)
-	head.add_child(UIKit.label("■", 14, col))
+	head.add_child(UIKit.label("■", 14, col.darkened(0.28)))
 	if editable:
 		head.add_child(_flat_edit(cat, col, scope))
 	else:
-		head.add_child(UIKit.label(cat, 13, col))
+		head.add_child(UIKit.label(cat, 13, col.darkened(0.28)))
 	if _can_delete():
 		UIKit.icon_button(head, "✕", "%s を消す" % cat, _del_category.bind(scope, cat), 26, UIKit.ROW_H, 13)
 
@@ -209,7 +209,7 @@ func _flat_edit(cat: String, col: Color, scope: String) -> LineEdit:
 	var le := LineEdit.new()
 	le.text = cat
 	le.add_theme_font_size_override("font_size", 13)
-	le.add_theme_color_override("font_color", col)
+	le.add_theme_color_override("font_color", col.darkened(0.28))
 	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	le.custom_minimum_size = Vector2(80, UIKit.ROW_H + 2)
 	var flat := StyleBoxFlat.new()
@@ -233,10 +233,10 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	box.add_child(row)
-	row.add_child(UIKit.label("●", 12, col))
+	row.add_child(UIKit.label("●", 12, col.darkened(0.25)))
 
 	if not editable:
-		row.add_child(UIKit.label(String(def["label"]), 12, Color(0.9, 0.92, 0.98)))
+		row.add_child(UIKit.label(String(def["label"]), 12, UIKit.TEXT))
 		row.add_child(UIKit.label("  %d〜%d" % [int(def["min"]), int(def["max"])],
 			10, UIKit.TEXT_DIM))
 		return
@@ -317,7 +317,7 @@ func _rebuild_actions() -> void:
 			var head := HBoxContainer.new()
 			head.add_theme_constant_override("separation", 8)
 			box.add_child(head)
-			head.add_child(UIKit.label(String(act["label"]), 13, Color(0.9, 0.92, 0.98)))
+			head.add_child(UIKit.label(String(act["label"]), 13, UIKit.TEXT))
 			head.add_child(UIKit.label("%s ／ %s"
 				% [Schema.behavior_label(kind), Schema.target_label(kind, String(act["target"]))],
 				10, UIKit.TEXT_DIM))
@@ -344,7 +344,7 @@ func _rebuild_actions() -> void:
 
 		var tkeys: Array = Schema.targets_of(kind).keys()
 		if tkeys.is_empty():
-			row.add_child(UIKit.label("対象がない", 10, Color(0.85, 0.6, 0.45)))
+			row.add_child(UIKit.label("対象がない", 10, Color(0.72, 0.36, 0.18)))
 		else:
 			var tlabels: Array = []
 			for t in tkeys:
@@ -455,7 +455,7 @@ func _rebuild_recipes() -> void:
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", 6)
 		box.add_child(head)
-		head.add_child(UIKit.label("◆", 13, Color(0.85, 0.75, 0.55)))
+		head.add_child(UIKit.label("◆", 13, Color(0.55, 0.40, 0.20)))
 		if editable:
 			var le := LineEdit.new()
 			le.text = String(rec["label"])
@@ -465,7 +465,7 @@ func _rebuild_recipes() -> void:
 			head.add_child(le)
 			le.text_changed.connect(_rename_recipe.bind(rid))
 		else:
-			head.add_child(UIKit.label(String(rec["label"]), 12, Color(0.9, 0.92, 0.98)))
+			head.add_child(UIKit.label(String(rec["label"]), 12, UIKit.TEXT))
 		if _can_delete():
 			UIKit.icon_button(head, "✕", "%s を消す" % String(rec["label"]),
 				_del_recipe.bind(rid), 26, UIKit.ROW_H, 13)

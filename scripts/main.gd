@@ -132,6 +132,19 @@ func _setup_ui() -> void:
 	hud.add_child(inspector)
 	inspector.select_requested.connect(_select)
 
+	var roster = preload("res://scripts/ui/roster_panel.gd").new()
+	roster.world = world
+	roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	roster.offset_left = 12
+	roster.offset_right = 452
+	roster.offset_top = 64
+	roster.offset_bottom = 420
+	roster.visible = false
+	hud.add_child(roster)
+	hud.roster_panel = roster
+	roster.closed.connect(hud.close_panels)
+	roster.select_requested.connect(_select)
+
 	var matrix = preload("res://scripts/ui/matrix_panel.gd").new()
 	matrix.world = world
 	matrix.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -171,9 +184,10 @@ func _setup_ui() -> void:
 
 
 func _process(_delta: float) -> void:
+	# 夜は「暗い昼」ではなく色を青紫へ寄せる。暗くしすぎると角丸ブロックの色が濁る
 	var d := SimClock.darkness()
-	var night := Color(0.34, 0.40, 0.62)
-	modulate_node.color = Color.WHITE.lerp(night, d * 0.85)
+	var night := Color(0.46, 0.52, 0.86)
+	modulate_node.color = Color.WHITE.lerp(night, d * 0.72)
 
 
 func _on_night(_day: int) -> void:
@@ -217,6 +231,13 @@ func _zoom(f: float) -> void:
 
 
 func _try_select(world_pos: Vector2) -> void:
+	# 掲示板は神が触れる唯一の場所なので、村人より先に拾う
+	if world.board != null:
+		var bp: Vector2 = world.board.position + Vector2(0, -30)
+		if world_pos.distance_to(bp) < 46.0:
+			hud.open_board()
+			return
+
 	var best = null
 	var best_d := 40.0
 	for v in world.villagers:

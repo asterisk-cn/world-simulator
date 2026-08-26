@@ -60,7 +60,8 @@ AI村人が自律的に行動するのを、プレイヤーは**神の視点**�
 | n×n グリッドの閲覧 | 上部「関係マトリクス」 |
 | 差出人不明の貼り紙 | 上部「掲示板」 |
 | 設定の閲覧（パラメータ / アクション / レシピ / 世界） | 上部「設定」 |
-| デバッグ（在庫一覧・材料配布・家を建てる） | 上部「デバッグ」 |
+| 村人一覧（誰がいま何をしているか） | 上部「村人」 |
+| デバッグ（材料配布・家を建てる） | 上部「デバッグ」 |
 
 ## 実行
 
@@ -89,7 +90,7 @@ scripts/
   data/      self_params / pair_params / personality / memory / rules
   world/     world / iso(クォータービュー変換) / harvest_node / structure / bulletin_board
   villager/  villager(世界で何が起きたか) / brain(判断の置き場所)
-  ui/        ui_kit / range_slider / inspector / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
+  ui/        ui_kit / range_slider / inspector / roster_panel / matrix_panel(n×n) / rules_panel(設定) / debug_panel / hud
 ```
 
 Godot 4.7.2 を `mise.toml` で固定。作業の経緯は [LOG.md](LOG.md)。

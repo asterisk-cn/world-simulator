@@ -1,11 +1,10 @@
 extends PanelContainer
 
 signal closed
-## デバッグ用の一覧。村人が何を持っていて、いま何をしていて、家が建ったかを一望する。
+## 検証用の近道だけ。見て楽しむ一覧は roster_panel.gd に移した。
 
 var world = null
 
-var _rows: VBoxContainer
 var _summary: Label
 var _accum := 0.0
 
@@ -27,59 +26,23 @@ func _ready() -> void:
 	var b2 := UIKit.button(head, "全員に家", _give_houses, 10)
 	b2.custom_minimum_size = Vector2(76, UIKit.ROW_H)
 
-	_summary = UIKit.label("", 11, Color(0.8, 0.85, 0.92))
+	_summary = UIKit.label("", 11, UIKit.TEXT_DIM)
 	root.add_child(_summary)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rows.add_theme_constant_override("separation", 1)
-	scroll.add_child(_rows)
 
 
 func _process(delta: float) -> void:
 	if not visible or world == null:
 		return
 	_accum += delta
-	if _accum < 0.2:
+	if _accum < 0.3:
 		return
 	_accum = 0.0
-	_refresh()
-
-
-func _refresh() -> void:
 	var houses := 0
-	for s in world.structures:
-		if s.kind == Structure.Kind.HOUSE:
+	for st in world.structures:
+		if st.kind == Structure.Kind.HOUSE:
 			houses += 1
 	_summary.text = "家 %d / %d　建築コスト 木%d 石%d" % [
 		houses, world.villagers.size(), Rules.BUILD_WOOD, Rules.BUILD_STONE]
-
-	while _rows.get_child_count() < world.villagers.size():
-		var l := UIKit.label("", 11, Color(0.75, 0.79, 0.86))
-		_rows.add_child(l)
-
-	for i in range(world.villagers.size()):
-		var v = world.villagers[i]
-		var l: Label = _rows.get_child(i)
-		var carried := ""
-		for item in Schema.all_items():
-			var n: int = v.item_count(String(item))
-			if n <= 0:
-				continue
-			if carried != "":
-				carried += " "
-			carried += "%s%d" % [Schema.item_label(String(item)), n]
-		l.text = "%-4s %s  %s  %s" % [
-			v.vname, carried if carried != "" else "手ぶら",
-			"家○" if v.home != null else "家×",
-			v.action_label(),
-		]
-		l.add_theme_color_override("font_color",
-			Color(0.6, 0.85, 0.65) if v.home != null else Color(0.75, 0.79, 0.86))
 
 
 ## 建築の検証用。全員に家1軒ぶんの材料を渡す。

@@ -13,6 +13,17 @@ var id: int = 0
 static var _next_id: int = 1
 
 
+var _lit := -1.0
+
+
+## 灯りの具合が変わったときだけ描き直す
+func _process(_delta: float) -> void:
+	var d := SimClock.darkness()
+	if absf(d - _lit) > 0.02:
+		_lit = d
+		queue_redraw()
+
+
 func setup(p_kind: int, p_cell: Vector2i, p_owner_id: int, p_color: Color) -> void:
 	id = _next_id
 	_next_id += 1
@@ -45,8 +56,15 @@ func _draw() -> void:
 	Iso.draw_block(self, 44.0, 22.0, 24.0, Color(0.86, 0.79, 0.66), center, 6.0)
 	Iso.draw_block(self, 50.0, 25.0, 16.0, owner_color, center + Vector2(0, -24.0), 7.0)
 
-	# 扉
-	var door := Iso.rounded(PackedVector2Array([
+	# 窓。夜は灯りがともり、村人が帰っていることが遠目にも分かる
+	var window := Iso.rounded(PackedVector2Array([
 		Vector2(5, -15), Vector2(19, -22), Vector2(19, -5), Vector2(5, 2)
 	]), 3.0)
-	draw_colored_polygon(Iso._shift(door, center), Color(0.28, 0.19, 0.13))
+	var lit := SimClock.darkness()
+	var col := Color(0.28, 0.19, 0.13).lerp(Color(1.0, 0.86, 0.48), lit)
+	draw_colored_polygon(Iso._shift(window, center), col)
+	if lit > 0.15:
+		# 灯りのにじみ
+		draw_colored_polygon(Iso._shift(Iso.rounded(PackedVector2Array([
+			Vector2(0, -20), Vector2(24, -32), Vector2(24, 2), Vector2(0, 8)
+		]), 6.0), center), Color(1.0, 0.85, 0.45, 0.13 * lit))

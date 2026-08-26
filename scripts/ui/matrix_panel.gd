@@ -44,6 +44,12 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("v_separation", 2)
 	scroll.add_child(_grid)
 
+	var legend := HBoxContainer.new()
+	legend.add_theme_constant_override("separation", UIKit.GAP)
+	root.add_child(legend)
+	legend.add_child(UIKit.label("空欄＝まだ会っていない", 10, UIKit.TEXT_DIM))
+	legend.add_child(UIKit.label("数字＝その向きの値", 10, UIKit.TEXT_DIM))
+
 	_detail = VBoxContainer.new()
 	_detail.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(_detail)
@@ -138,7 +144,7 @@ func rebuild() -> void:
 			btn.flat = false
 			_grid.add_child(btn)
 			if a.id == b.id:
-				btn.text = "—"
+				btn.text = ""
 				btn.disabled = true
 			else:
 				btn.pressed.connect(_on_cell_pressed.bind(int(a.id), int(b.id)))
@@ -171,8 +177,9 @@ func _update_cells() -> void:
 			val = from_v.pair_to(tid).get_v(_param_id)
 
 		if not known:
-			btn.text = "·"
-			_paint(btn, Color(0.16, 0.17, 0.20))
+			# まだ会っていない相手は空欄。値0と見分けがつくようにする
+			btn.text = ""
+			_paint(btn, Color(0.13, 0.14, 0.17))
 			continue
 		btn.text = "%d" % int(val)
 		_paint(btn, _value_color(val, lo, hi))

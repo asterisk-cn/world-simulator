@@ -8,6 +8,7 @@ const INK := Color(1, 1, 1, 0.07)      ## 押せるものの下地
 const INK_HOVER := Color(1, 1, 1, 0.14)
 const INK_ACTIVE := Color(1, 1, 1, 0.20)
 const SUNK := Color(0, 0, 0, 0.22)     ## 入力欄のくぼみ
+const ACCENT := Color(0.99, 0.80, 0.38) ## 神の手が届くところ。ここぞという1か所にだけ使う
 const TEXT := Color(0.88, 0.90, 0.94)
 const TEXT_DIM := Color(0.60, 0.63, 0.70)
 
@@ -197,6 +198,7 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	bg.bg_color = Color(1, 1, 1, 0.08)
 	bg.set_corner_radius_all(3)
 	pb.add_theme_stylebox_override("background", bg)
+	# 値が下限に張り付いていても「バーがある」ことが分かるよう、下地に印を残す
 	row.add_child(pb)
 
 
@@ -251,6 +253,33 @@ static func icon_button(parent: Node, glyph: String, tip: String, on_press: Call
 	b.tooltip_text = tip
 	b.add_theme_font_size_override("font_size", size)
 	b.custom_minimum_size = Vector2(w, h)
+	parent.add_child(b)
+	b.pressed.connect(on_press)
+	return b
+
+
+## 神が押す、いちばん強いボタン。画面に1つだけ置く。
+static func accent_button(parent: Node, text: String, on_press: Callable,
+		size: int = 12) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", size)
+	b.custom_minimum_size = Vector2(0, ROW_H + 6)
+	var mk := func(a: float) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, a)
+		sb.set_corner_radius_all(6)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+		return sb
+	b.add_theme_stylebox_override("normal", mk.call(0.86))
+	b.add_theme_stylebox_override("hover", mk.call(1.0))
+	b.add_theme_stylebox_override("pressed", mk.call(0.72))
+	b.add_theme_color_override("font_color", Color(0.12, 0.10, 0.06))
+	b.add_theme_color_override("font_hover_color", Color(0.10, 0.08, 0.05))
+	b.add_theme_color_override("font_pressed_color", Color(0.10, 0.08, 0.05))
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	return b

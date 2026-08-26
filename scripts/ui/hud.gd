@@ -15,6 +15,7 @@ var _top_bar: PanelContainer
 var _pause_btn: Button
 var _log_panel: PanelContainer
 
+var roster_panel = null
 var matrix_panel = null
 var rules_panel = null
 var debug_panel = null
@@ -51,6 +52,8 @@ func set_play_ui_visible(on: bool) -> void:
 		_board_panel.visible = false
 	if matrix_panel != null and not on:
 		matrix_panel.visible = false
+	if roster_panel != null and not on:
+		roster_panel.visible = false
 	if debug_panel != null and not on:
 		debug_panel.visible = false
 
@@ -83,6 +86,7 @@ func _build_top_bar() -> void:
 		b.custom_minimum_size = Vector2(34, 24)
 
 	row.add_child(VSeparator.new())
+	UIKit.icon_button(row, "☷", "村人", _toggle_roster)
 	UIKit.icon_button(row, "▤", "掲示板", _toggle_board)
 	UIKit.icon_button(row, "▦", "関係マトリクス", _toggle_matrix)
 	UIKit.icon_button(row, "⚙", "設定", _toggle_rules)
@@ -110,13 +114,25 @@ func _set_speed(sp: float) -> void:
 ## 大きい窓は一度に1枚だけ。世界が見えなくなるのを防ぐ。
 func _show_only(target) -> void:
 	var want: bool = target != null and not target.visible
-	for p in [_board_panel, matrix_panel, rules_panel, debug_panel]:
+	for p in [roster_panel, _board_panel, matrix_panel, rules_panel, debug_panel]:
 		if p != null:
 			p.visible = (p == target) and want
 
 
 func close_panels() -> void:
 	_show_only(null)
+
+
+## 世界の掲示板を押したときに開く
+func open_board() -> void:
+	if _board_panel != null and not _board_panel.visible:
+		_show_only(_board_panel)
+	if _post_text != null:
+		_post_text.grab_focus()
+
+
+func _toggle_roster() -> void:
+	_show_only(roster_panel)
 
 
 func _toggle_board() -> void:
@@ -175,20 +191,26 @@ func _build_board_panel() -> void:
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
 	_board_panel.add_child(box)
 	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.95, 0.86, 0.6))
-	UIKit.wrapped(box, "貼り紙は差出人不明として扱われる。", 10)
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(scroll)
-	_board_list = VBoxContainer.new()
-	_board_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_board_list.add_theme_constant_override("separation", 2)
-	scroll.add_child(_board_list)
+	# --- 神が村に言葉を落とす場所。この窓の主役なので先頭に置く ---
+	var card := UIKit.panel(Color(0.20, 0.17, 0.10), 8, UIKit.PAD_S)
+	box.add_child(card)
+	var form_box := VBoxContainer.new()
+	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
+	card.add_child(form_box)
+	form_box.add_child(UIKit.label("村に言葉を落とす", 13, UIKit.ACCENT))
+	UIKit.wrapped(form_box, "誰が書いたかは村人に分からない。信じるかどうかは読んだ側が決める。", 10)
+
+	_post_text = LineEdit.new()
+	_post_text.placeholder_text = "貼り紙の文面"
+	_post_text.add_theme_font_size_override("font_size", 12)
+	_post_text.custom_minimum_size = Vector2(0, UIKit.ROW_H + 4)
+	form_box.add_child(_post_text)
+	_post_text.text_submitted.connect(func(_t: String) -> void: _submit_post())
 
 	var form := HBoxContainer.new()
-	form.add_theme_constant_override("separation", 4)
-	box.add_child(form)
+	form.add_theme_constant_override("separation", UIKit.GAP_S)
+	form_box.add_child(form)
 
 	var kinds := [BulletinBoard.KIND_INFO, BulletinBoard.KIND_CLAIM,
 		BulletinBoard.KIND_ACCUSE, BulletinBoard.KIND_OFFER]
@@ -198,14 +220,24 @@ func _build_board_panel() -> void:
 	_post_target = UIKit.dropdown([], [], "")
 	form.add_child(_post_target)
 
-	_post_text = LineEdit.new()
-	_post_text.placeholder_text = "貼り紙の文面"
-	_post_text.add_theme_font_size_override("font_size", 11)
-	_post_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	form.add_child(_post_text)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form.add_child(gap)
 
-	var submit := UIKit.button(form, "貼る", _submit_post)
-	submit.custom_minimum_size = Vector2(48, 24)
+	var submit := UIKit.accent_button(form, "貼る", _submit_post)
+	submit.custom_minimum_size = Vector2(84, UIKit.ROW_H + 4)
+
+	# --- いま貼られているもの ---
+	UIKit.section(box, "貼られているもの")
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	_board_list = VBoxContainer.new()
+	_board_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_board_list.add_theme_constant_override("separation", UIKit.GAP_S)
+	scroll.add_child(_board_list)
+
 	_refresh_targets()
 
 

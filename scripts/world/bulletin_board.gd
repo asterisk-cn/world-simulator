@@ -66,16 +66,17 @@ func unread_for(mem) -> Array:
 
 
 func _draw() -> void:
-	draw_colored_polygon(Iso.diamond(0.8), Color(0, 0, 0, 0.2))
-	# 支柱
-	draw_rect(Rect2(-16, -20, 5, 22), Color(0.36, 0.25, 0.16))
-	draw_rect(Rect2(11, -20, 5, 22), Color(0.36, 0.25, 0.16))
-	# 板
-	var board := PackedVector2Array([
+	Iso.draw_shadow(self, 0.8, 0.2)
+	# 支柱と板を角丸ブロックで
+	Iso.draw_block(self, 3.5, 1.8, 20.0, Color(0.44, 0.31, 0.20), Vector2(-13, 0), 1.5)
+	Iso.draw_block(self, 3.5, 1.8, 20.0, Color(0.44, 0.31, 0.20), Vector2(13, 0), 1.5)
+
+	var panel := Iso.rounded(PackedVector2Array([
 		Vector2(-26, -54), Vector2(26, -54), Vector2(26, -18), Vector2(-26, -18)
-	])
-	draw_colored_polygon(board, Color(0.55, 0.40, 0.24))
-	draw_polyline(board + PackedVector2Array([board[0]]), Color(0.30, 0.21, 0.12), 2.0)
+	]), 5.0)
+	draw_colored_polygon(panel, Color(0.60, 0.44, 0.27))
+	draw_polyline(panel + PackedVector2Array([panel[0]]), Color(0.34, 0.24, 0.14), 2.0)
+
 	# 貼り紙
 	var n: int = mini(posts.size(), 6)
 	for i in range(n):
@@ -86,7 +87,9 @@ func _draw() -> void:
 		var paper := Color(0.94, 0.92, 0.84)
 		if posts[posts.size() - 1 - i]["author_id"] == -1:
 			paper = Color(0.99, 0.86, 0.55)
-		draw_rect(Rect2(x, y, 12.0, 13.0), paper)
-		draw_line(Vector2(x + 2, y + 4), Vector2(x + 10, y + 4), Color(0.4, 0.4, 0.4), 1.0)
-		draw_line(Vector2(x + 2, y + 7), Vector2(x + 9, y + 7), Color(0.4, 0.4, 0.4), 1.0)
-		draw_line(Vector2(x + 2, y + 10), Vector2(x + 10, y + 10), Color(0.4, 0.4, 0.4), 1.0)
+		draw_colored_polygon(Iso.rounded(PackedVector2Array([
+			Vector2(x, y), Vector2(x + 12, y), Vector2(x + 12, y + 13), Vector2(x, y + 13)
+		]), 2.5), paper)
+		for k in range(3):
+			var ly := y + 4.0 + float(k) * 3.0
+			draw_line(Vector2(x + 2.5, ly), Vector2(x + 9.5, ly), Color(0.45, 0.45, 0.45), 1.0)

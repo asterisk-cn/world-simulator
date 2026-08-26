@@ -192,8 +192,8 @@ func _build_pairs() -> void:
 		var gap := Control.new()
 		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(gap)
-		var jump := UIKit.button(head, "この人を見る", _jump_to.bind(target_id), 10)
-		jump.custom_minimum_size = Vector2(78, 22)
+		UIKit.icon_button(head, "→", "%s を見る" % other.vname,
+			_jump_to.bind(target_id), 26, 22, 14)
 
 		for d in Schema.pair_params():
 			UIKit.bar_row(box, String(d["label"]),

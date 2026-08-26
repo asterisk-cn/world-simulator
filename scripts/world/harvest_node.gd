@@ -56,25 +56,25 @@ func depleted() -> bool:
 
 
 func _draw() -> void:
-	draw_colored_polygon(Iso.diamond(0.55), Color(0, 0, 0, 0.18))
+	Iso.draw_shadow(self, 0.55, 0.2)
 	if depleted():
-		draw_colored_polygon(Iso.diamond(0.25), Color(0.35, 0.33, 0.28, 0.6))
+		Iso.draw_block(self, 8.0, 4.0, 3.0, Color(0.40, 0.38, 0.32), Vector2.ZERO, 2.0)
 		return
+
+	var lush := float(amount) / float(max_amount)
 	match kind:
 		Kind.BERRY:
+			# 低い茂みのブロックに実を乗せる
+			Iso.draw_block(self, 13.0, 6.5, 7.0 + lush * 3.0, Color(0.30, 0.56, 0.32),
+				Vector2.ZERO, 4.0)
 			for i in range(amount):
 				var a := TAU * float(i) / float(max_amount)
-				var o := Vector2(cos(a) * 9.0, sin(a) * 4.5 - 6.0)
-				draw_circle(o, 5.0, Color(0.25, 0.55, 0.28))
-				draw_circle(o + Vector2(0, -1), 2.4, Color(0.86, 0.28, 0.34))
+				var o := Vector2(cos(a) * 7.0, sin(a) * 3.5 - 9.0 - lush * 3.0)
+				draw_circle(o, 2.6, Color(0.88, 0.30, 0.36))
 		Kind.TREE:
-			draw_rect(Rect2(-3, -16, 6, 16), Color(0.36, 0.25, 0.16))
-			var lush := float(amount) / float(max_amount)
-			draw_circle(Vector2(0, -24), 12.0 + lush * 6.0, Color(0.18, 0.42, 0.22))
-			draw_circle(Vector2(-6, -30), 8.0 + lush * 4.0, Color(0.22, 0.5, 0.26))
-			draw_circle(Vector2(7, -29), 7.0 + lush * 4.0, Color(0.15, 0.38, 0.2))
+			Iso.draw_block(self, 4.5, 2.2, 12.0, Color(0.44, 0.31, 0.20), Vector2.ZERO, 1.5)
+			Iso.draw_block(self, 15.0, 7.5, 16.0 + lush * 6.0, Color(0.26, 0.52, 0.30),
+				Vector2(0, -12.0), 6.0)
 		Kind.ROCK:
-			var faces := Iso.box_faces(14.0, 7.0, 10.0 + float(amount))
-			draw_colored_polygon(faces[0], Color(0.62, 0.62, 0.66))
-			draw_colored_polygon(faces[1], Color(0.40, 0.40, 0.45))
-			draw_colored_polygon(faces[2], Color(0.50, 0.50, 0.55))
+			Iso.draw_block(self, 14.0, 7.0, 9.0 + lush * 5.0, Color(0.66, 0.66, 0.70),
+				Vector2.ZERO, 4.0)

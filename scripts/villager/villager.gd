@@ -290,28 +290,26 @@ func action_label() -> String:
 
 func _draw() -> void:
 	var font: Font = SimConfig.ui_font if SimConfig.ui_font != null else ThemeDB.fallback_font
+	var lift := sin(_bob) * (1.6 if action_phase == "move" else 0.4)
+	var up := Vector2(0, -lift)
 
-	var lift := sin(_bob) * (1.5 if action_phase == "move" else 0.4)
-	draw_colored_polygon(Iso.diamond(0.5), Color(0, 0, 0, 0.28))
+	Iso.draw_shadow(self, 0.5, 0.26)
 
 	if selected:
-		var ring := Iso.diamond(0.95)
+		var ring := Iso.rounded(Iso.diamond(1.0), 6.0)
 		draw_polyline(ring + PackedVector2Array([ring[0]]), Color(1, 0.95, 0.5), 2.5)
 
-	var faces := Iso.box_faces(9.0, 4.5, 20.0 - lift)
-	draw_colored_polygon(_shift(faces[1], Vector2(0, -lift)), color.darkened(0.35))
-	draw_colored_polygon(_shift(faces[2], Vector2(0, -lift)), color.darkened(0.12))
-	draw_colored_polygon(_shift(faces[0], Vector2(0, -lift)), color.lightened(0.1))
-	draw_circle(Vector2(0, -30 - lift), 7.0, Color(0.93, 0.80, 0.66))
-	draw_circle(Vector2(-2.5, -31 - lift), 1.2, Color(0.15, 0.13, 0.12))
-	draw_circle(Vector2(2.5, -31 - lift), 1.2, Color(0.15, 0.13, 0.12))
+	# 胴の上に頭を積む。どちらも同じ角丸ブロック。
+	Iso.draw_block(self, 9.0, 4.5, 17.0, color, up, 3.5)
+	Iso.draw_block(self, 7.0, 3.5, 11.0, Color(0.95, 0.86, 0.74), up + Vector2(0, -17.0), 3.5)
 
-	draw_string(font, Vector2(-40, -44 - lift), vname, HORIZONTAL_ALIGNMENT_CENTER, 80, 11, Color(1, 1, 1, 0.92))
-	draw_string(font, Vector2(-50, 14), action_label(), HORIZONTAL_ALIGNMENT_CENTER, 100, 10, Color(0.9, 0.92, 0.95, 0.75))
+	var eye := Color(0.18, 0.16, 0.15)
+	draw_circle(Vector2(-2.6, -23.0) + up, 1.3, eye)
+	draw_circle(Vector2(2.6, -23.0) + up, 1.3, eye)
 
-
-func _shift(pts: PackedVector2Array, off: Vector2) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for p in pts:
-		out.append(p + off)
-	return out
+	# 名前は常に、いま何をしているかは選んでいる村人だけ。並ぶと読めなくなるので。
+	draw_string(font, Vector2(-40, -38 - lift), vname, HORIZONTAL_ALIGNMENT_CENTER, 80, 11,
+		Color(1, 1, 1, 0.88 if selected else 0.62))
+	if selected:
+		draw_string(font, Vector2(-55, 16), action_label(), HORIZONTAL_ALIGNMENT_CENTER, 110, 10,
+			Color(1.0, 0.95, 0.65, 0.95))

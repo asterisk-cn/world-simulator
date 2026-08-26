@@ -136,6 +136,19 @@ static func button(parent: Node, text: String, on_press: Callable, size: int = 1
 	return b
 
 
+## アイコンだけのボタン。何のボタンかはツールチップで補う。
+static func icon_button(parent: Node, glyph: String, tip: String, on_press: Callable,
+		w: int = 28, h: int = 24, size: int = 15) -> Button:
+	var b := Button.new()
+	b.text = glyph
+	b.tooltip_text = tip
+	b.add_theme_font_size_override("font_size", size)
+	b.custom_minimum_size = Vector2(w, h)
+	parent.add_child(b)
+	b.pressed.connect(on_press)
+	return b
+
+
 static func line_edit_row(parent: Node, name_text: String, value: String,
 		on_change: Callable, name_width: int = 62) -> LineEdit:
 	var row := HBoxContainer.new()

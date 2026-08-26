@@ -12,6 +12,7 @@ var _post_kind: OptionButton
 var _post_target: OptionButton
 var _board_panel: PanelContainer
 var _top_bar: PanelContainer
+var _pause_btn: Button
 var _log_panel: PanelContainer
 
 var matrix_panel = null
@@ -76,31 +77,35 @@ func _build_top_bar() -> void:
 
 	row.add_child(VSeparator.new())
 
-	var pause_btn := UIKit.button(row, "⏸", _toggle_pause)
-	pause_btn.custom_minimum_size = Vector2(34, 24)
+	_pause_btn = UIKit.icon_button(row, "❚❚", "一時停止", _toggle_pause, 34, 24, 12)
 	for s in [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]:
 		var sp: float = s
 		var b := UIKit.button(row, "%dx" % int(sp), _set_speed.bind(sp))
 		b.custom_minimum_size = Vector2(34, 24)
 
 	row.add_child(VSeparator.new())
-	var board_btn := UIKit.button(row, "掲示板", _toggle_board)
-	board_btn.custom_minimum_size = Vector2(60, 24)
-	var mat_btn := UIKit.button(row, "関係マトリクス", _toggle_matrix)
-	mat_btn.custom_minimum_size = Vector2(96, 24)
-	var rules_btn := UIKit.button(row, "設定", _toggle_rules)
-	rules_btn.custom_minimum_size = Vector2(48, 24)
-	var dbg_btn := UIKit.button(row, "デバッグ", _toggle_debug)
-	dbg_btn.custom_minimum_size = Vector2(66, 24)
+	UIKit.icon_button(row, "▤", "掲示板", _toggle_board)
+	UIKit.icon_button(row, "▦", "関係マトリクス", _toggle_matrix)
+	UIKit.icon_button(row, "⚙", "設定", _toggle_rules)
+	UIKit.icon_button(row, "☰", "デバッグ", _toggle_debug)
 
 
 func _toggle_pause() -> void:
 	SimClock.paused = not SimClock.paused
+	_refresh_pause_btn()
+
+
+func _refresh_pause_btn() -> void:
+	if _pause_btn == null:
+		return
+	_pause_btn.text = "▶" if SimClock.paused else "❚❚"
+	_pause_btn.tooltip_text = "再開" if SimClock.paused else "一時停止"
 
 
 func _set_speed(sp: float) -> void:
 	SimClock.paused = false
 	SimClock.speed = sp
+	_refresh_pause_btn()
 
 
 func _toggle_board() -> void:

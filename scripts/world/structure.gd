@@ -33,33 +33,20 @@ func contains_cell(c: Vector2i) -> bool:
 
 
 func _draw() -> void:
-	_draw_house()
-
-
-func _draw_house() -> void:
-	# 2x2 の敷地を薄く塗る（持ち主の色）
+	# 敷地を持ち主の色で薄く塗る
 	for c in footprint():
 		var off := Iso.cell_to_world(Vector2(c)) - position
-		draw_colored_polygon(_offset(Iso.diamond(0.98), off), Color(owner_color.r, owner_color.g, owner_color.b, 0.16))
+		draw_colored_polygon(
+			Iso._shift(Iso.rounded(Iso.diamond(0.96), 5.0), off),
+			Color(owner_color.r, owner_color.g, owner_color.b, 0.15))
 
 	var center := Iso.cell_to_world(Vector2(cell) + Vector2(0.5, 0.5)) - position
-	var faces := Iso.box_faces(46.0, 23.0, 30.0)
-	var wall := Color(0.80, 0.72, 0.58)
-	draw_colored_polygon(_offset(faces[1], center), wall.darkened(0.28))
-	draw_colored_polygon(_offset(faces[2], center), wall.darkened(0.10))
-	# 屋根は持ち主の色
-	var roof := Iso.box_faces(52.0, 26.0, 44.0)
-	draw_colored_polygon(_offset(roof[0], center), owner_color)
-	draw_colored_polygon(_offset(roof[1], center), owner_color.darkened(0.3))
-	draw_colored_polygon(_offset(roof[2], center), owner_color.darkened(0.12))
+	# 壁の上に屋根を積む。村人と同じ角丸ブロック。
+	Iso.draw_block(self, 44.0, 22.0, 24.0, Color(0.86, 0.79, 0.66), center, 6.0)
+	Iso.draw_block(self, 50.0, 25.0, 16.0, owner_color, center + Vector2(0, -24.0), 7.0)
+
 	# 扉
-	draw_colored_polygon(_offset(PackedVector2Array([
-		Vector2(6, -14), Vector2(20, -21), Vector2(20, -5), Vector2(6, 2)
-	]), center), Color(0.30, 0.20, 0.14))
-
-
-func _offset(pts: PackedVector2Array, off: Vector2) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for pt in pts:
-		out.append(pt + off)
-	return out
+	var door := Iso.rounded(PackedVector2Array([
+		Vector2(5, -15), Vector2(19, -22), Vector2(19, -5), Vector2(5, 2)
+	]), 3.0)
+	draw_colored_polygon(Iso._shift(door, center), Color(0.28, 0.19, 0.13))

@@ -50,10 +50,11 @@ func _ready() -> void:
 	_reset_btn.custom_minimum_size = Vector2(80, 22)
 
 	_delete_btn = Button.new()
-	_delete_btn.text = "削除"
+	_delete_btn.text = "✕"
+	_delete_btn.tooltip_text = "削除モード"
 	_delete_btn.toggle_mode = true
-	_delete_btn.add_theme_font_size_override("font_size", 10)
-	_delete_btn.custom_minimum_size = Vector2(52, 22)
+	_delete_btn.add_theme_font_size_override("font_size", 14)
+	_delete_btn.custom_minimum_size = Vector2(28, 24)
 	head.add_child(_delete_btn)
 	_delete_btn.toggled.connect(_on_delete_toggled)
 
@@ -185,8 +186,7 @@ func _build_category(scope: String, cat: String) -> void:
 	else:
 		head.add_child(UIKit.label(cat, 13, col))
 	if _can_delete():
-		var dc := UIKit.button(head, "×", _del_category.bind(scope, cat), 11)
-		dc.custom_minimum_size = Vector2(26, 22)
+		UIKit.icon_button(head, "✕", "%s を消す" % cat, _del_category.bind(scope, cat), 26, 22, 13)
 
 	box.add_child(HSeparator.new())
 
@@ -256,8 +256,8 @@ func _build_param(box: Node, def: Dictionary) -> void:
 		_set_range.bind(def), col, 0)
 
 	if _can_delete():
-		var del := UIKit.button(row, "×", _del_param.bind(pid), 11)
-		del.custom_minimum_size = Vector2(26, 22)
+		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
+			_del_param.bind(pid), 26, 22, 13)
 
 
 func _add_category(scope: String) -> void:
@@ -338,8 +338,8 @@ func _rebuild_actions() -> void:
 		name_row.add_child(le)
 		le.text_changed.connect(_set_a_label.bind(act))
 		if _can_delete():
-			var del := UIKit.button(name_row, "×", _del_action.bind(aid), 11)
-			del.custom_minimum_size = Vector2(26, 22)
+			UIKit.icon_button(name_row, "✕", "%s を消す" % String(act["label"]),
+				_del_action.bind(aid), 26, 22, 13)
 
 		UIKit.option_row(box, "タイプ", kinds, kind_labels, kind, _set_kind.bind(act), 48)
 
@@ -457,8 +457,8 @@ func _rebuild_recipes() -> void:
 		else:
 			head.add_child(UIKit.label(String(rec["label"]), 12, Color(0.9, 0.92, 0.98)))
 		if _can_delete():
-			var del := UIKit.button(head, "×", _del_recipe.bind(rid), 11)
-			del.custom_minimum_size = Vector2(26, 22)
+			UIKit.icon_button(head, "✕", "%s を消す" % String(rec["label"]),
+				_del_recipe.bind(rid), 26, 22, 13)
 
 		box.add_child(HSeparator.new())
 

@@ -44,12 +44,6 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("v_separation", 2)
 	scroll.add_child(_grid)
 
-	var legend := HBoxContainer.new()
-	legend.add_theme_constant_override("separation", UIKit.GAP)
-	root.add_child(legend)
-	legend.add_child(UIKit.label("空欄＝まだ会っていない", 10, UIKit.TEXT_DIM))
-	legend.add_child(UIKit.label("数字＝その向きの値", 10, UIKit.TEXT_DIM))
-
 	_detail = VBoxContainer.new()
 	_detail.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(_detail)

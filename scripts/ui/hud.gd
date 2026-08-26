@@ -185,12 +185,7 @@ func _build_log() -> void:
 
 	var box := VBoxContainer.new()
 	panel.add_child(box)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", UIKit.GAP)
-	box.add_child(head)
-	head.add_child(UIKit.label("村の記録", 11, Color(0.72, 0.78, 0.9)))
-	head.add_child(UIKit.label("● 村の変化", 9, Color(1.0, 0.78, 0.35)))
-	head.add_child(UIKit.label("● 人のあいだ", 9, Color(0.55, 0.85, 0.95)))
+	box.add_child(UIKit.label("村の記録", 11, Color(0.72, 0.78, 0.9)))
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true

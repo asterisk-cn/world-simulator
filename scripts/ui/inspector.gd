@@ -1,5 +1,8 @@
 extends PanelContainer
-## 個体インスペクタ。神が一人の村人の内側を直接いじる面。
+## 個体インスペクタ。選んだ村人の内側を見る面。
+
+signal select_requested(v)
+
 ## どのパラメータが並ぶかは Schema が決めるので、パラメータを足せばここにも自動で出る。
 
 var world = null
@@ -116,14 +119,19 @@ func _build_header() -> void:
 	_body.add_child(UIKit.label(subject.vname, 17, subject.color.lightened(0.25)))
 	_body.add_child(UIKit.label(subject.personality.describe(), 11, UIKit.TEXT_DIM))
 
-	var inv: Dictionary = subject.inventory
-	var home_text := "　家なし" if subject.home == null else "　家あり"
-	_body.add_child(UIKit.label("食料 %d / 木材 %d / 石材 %d%s"
-		% [inv["food"], inv["wood"], inv["stone"], home_text], 11, UIKit.TEXT_DIM))
+	var carried := ""
+	for item in Schema.all_items():
+		var n: int = subject.item_count(String(item))
+		if n <= 0:
+			continue
+		if carried != "":
+			carried += " / "
+		carried += "%s %d" % [Schema.item_label(String(item)), n]
+	if carried == "":
+		carried = "手ぶら"
+	_body.add_child(UIKit.label("%s　%s"
+		% [carried, "家なし" if subject.home == null else "家あり"], 11, UIKit.TEXT_DIM))
 	UIKit.wrapped(_body, "いま：%s" % subject.action_label(), 11, Color(0.85, 0.9, 0.95))
-
-	_body.add_child(UIKit.label("できること %d通り" % subject.feasible_actions().size(),
-		11, UIKit.TEXT_DIM))
 
 
 func _build_self_params() -> void:
@@ -181,19 +189,23 @@ func _build_pairs() -> void:
 		head.add_child(UIKit.label("→ " + String(other.vname), 12, other.color.lightened(0.3)))
 		head.add_child(UIKit.label("　接触 %d回" % subject.pair_to(target_id).contacts,
 			10, UIKit.TEXT_DIM))
+		var gap := Control.new()
+		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(gap)
+		var jump := UIKit.button(head, "この人を見る", _jump_to.bind(target_id), 10)
+		jump.custom_minimum_size = Vector2(78, 22)
 
 		for d in Schema.pair_params():
 			UIKit.bar_row(box, String(d["label"]),
 				subject.pair_to(target_id).get_v(String(d["id"])) - float(d["min"]),
 				maxf(float(d["max"]) - float(d["min"]), 1.0), Schema.param_color(String(d["id"])))
 
-		if other.knows(subject.id):
-			var line := ""
-			for d2 in Schema.pair_params():
-				line += "%s%d  " % [String(d2["label"]),
-					int(other.pair_to(subject.id).get_v(String(d2["id"])))]
-			UIKit.wrapped(box, "　← %s から見た %s：%s" % [other.vname, subject.vname, line],
-				10, Color(0.66, 0.70, 0.78))
+
+
+func _jump_to(target_id: int) -> void:
+	var v = world.villager_by_id(target_id)
+	if v != null:
+		select_requested.emit(v)
 
 
 func _build_memory() -> void:

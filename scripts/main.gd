@@ -107,7 +107,7 @@ func _spawn_villagers() -> void:
 
 		var v := Villager.new()
 		v.setup(world, _next_id, NAMES[i % NAMES.size()], PALETTE[i % PALETTE.size()], c)
-		v.inventory["food"] = randi_range(0, 2)
+		v.add_item("food", randi_range(0, 2))
 		_next_id += 1
 		world.register_villager(v)
 
@@ -133,6 +133,7 @@ func _setup_ui() -> void:
 	inspector.offset_top = 12
 	inspector.offset_bottom = -12
 	hud.add_child(inspector)
+	inspector.select_requested.connect(_select)
 
 	var matrix = preload("res://scripts/ui/matrix_panel.gd").new()
 	matrix.world = world

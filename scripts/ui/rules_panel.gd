@@ -11,6 +11,7 @@ var editable := true
 var _tabs: TabContainer
 var _param_box: VBoxContainer
 var _action_box: VBoxContainer
+var _recipe_box: VBoxContainer
 var _world_box: VBoxContainer
 var _title: Label
 var _start_btn: Button
@@ -63,6 +64,7 @@ func _ready() -> void:
 
 	_param_box = _make_tab("パラメータ")
 	_action_box = _make_tab("アクション")
+	_recipe_box = _make_tab("レシピ")
 	_world_box = _make_tab("世界")
 
 	_start_btn = UIKit.button(root, "この世界を始める", _on_start, 13)
@@ -70,8 +72,10 @@ func _ready() -> void:
 
 	Schema.parameters_changed.connect(_rebuild_params)
 	Schema.actions_changed.connect(_rebuild_actions)
+	Schema.recipes_changed.connect(_rebuild_recipes)
 	_rebuild_params()
 	_rebuild_actions()
+	_rebuild_recipes()
 	_rebuild_world()
 
 
@@ -86,6 +90,7 @@ func set_editable(on: bool) -> void:
 	_update_delete_btn()
 	_rebuild_params()
 	_rebuild_actions()
+	_rebuild_recipes()
 	_rebuild_world()
 
 
@@ -98,6 +103,7 @@ func _on_delete_toggled(on: bool) -> void:
 	_delete_btn.modulate = Color(1.0, 0.55, 0.5) if on else Color.WHITE
 	_rebuild_params()
 	_rebuild_actions()
+	_rebuild_recipes()
 
 
 func _on_tab_changed(_i: int) -> void:
@@ -108,7 +114,7 @@ func _on_tab_changed(_i: int) -> void:
 func _update_delete_btn() -> void:
 	if _delete_btn == null or _tabs == null:
 		return
-	_delete_btn.visible = editable and _tabs.current_tab != 2
+	_delete_btn.visible = editable and _tabs.current_tab != 3
 
 
 func _can_delete() -> bool:
@@ -416,3 +422,87 @@ func _step_for(vmin: float, vmax: float) -> float:
 	if span <= 20.0:
 		return 0.1
 	return 1.0
+
+
+# ---------------------------------------------------------------------------
+# レシピ
+# ---------------------------------------------------------------------------
+
+func _rebuild_recipes() -> void:
+	if _recipe_box == null:
+		return
+	_clear(_recipe_box)
+
+	for r in Schema.recipes:
+		var rec: Dictionary = r
+		var rid := String(rec["id"])
+		var card := UIKit.panel(UIKit.BG_SOFT, 6)
+		_recipe_box.add_child(card)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 2)
+		card.add_child(box)
+
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 6)
+		box.add_child(head)
+		head.add_child(UIKit.label("◆", 13, Color(0.85, 0.75, 0.55)))
+		if editable:
+			var le := LineEdit.new()
+			le.text = String(rec["label"])
+			le.add_theme_font_size_override("font_size", 12)
+			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			le.custom_minimum_size = Vector2(80, 22)
+			head.add_child(le)
+			le.text_changed.connect(_rename_recipe.bind(rid))
+		else:
+			head.add_child(UIKit.label(String(rec["label"]), 12, Color(0.9, 0.92, 0.98)))
+		if _can_delete():
+			var del := UIKit.button(head, "×", _del_recipe.bind(rid), 11)
+			del.custom_minimum_size = Vector2(26, 22)
+
+		box.add_child(HSeparator.new())
+
+		var indent := MarginContainer.new()
+		indent.add_theme_constant_override("margin_left", 14)
+		box.add_child(indent)
+		var inner := VBoxContainer.new()
+		inner.add_theme_constant_override("separation", 2)
+		indent.add_child(inner)
+
+		if editable:
+			inner.add_child(UIKit.label("材料", 10, UIKit.TEXT_DIM))
+			for item in Schema.all_items():
+				var iid := String(item)
+				if iid == rid:
+					continue  # 自分自身は材料にできない
+				UIKit.stepper_row(inner, Schema.item_label(iid),
+					int(rec["inputs"].get(iid, 0)), 9,
+					_set_input.bind(rid, iid), 70)
+		else:
+			var mats := ""
+			for item in rec["inputs"]:
+				if mats != "":
+					mats += " ＋ "
+				mats += "%s×%d" % [Schema.item_label(String(item)), int(rec["inputs"][item])]
+			inner.add_child(UIKit.label(mats if mats != "" else "材料なし", 11, UIKit.TEXT_DIM))
+
+	if editable:
+		UIKit.spacer(_recipe_box, 4)
+		UIKit.button(_recipe_box, "＋ レシピを追加", _add_recipe)
+	UIKit.spacer(_recipe_box, 10)
+
+
+func _add_recipe() -> void:
+	Schema.add_recipe()
+
+
+func _del_recipe(rid: String) -> void:
+	Schema.remove_recipe(rid)
+
+
+func _rename_recipe(text: String, rid: String) -> void:
+	Schema.rename_recipe(rid, text)
+
+
+func _set_input(n: int, rid: String, item: String) -> void:
+	Schema.set_recipe_input(rid, item, n)

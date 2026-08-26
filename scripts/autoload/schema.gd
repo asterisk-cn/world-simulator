@@ -11,6 +11,7 @@ extends Node
 
 signal parameters_changed
 signal actions_changed
+signal recipes_changed
 
 const SCOPE_SELF := "self"
 const SCOPE_PAIR := "pair"
@@ -71,18 +72,107 @@ const TARGETS := {
 	},
 }
 
+## 世界に元からある持ち物。採取で手に入る。
+const ITEMS := {
+	"food": "木の実",
+	"wood": "木材",
+	"stone": "石材",
+}
+
 var parameters: Array = []
 var actions: Array = []
+var recipes: Array = []
 
 
 func _ready() -> void:
 	reset_all()
 
 
+# ---------------------------------------------------------------------------
+# レシピ
+# ---------------------------------------------------------------------------
+
+func _default_recipes() -> void:
+	recipes = [
+		{"id": "tool", "label": "道具", "inputs": {"wood": 1, "stone": 1}},
+	]
+
+
+func recipe_def(id: String) -> Variant:
+	for r in recipes:
+		if String(r["id"]) == id:
+			return r
+	return null
+
+
+## 元からある持ち物と、レシピで作れるものを合わせた一覧
+func all_items() -> Array:
+	var out: Array = ITEMS.keys()
+	for r in recipes:
+		out.append(String(r["id"]))
+	return out
+
+
+func item_label(id: String) -> String:
+	if ITEMS.has(id):
+		return String(ITEMS[id])
+	var r = recipe_def(id)
+	return id if r == null else String(r["label"])
+
+
+func add_recipe() -> Dictionary:
+	var taken: Array = []
+	for r in recipes:
+		taken.append(String(r["id"]))
+	var r2 := {"id": _unique_id("r", taken), "label": "新しいもの", "inputs": {}}
+	recipes.append(r2)
+	recipes_changed.emit()
+	actions_changed.emit()
+	return r2
+
+
+func remove_recipe(id: String) -> void:
+	for i in range(recipes.size()):
+		if String(recipes[i]["id"]) == id:
+			recipes.remove_at(i)
+			break
+	# 消えたレシピを材料にしていたものと、作ろうとしていたアクションを片付ける
+	for r in recipes:
+		r["inputs"].erase(id)
+	var kept: Array = []
+	for a in actions:
+		if String(a["kind"]) == "craft" and String(a["target"]) == id:
+			continue
+		kept.append(a)
+	actions = kept
+	recipes_changed.emit()
+	actions_changed.emit()
+
+
+func set_recipe_input(id: String, item: String, n: int) -> void:
+	var r = recipe_def(id)
+	if r == null:
+		return
+	if n <= 0:
+		r["inputs"].erase(item)
+	else:
+		r["inputs"][item] = n
+	recipes_changed.emit()
+
+
+func rename_recipe(id: String, label: String) -> void:
+	var r = recipe_def(id)
+	if r != null:
+		r["label"] = label
+		actions_changed.emit()
+
+
 func reset_all() -> void:
+	_default_recipes()
 	_default_parameters()
 	_default_actions()
 	parameters_changed.emit()
+	recipes_changed.emit()
 	actions_changed.emit()
 
 
@@ -291,6 +381,7 @@ func _default_actions() -> void:
 		make_action("read", "掲示板を読む", "social", "read"),
 		make_action("approach", "近づく", "move", "toward"),
 		make_action("avoid", "離れる", "move", "away"),
+		make_action("craft_tool", "道具を作る", "craft", "tool"),
 		make_action("wander", "歩き回る", "move", "anywhere"),
 	]
 
@@ -331,7 +422,16 @@ func behavior_label(kind: String) -> String:
 	return kind
 
 
+## 制作の対象はレシピそのもの。レシピを足せば作れるものが増える。
 func targets_of(kind: String) -> Dictionary:
+	if kind == "craft":
+		var out := {}
+		for r in recipes:
+			out[String(r["id"])] = {
+				"label": String(r["label"]), "targeted": false,
+				"duration": 1.6, "reach": 999.0,
+			}
+		return out
 	return TARGETS.get(kind, {})
 
 

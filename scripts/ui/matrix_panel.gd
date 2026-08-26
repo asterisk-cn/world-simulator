@@ -8,7 +8,6 @@ const HEAD_W := 62
 var world = null
 
 var _param_id: String = "affinity"
-var _mode: String = "value"  ## "value" | "gap"
 var _grid: GridContainer
 var _cells := {}             ## "from:to" -> Button
 var _detail: VBoxContainer
@@ -43,13 +42,6 @@ func _ready() -> void:
 	_param_opt.add_theme_font_size_override("font_size", 11)
 	head.add_child(_param_opt)
 	_param_opt.item_selected.connect(_on_param_selected)
-
-	var mode_opt := OptionButton.new()
-	mode_opt.add_theme_font_size_override("font_size", 11)
-	mode_opt.add_item("値（行→列）")
-	mode_opt.add_item("差 |A→B − B→A|")
-	head.add_child(mode_opt)
-	mode_opt.item_selected.connect(_on_mode_selected)
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 240)
@@ -96,10 +88,6 @@ func _on_param_selected(i: int) -> void:
 	_update_cells()
 	_build_detail()
 
-
-func _on_mode_selected(i: int) -> void:
-	_mode = "value" if i == 0 else "gap"
-	_update_cells()
 
 
 func _process(delta: float) -> void:
@@ -179,16 +167,6 @@ func _update_cells() -> void:
 		var known: bool = from_v.knows(tid)
 		if known:
 			val = from_v.pair_to(tid).get_v(_param_id)
-
-		if _mode == "gap":
-			var to_v = world.villager_by_id(tid)
-			var back: float = 0.0
-			if to_v != null and to_v.knows(fid):
-				back = to_v.pair_to(fid).get_v(_param_id)
-			var gap: float = absf(val - back)
-			btn.text = "%d" % int(gap)
-			_paint(btn, Color(0.18, 0.19, 0.23).lerp(Color(0.95, 0.75, 0.25), clampf(gap / maxf(hi - lo, 1.0) * 2.0, 0.0, 1.0)))
-			continue
 
 		if not known:
 			btn.text = "·"

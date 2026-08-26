@@ -64,8 +64,19 @@ func _candidates_for(a: Dictionary) -> Array:
 		"social":
 			return _social(a, target)
 		"craft":
-			return []
+			return _one(_craft(a, target))
 	return []
+
+
+## 材料が全部そろっていれば作れる。手持ちで完結するので移動はしない。
+func _craft(a: Dictionary, target: String):
+	var r = Schema.recipe_def(target)
+	if r == null or r["inputs"].is_empty():
+		return null
+	for item in r["inputs"]:
+		if v.item_count(String(item)) < int(r["inputs"][item]):
+			return null
+	return _pack(a, v.cell, null, String(a["label"]))
 
 
 func _one(c) -> Array:
@@ -120,7 +131,7 @@ func _gather(a: Dictionary, target: String):
 func _build(a: Dictionary, target: String):
 	if target != "house" or v.home != null:
 		return null
-	if int(v.inventory["wood"]) < Rules.BUILD_WOOD or int(v.inventory["stone"]) < Rules.BUILD_STONE:
+	if v.item_count("wood") < Rules.BUILD_WOOD or v.item_count("stone") < Rules.BUILD_STONE:
 		return null
 	var c: Vector2i = v.world.find_build_cell(v.cell, v.id)
 	if c.x < 0:
@@ -141,7 +152,7 @@ func _in_reach(a: Dictionary, at: Vector2) -> bool:
 func _use(a: Dictionary, target: String):
 	match target:
 		"food":
-			if int(v.inventory["food"]) <= 0:
+			if v.item_count("food") <= 0:
 				return null
 			return _pack(a, v.cell, null, String(a["label"]))
 		"home":

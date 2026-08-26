@@ -84,8 +84,8 @@ func _refresh() -> void:
 ## 建築の検証用。全員に家1軒ぶんの材料を渡す。
 func _give_materials() -> void:
 	for v in world.villagers:
-		v.inventory["wood"] = int(v.inventory["wood"]) + Rules.BUILD_WOOD
-		v.inventory["stone"] = int(v.inventory["stone"]) + Rules.BUILD_STONE
+		v.add_item("wood", Rules.BUILD_WOOD)
+		v.add_item("stone", Rules.BUILD_STONE)
 	EventLog.notable("神が全員に建築材料を配った")
 
 

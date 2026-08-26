@@ -214,6 +214,43 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	return rs
 
 
+## ラベル + −/数/+ の行。on_change(new_count) が呼ばれる。
+static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
+		on_change: Callable, name_width: int = 62) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	parent.add_child(row)
+	var nm := label(name_text, 11, TEXT)
+	nm.custom_minimum_size = Vector2(name_width, 0)
+	row.add_child(nm)
+
+	var minus := Button.new()
+	minus.text = "−"
+	minus.add_theme_font_size_override("font_size", 11)
+	minus.custom_minimum_size = Vector2(24, 22)
+	row.add_child(minus)
+
+	var val := label(str(value), 11, TEXT if value > 0 else TEXT_DIM)
+	val.custom_minimum_size = Vector2(24, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	row.add_child(val)
+
+	var plus := Button.new()
+	plus.text = "＋"
+	plus.add_theme_font_size_override("font_size", 11)
+	plus.custom_minimum_size = Vector2(24, 22)
+	row.add_child(plus)
+
+	var count := [value]
+	var apply := func(d: int) -> void:
+		count[0] = clampi(count[0] + d, 0, vmax)
+		val.text = str(count[0])
+		val.add_theme_color_override("font_color", TEXT if count[0] > 0 else TEXT_DIM)
+		on_change.call(count[0])
+	minus.pressed.connect(func() -> void: apply.call(-1))
+	plus.pressed.connect(func() -> void: apply.call(1))
+
+
 ## 折りたたみ。中身を入れる VBoxContainer を返す。
 static func collapsible(parent: Node, title: String, open: bool = false) -> VBoxContainer:
 	var head := Button.new()

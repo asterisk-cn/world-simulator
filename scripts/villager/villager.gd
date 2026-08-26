@@ -25,7 +25,7 @@ var memory: Memory
 ## 自分から見た相手ごとのパラメータ。other_id -> PairParams
 var pairs := {}
 
-var inventory := {"food": 0, "wood": 0, "stone": 0}
+var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決める
 var home: Structure = null
 
 var current_action := {}
@@ -69,8 +69,16 @@ func knows(other_id: int) -> bool:
 	return pairs.has(other_id)
 
 
+func item_count(item: String) -> int:
+	return int(inventory.get(item, 0))
+
+
+func add_item(item: String, n: int) -> void:
+	inventory[item] = maxi(0, item_count(item) + n)
+
+
 func wealth() -> float:
-	var w := float(inventory["food"]) + float(inventory["wood"]) * 0.8 + float(inventory["stone"]) * 1.2
+	var w := float(carried())
 	if home != null:
 		w += 20.0
 	return w
@@ -81,11 +89,6 @@ func carried() -> int:
 	for k in inventory:
 		t += int(inventory[k])
 	return t
-
-
-## いま実行可能な行動の一覧。AIに渡す「できること」。
-func feasible_actions() -> Array:
-	return _brain.feasible()
 
 
 # ---------------------------------------------------------------------------
@@ -166,17 +169,19 @@ func _complete_action() -> void:
 			if obj != null and is_instance_valid(obj) and not obj.depleted():
 				var got: int = obj.take(1)
 				var item: String = obj.item_key()
-				inventory[item] = int(inventory[item]) + got
+				add_item(item, got)
 				if got > 0:
 					memory.record("採取：%s を手に入れた" % HarvestNode.KIND_NAME[obj.kind])
+		"craft":
+			_do_craft(target)
 		"build":
 			if target == "house":
 				_do_build()
 		"use":
 			match target:
 				"food":
-					if int(inventory["food"]) > 0:
-						inventory["food"] = int(inventory["food"]) - 1
+					if item_count("food") > 0:
+						add_item("food", -1)
 						memory.record("食事：木の実を食べた")
 				"home":
 					memory.record("睡眠：家で眠った")
@@ -191,14 +196,28 @@ func _complete_action() -> void:
 					_do_read_board()
 
 
+## 材料を消して、できたものを1つ持つ
+func _do_craft(recipe_id: String) -> void:
+	var r = Schema.recipe_def(recipe_id)
+	if r == null:
+		return
+	for item in r["inputs"]:
+		if item_count(String(item)) < int(r["inputs"][item]):
+			return
+	for item in r["inputs"]:
+		add_item(String(item), -int(r["inputs"][item]))
+	add_item(recipe_id, 1)
+	memory.record("制作：%s を作った" % Schema.item_label(recipe_id))
+
+
 func _do_build() -> void:
-	if int(inventory["wood"]) < Rules.BUILD_WOOD or int(inventory["stone"]) < Rules.BUILD_STONE:
+	if item_count("wood") < Rules.BUILD_WOOD or item_count("stone") < Rules.BUILD_STONE:
 		return
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if c.x < 0 or not world._can_build_at(c):
 		return
-	inventory["wood"] = int(inventory["wood"]) - Rules.BUILD_WOOD
-	inventory["stone"] = int(inventory["stone"]) - Rules.BUILD_STONE
+	add_item("wood", -Rules.BUILD_WOOD)
+	add_item("stone", -Rules.BUILD_STONE)
 	home = world.add_structure(Structure.Kind.HOUSE, c, id, color)
 	memory.record("建築：自分の家を建てた")
 	EventLog.notable("%s が家を建てた" % vname)

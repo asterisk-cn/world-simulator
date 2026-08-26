@@ -218,7 +218,7 @@ func _build_board_panel() -> void:
 	var form_box := VBoxContainer.new()
 	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
 	card.add_child(form_box)
-	form_box.add_child(UIKit.label("村に言葉を落とす", 13, UIKit.ACCENT))
+	form_box.add_child(UIKit.label("神のお告げ", 13, UIKit.ACCENT))
 
 	_post_text = LineEdit.new()
 	_post_text.placeholder_text = "貼り紙の文面"

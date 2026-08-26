@@ -56,13 +56,10 @@ func _draw() -> void:
 	Iso.draw_block(self, 44.0, 22.0, 24.0, Color(0.86, 0.79, 0.66), center, 6.0)
 	Iso.draw_block(self, 50.0, 25.0, 16.0, owner_color, center + Vector2(0, -24.0), 7.0)
 
-	# 屋根の上に持ち主の色の目印。誰の家かが遠目に分かる
-	Iso.draw_block(self, 3.0, 1.5, 9.0, owner_color.lightened(0.25),
-		center + Vector2(0, -40.0), 1.5)
-
-	# 窓。夜は灯りがともり、村人が帰っていることが遠目にも分かる
+	# 窓。壁の真ん中の高さに置く。高すぎると屋根に食い込んで軒のように見える。
+	# 誰の家かは屋根の色で分かるので、旗のような目印は立てない。
 	var window := Iso.rounded(PackedVector2Array([
-		Vector2(5, -15), Vector2(19, -22), Vector2(19, -5), Vector2(5, 2)
+		Vector2(6, -10), Vector2(18, -16), Vector2(18, -3), Vector2(6, 3)
 	]), 3.0)
 	var lit := SimClock.darkness()
 	if lit > 0.1:
@@ -70,8 +67,8 @@ func _draw() -> void:
 		for i in range(3):
 			var g := 1.0 + float(i) * 0.55
 			draw_colored_polygon(Iso._shift(Iso.rounded(PackedVector2Array([
-				Vector2(-4 - 10 * g, -18 - 8 * g), Vector2(24 + 10 * g, -32 - 8 * g),
-				Vector2(24 + 10 * g, 2 + 8 * g), Vector2(-4 - 10 * g, 10 + 8 * g),
+				Vector2(-2 - 9 * g, -12 - 7 * g), Vector2(24 + 9 * g, -25 - 7 * g),
+				Vector2(24 + 9 * g, 0 + 7 * g), Vector2(-2 - 9 * g, 12 + 7 * g),
 			]), 10.0), center), Color(1.0, 0.84, 0.42, 0.10 * lit))
 	var col := Color(0.28, 0.19, 0.13).lerp(Color(1.0, 0.94, 0.70), lit)
 	draw_colored_polygon(Iso._shift(window, center), col)

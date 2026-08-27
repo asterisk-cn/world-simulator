@@ -283,7 +283,7 @@ func _do_post() -> void:
 		if int(e["author_id"]) == id and String(e["text"]) == text:
 			return
 	board.post(id, vname, text)
-	memory.record("掲示：掲示板に貼り紙をした")
+	memory.record("掲示板：「%s」を貼った" % text)
 
 
 ## 掲示板を読む。読んだという事実だけを残す。
@@ -297,7 +297,9 @@ func _do_read_board() -> void:
 		return
 	for e in unread:
 		memory.mark_post_read(int(e["id"]), 1.0)
-		memory.record("掲示板：%s の貼り紙を読んだ" % String(e["author_name"]))
+		# 誰の紙かより、何が書いてあったかが記憶に残る
+		memory.record("掲示板：「%s」（%s）を読んだ"
+			% [String(e["text"]), String(e["author_name"])])
 
 
 # ---------------------------------------------------------------------------

@@ -1,17 +1,6 @@
 extends Node2D
 ## 起動処理。世界を作り、村人を置き、カメラと UI を繋ぐ。
 
-const VILLAGER_COUNT := 8
-
-const NAMES := ["ハル", "ミナ", "ソウ", "リク", "ノア", "カイ", "ユキ", "トウ", "レン", "サキ", "ジン", "アオ"]
-
-const PALETTE := [
-	Color(0.90, 0.45, 0.40), Color(0.40, 0.65, 0.92), Color(0.55, 0.80, 0.45),
-	Color(0.93, 0.75, 0.35), Color(0.72, 0.55, 0.92), Color(0.40, 0.82, 0.80),
-	Color(0.92, 0.58, 0.75), Color(0.65, 0.70, 0.45), Color(0.85, 0.60, 0.35),
-	Color(0.50, 0.55, 0.85), Color(0.70, 0.85, 0.60), Color(0.88, 0.50, 0.55),
-]
-
 var world: World
 var camera: Camera2D
 var modulate_node: CanvasModulate
@@ -98,7 +87,7 @@ func _start_world() -> void:
 	rules_panel.set_editable(false)
 	_spawn_villagers()
 	SimClock.paused = false
-	EventLog.add("村が始まった。%d人。" % VILLAGER_COUNT, Color(0.30, 0.36, 0.52))
+	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 
 
 ## セットアップ中は定義パネルを大きく中央に出し、他の面を隠す
@@ -133,17 +122,24 @@ func _setup_font() -> void:
 	get_window().theme = SimConfig.ui_theme
 
 
+## 開始前に「ひと」で決めた顔ぶれを、そのまま世界へ置く。
 func _spawn_villagers() -> void:
 	var center := Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0)
-	for i in range(VILLAGER_COUNT):
-		var a := TAU * float(i) / float(VILLAGER_COUNT)
+	var n: int = Schema.villagers.size()
+	for i in range(n):
+		var h: Dictionary = Schema.villagers[i]
+		var a := TAU * float(i) / float(maxi(n, 1))
 		var c := center + Vector2(cos(a), sin(a)) * randf_range(3.0, 6.0)
 		c.x = clampf(c.x, 1.0, World.GRID_W - 2.0)
 		c.y = clampf(c.y, 1.0, World.GRID_H - 2.0)
 
 		var v := Villager.new()
-		v.setup(world, _next_id, NAMES[i % NAMES.size()], PALETTE[i % PALETTE.size()], c)
-		v.add_item("food", randi_range(0, 2))
+		v.setup(world, _next_id, String(h["name"]), Color(h["color"]), c)
+		v.personality.quirk = String(h["quirk"])
+		for key in h["axes"]:
+			v.personality.set_axis(String(key), float(h["axes"][key]))
+		for item in h["items"]:
+			v.add_item(String(item), int(h["items"][item]))
 		_next_id += 1
 		world.register_villager(v)
 

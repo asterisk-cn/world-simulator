@@ -4,6 +4,9 @@ extends RefCounted
 ##
 ## 【要検討】扱いは未決。DESIGN.md §6 を参照。
 
+## 移動はその日を語る材料にならない。どこへ歩いたかではなく、何をしたかを残す。
+const NOT_A_DEED := "移動"
+
 var episodes: Array = []      ## 今日の生の出来事（文字列）
 var summaries: Array = []     ## 過去の日ごとの要約
 var read_posts := {}          ## post_id -> {"day": int, "belief": float}
@@ -41,9 +44,15 @@ func _summarize(owner_name: String, day: int) -> String:
 	if episodes.is_empty():
 		return "%d日目：特に何もなかった。" % day
 	var counts := {}
+	var deeds := 0
 	for e in episodes:
 		var head: String = String(e).split("：")[0]
+		if head == NOT_A_DEED:
+			continue
+		deeds += 1
 		counts[head] = int(counts.get(head, 0)) + 1
+	if deeds == 0:
+		return "%d日目：%s は歩き回っていた。" % [day, owner_name]
 	var busiest := ""
 	var best := 0
 	for k in counts:
@@ -51,7 +60,7 @@ func _summarize(owner_name: String, day: int) -> String:
 			best = counts[k]
 			busiest = k
 	# 出来事そのものは「今日の出来事」に並ぶので、要約は一行に留める
-	return "%d日目：%s は主に「%s」をして過ごした（%d件）" % [day, owner_name, busiest, episodes.size()]
+	return "%d日目：%s は「%s」が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
 
 
 func recent_summary(n: int = 2) -> String:

@@ -10,6 +10,7 @@ var world = null
 var editable := true
 
 var _tabs: TabContainer
+var _people_box: VBoxContainer
 var _head_row: HBoxContainer
 var _param_box: VBoxContainer
 var _action_box: VBoxContainer
@@ -76,6 +77,7 @@ func _ready() -> void:
 	_action_box = _make_tab("ふるまい")
 	_recipe_box = _make_tab("つくりかた")
 	_world_box = _make_tab("世界")
+	_people_box = _make_tab("村人")
 
 	# 大事なことほど、注記の書式で書かない
 	_start_note = UIKit.label("これがこの世界の、最初で最後の言葉になる。", 12, UIKit.HEAD)
@@ -87,10 +89,12 @@ func _ready() -> void:
 	Schema.parameters_changed.connect(_rebuild_params)
 	Schema.actions_changed.connect(_rebuild_actions)
 	Schema.recipes_changed.connect(_rebuild_recipes)
+	Schema.villagers_changed.connect(_rebuild_people)
 	_rebuild_params()
 	_rebuild_actions()
 	_rebuild_recipes()
 	_rebuild_world()
+	_rebuild_people()
 
 
 func set_editable(on: bool) -> void:
@@ -111,6 +115,7 @@ func set_editable(on: bool) -> void:
 	_rebuild_actions()
 	_rebuild_recipes()
 	_rebuild_world()
+	_rebuild_people()
 
 
 func _on_start() -> void:
@@ -128,6 +133,7 @@ func _on_delete_toggled(on: bool) -> void:
 	_rebuild_params()
 	_rebuild_actions()
 	_rebuild_recipes()
+	_rebuild_people()
 
 
 func _on_tab_changed(_i: int) -> void:
@@ -156,7 +162,9 @@ func _can_delete() -> bool:
 func _make_tab(title: String) -> VBoxContainer:
 	var holder := MarginContainer.new()
 	holder.name = title
-	holder.add_theme_constant_override("margin_top", 2)
+	# 紙を見出しの下へ少し差し込む。ここが空くと札が浮いて、紙の束に見えない
+	# （奥の札は選ばれた札ほど下へ伸びないので、その差を紙側で吸う）
+	holder.add_theme_constant_override("margin_top", -3)
 	_tabs.add_child(holder)
 	var page := PanelContainer.new()
 	page.add_theme_stylebox_override("panel", UIKit.page_style())
@@ -574,6 +582,181 @@ func _step_for(vmin: float, vmax: float) -> float:
 	if span <= 20.0:
 		return 0.1
 	return 1.0
+
+
+# ---------------------------------------------------------------------------
+# ひと
+# ---------------------------------------------------------------------------
+
+func _rebuild_people() -> void:
+	if _people_box == null:
+		return
+	_clear(_people_box)
+	if not editable:
+		_people_list()
+		return
+
+	UIKit.wrapped(_people_box,
+		"この世界に置く村人。名前も性格も、その人がどう振る舞うかの素になる。", 11, UIKit.TEXT_DIM)
+
+	for h in Schema.villagers:
+		_build_person(h)
+
+	if Schema.villagers.size() < Schema.MAX_VILLAGERS:
+		UIKit.spacer(_people_box, 4)
+		UIKit.add_button(_people_box, "＋ 村人を増やす", _add_villager)
+	UIKit.spacer(_people_box, 10)
+
+
+func _build_person(h: Dictionary) -> void:
+	var hid := String(h["id"])
+	var card := UIKit.card()
+	_people_box.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", UIKit.GAP_S)
+	card.add_child(box)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", UIKit.GAP_S)
+	box.add_child(head)
+	head.add_child(_color_swatch(h))
+
+	var name_edit := LineEdit.new()
+	name_edit.text = String(h["name"])
+	name_edit.add_theme_font_size_override("font_size", 13)
+	name_edit.add_theme_color_override("font_color", Color(h["color"]).darkened(0.42))
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.custom_minimum_size = Vector2(90, UIKit.ROW_H + 2)
+	head.add_child(name_edit)
+	name_edit.text_changed.connect(func(t: String) -> void: h["name"] = t)
+
+	var quirk := LineEdit.new()
+	quirk.text = String(h["quirk"])
+	quirk.placeholder_text = "一言でいうと"
+	quirk.add_theme_font_size_override("font_size", 11)
+	quirk.custom_minimum_size = Vector2(150, UIKit.ROW_H)
+	head.add_child(quirk)
+	quirk.text_changed.connect(func(t: String) -> void: h["quirk"] = t)
+
+	if _can_delete() and Schema.villagers.size() > 1:
+		UIKit.icon_button(head, "✕", "%s を消す" % String(h["name"]),
+			_del_villager.bind(hid), 26, UIKit.ROW_H, 13)
+
+	box.add_child(HSeparator.new())
+
+	# 性格。見る側（インスペクタ）と同じ積み木・同じ両端の言葉
+	for a in Personality.AXES:
+		var key := String(a[0])
+		UIKit.pole_slider(box, String(a[2]), String(a[3]),
+			float(h["axes"].get(key, 0.5)),
+			func(x: float) -> void: h["axes"][key] = x)
+
+	# 持ち物。始まりに何を握らせておくか
+	var have := HBoxContainer.new()
+	have.add_theme_constant_override("separation", UIKit.GAP)
+	box.add_child(have)
+	have.add_child(UIKit.label("持ち物", 10, UIKit.TEXT_DIM))
+	for item in Schema.all_items():
+		_item_counter(have, h, String(item))
+
+
+## 色は世界の上での見分けになる。押すと、まだ誰も使っていない色へ移る。
+func _color_swatch(h: Dictionary) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(UIKit.ROW_H, UIKit.ROW_H)
+	b.tooltip_text = "色を変える"
+	var paint := func(col: Color) -> void:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col
+		sb.set_corner_radius_all(5)
+		sb.border_color = Color(0.46, 0.33, 0.21, 0.45)
+		sb.set_border_width_all(1)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+	paint.call(Color(h["color"]))
+	b.pressed.connect(func() -> void:
+		h["color"] = Schema.next_color(Color(h["color"]))
+		paint.call(Color(h["color"])))
+	return b
+
+
+func _item_counter(parent: Node, h: Dictionary, iid: String) -> void:
+	var cell := HBoxContainer.new()
+	cell.add_theme_constant_override("separation", 3)
+	cell.tooltip_text = Schema.item_label(iid)
+	parent.add_child(cell)
+	cell.add_child(ItemIcon.of_item(iid, 18))
+
+	var n := int(h["items"].get(iid, 0))
+	# 並びは つくりかた の材料と同じ −／数／＋。場所ごとに形が変わると読み方が変わる
+	var minus := UIKit._round_button("−")
+	cell.add_child(minus)
+
+	var val := UIKit.label(str(n), 11, UIKit.TEXT if n > 0 else UIKit.TEXT_DIM)
+	val.custom_minimum_size = Vector2(16, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cell.add_child(val)
+
+	var plus := UIKit._round_button("＋")
+	cell.add_child(plus)
+
+	var count := [n]
+	var apply := func(d: int) -> void:
+		count[0] = clampi(count[0] + d, 0, 9)
+		val.text = str(count[0])
+		val.add_theme_color_override("font_color",
+			UIKit.TEXT if count[0] > 0 else UIKit.TEXT_DIM)
+		if count[0] <= 0:
+			h["items"].erase(iid)
+		else:
+			h["items"][iid] = count[0]
+	minus.pressed.connect(func() -> void: apply.call(-1))
+	plus.pressed.connect(func() -> void: apply.call(1))
+
+
+## 始まったあとは、誰がいたかを1枚の紙で見るだけ
+func _people_list() -> void:
+	var card := UIKit.card()
+	_people_box.add_child(card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 0)
+	card.add_child(box)
+
+	var first := true
+	for h in Schema.villagers:
+		if not first:
+			UIKit.hairline(box)
+		first = false
+		var pad := MarginContainer.new()
+		pad.add_theme_constant_override("margin_top", 3)
+		pad.add_theme_constant_override("margin_bottom", 3)
+		box.add_child(pad)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", UIKit.GAP_S)
+		pad.add_child(row)
+
+		var dot := ColorRect.new()
+		dot.color = Color(h["color"])
+		dot.custom_minimum_size = Vector2(10, 10)
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(dot)
+
+		var nm := UIKit.label(String(h["name"]), 12, UIKit.TEXT)
+		nm.custom_minimum_size = Vector2(62, 0)
+		row.add_child(nm)
+		var q := UIKit.label(String(h["quirk"]), 11, UIKit.TEXT_DIM)
+		q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(q)
+	UIKit.spacer(_people_box, 10)
+
+
+func _add_villager() -> void:
+	Schema.add_villager()
+
+
+func _del_villager(hid: String) -> void:
+	Schema.remove_villager(hid)
 
 
 # ---------------------------------------------------------------------------

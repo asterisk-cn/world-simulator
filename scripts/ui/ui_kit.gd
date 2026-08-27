@@ -110,13 +110,13 @@ static func build_theme(font: Font) -> Theme:
 	tab_on.border_width_right = 1
 	tab_on.content_margin_left = 15
 	tab_on.content_margin_right = 15
-	tab_on.content_margin_top = 7
-	tab_on.content_margin_bottom = 7
+	tab_on.content_margin_top = 8
+	tab_on.content_margin_bottom = 6
 	# 下の面の縁を覆って、タブと紙をひと続きに見せる
 	tab_on.expand_margin_bottom = 3
 	th.set_stylebox("tab_selected", "TabContainer", tab_on)
 
-	# 奥の紙は少し沈めて、上端も一段下げる
+	# 奥の紙は色で沈める。高さを変えて逃がすと、紙どうしのあいだに隙間が空く
 	var tab_off := StyleBoxFlat.new()
 	tab_off.bg_color = Color(0.90, 0.85, 0.76)
 	tab_off.corner_radius_top_left = 8
@@ -127,8 +127,8 @@ static func build_theme(font: Font) -> Theme:
 	tab_off.border_width_right = 1
 	tab_off.content_margin_left = 15
 	tab_off.content_margin_right = 15
-	tab_off.content_margin_top = 9
-	tab_off.content_margin_bottom = 5
+	tab_off.content_margin_top = 8
+	tab_off.content_margin_bottom = 6
 	th.set_stylebox("tab_unselected", "TabContainer", tab_off)
 
 	var tab_hover := tab_off.duplicate() as StyleBoxFlat
@@ -317,6 +317,40 @@ static func pole_row(parent: Node, left: String, right: String, value: float) ->
 	row.add_child(r)
 
 
+## 両極のあいだを決める。見る側（pole_row）と同じ積み木・同じ両端の言葉にする。
+## 決める側と見る側で形が違うと、自分が決めたものが動いている繋がりが切れる。
+static func pole_slider(parent: Node, left: String, right: String, value: float,
+		on_change: Callable) -> BlockSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", GAP_INLINE)
+	parent.add_child(row)
+
+	var l := label(left, 10, TEXT_DIM)
+	l.custom_minimum_size = Vector2(46, 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(l)
+
+	var s := BlockSlider.new()
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(s)
+	s.setup(value * 100.0, 0.0, 100.0, 10.0, Color(0.48, 0.36, 0.66))
+
+	var r := label(right, 10, TEXT_DIM)
+	r.custom_minimum_size = Vector2(46, 0)
+	row.add_child(r)
+
+	# どちらへ寄っているかは、両端の言葉の濃さでも読める
+	var lean := func(v: float) -> void:
+		l.add_theme_color_override("font_color", TEXT if v < 0.45 else TEXT_DIM)
+		r.add_theme_color_override("font_color", TEXT if v > 0.55 else TEXT_DIM)
+	lean.call(value)
+	s.changed.connect(func(x: float) -> void:
+		lean.call(x / 100.0)
+		on_change.call(x / 100.0))
+	return s
+
+
 ## 読み取り専用の値表示。積み木を並べて見せる。
 static func bar_row(parent: Node, name_text: String, value: float,
 		vmin: float, vmax: float, col: Color, idle: bool = false) -> void:
@@ -409,6 +443,16 @@ static func scroll_body(parent: Node, fade: Color = PAGE) -> VBoxContainer:
 	veil.stretch_mode = TextureRect.STRETCH_SCALE
 	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(veil)
+
+	# 溶かすのは「まだ下に続いている」あいだだけ。
+	# 終わりまで送ったのに霞んだままだと、読み終えたのに読めていないように見える。
+	var bar := scroll.get_v_scroll_bar()
+	var follow := func() -> void:
+		var left: float = bar.max_value - bar.page - bar.value
+		veil.modulate.a = clampf(left / 20.0, 0.0, 1.0)
+	bar.value_changed.connect(func(_v: float) -> void: follow.call())
+	bar.changed.connect(follow)
+	follow.call()
 
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_right", SCROLL_GUTTER)

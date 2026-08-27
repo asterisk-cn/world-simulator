@@ -245,18 +245,12 @@ func _build_detail() -> void:
 	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, UIKit.TEXT))
 	if f.pair_peek(_sel_to) == null:
 		head.add_child(UIKit.label("まだ会っていない", 10, UIKit.TEXT_DIM))
-	var sw := UIKit.button(head, "向きを反転", _swap_pair, 10)
-	sw.custom_minimum_size = Vector2(80, UIKit.ROW_H)
+	var sw := SwapButton.new()
+	head.add_child(sw)
+	sw.pressed.connect(_swap_pair)
 
 	for d in Schema.pair_params():
 		var key := String(d["id"])
 		UIKit.bar_row(_detail, String(d["label"]), _get_cell(key),
 			float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
 
-	var line := ""
-	for d2 in Schema.pair_params():
-		var back: float = 0.0
-		if t.knows(f.id):
-			back = t.pair_to(f.id).get_v(String(d2["id"]))
-		line += "%s%d  " % [String(d2["label"]), int(back)]
-	UIKit.wrapped(_detail, "逆向き（%s → %s）：%s" % [t.vname, f.vname, line], 10, UIKit.TEXT_DIM)

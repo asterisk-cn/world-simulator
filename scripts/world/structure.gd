@@ -56,10 +56,11 @@ func _draw() -> void:
 	Iso.draw_block(self, 44.0, 22.0, 24.0, Color(0.86, 0.79, 0.66), center, 6.0)
 	Iso.draw_block(self, 50.0, 25.0, 16.0, owner_color, center + Vector2(0, -24.0), 7.0)
 
-	# 窓。壁の真ん中の高さに置く。高すぎると屋根に食い込んで軒のように見える。
+	# 窓は壁の下のほうに置く。高いと屋根に食い込んで軒のように見え、
+	# 家というより庇つきの箱になる。
 	# 誰の家かは屋根の色で分かるので、旗のような目印は立てない。
 	var window := Iso.rounded(PackedVector2Array([
-		Vector2(6, -10), Vector2(18, -16), Vector2(18, -3), Vector2(6, 3)
+		Vector2(6, -1), Vector2(18, -7), Vector2(18, 6), Vector2(6, 12)
 	]), 3.0)
 	var lit := SimClock.darkness()
 	if lit > 0.1:

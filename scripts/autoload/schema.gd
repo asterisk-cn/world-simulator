@@ -12,6 +12,7 @@ extends Node
 signal parameters_changed
 signal actions_changed
 signal recipes_changed
+signal villagers_changed
 
 const SCOPE_SELF := "self"
 const SCOPE_PAIR := "pair"
@@ -72,6 +73,30 @@ const TARGETS := {
 	},
 }
 
+# ---------------------------------------------------------------------------
+# 世界に置く人
+#
+# 名前も性格も、AIが「この人はこういう人だ」と受け取るための素でしかない。
+# ここから行動が導出されることはない。だから定義が持つのは、
+# 誰なのか（名前・色・一言）と、始まりの状態（性格の4軸・持ち物）だけ。
+# ---------------------------------------------------------------------------
+
+const NAMES := ["ハル", "ミナ", "ソウ", "リク", "ノア", "カイ", "ユキ", "トウ",
+	"レン", "サキ", "ジン", "アオ"]
+
+const PALETTE := [
+	Color(0.90, 0.45, 0.40), Color(0.40, 0.65, 0.92), Color(0.55, 0.80, 0.45),
+	Color(0.93, 0.75, 0.35), Color(0.72, 0.55, 0.92), Color(0.40, 0.82, 0.80),
+	Color(0.92, 0.58, 0.75), Color(0.65, 0.70, 0.45), Color(0.85, 0.60, 0.35),
+	Color(0.50, 0.55, 0.85), Color(0.70, 0.85, 0.60), Color(0.88, 0.50, 0.55),
+]
+
+## n×n の間柄が読める上限。これを超えると、見るための面が先に壊れる。
+const MAX_VILLAGERS := 12
+
+const DEFAULT_VILLAGERS := 8
+
+
 ## 世界に元からある持ち物。採取で手に入る。
 const ITEMS := {
 	"food": "木の実",
@@ -82,6 +107,7 @@ const ITEMS := {
 var parameters: Array = []
 var actions: Array = []
 var recipes: Array = []
+var villagers: Array = []
 
 
 func _ready() -> void:
@@ -171,9 +197,73 @@ func reset_all() -> void:
 	_default_recipes()
 	_default_parameters()
 	_default_actions()
+	_default_villagers()
 	parameters_changed.emit()
 	recipes_changed.emit()
 	actions_changed.emit()
+	villagers_changed.emit()
+
+
+# ---------------------------------------------------------------------------
+# 世界に置く人
+# ---------------------------------------------------------------------------
+
+func _default_villagers() -> void:
+	villagers = []
+	for i in range(DEFAULT_VILLAGERS):
+		villagers.append(_make_villager(i))
+
+
+## 既定の一人。性格は振っておく。神が触らなければ、そのまま世界へ出る。
+func _make_villager(i: int) -> Dictionary:
+	var taken: Array = []
+	for h in villagers:
+		taken.append(String(h["id"]))
+	var p := Personality.random()
+	return {
+		"id": _unique_id("h", taken),
+		"name": NAMES[i % NAMES.size()],
+		"color": PALETTE[i % PALETTE.size()],
+		"quirk": p.quirk,
+		"axes": {"ei": p.ei, "sn": p.sn, "tf": p.tf, "jp": p.jp},
+		"items": {"food": randi_range(0, 2)},
+	}
+
+
+func add_villager() -> Dictionary:
+	if villagers.size() >= MAX_VILLAGERS:
+		return {}
+	var h := _make_villager(villagers.size())
+	villagers.append(h)
+	villagers_changed.emit()
+	return h
+
+
+func remove_villager(id: String) -> void:
+	if villagers.size() <= 1:
+		return  # 誰もいない世界は観察できない
+	for i in range(villagers.size()):
+		if String(villagers[i]["id"]) == id:
+			villagers.remove_at(i)
+			break
+	villagers_changed.emit()
+
+
+## 次に空いている色。同じ色が2人いると、世界の上でも間柄の表でも見分けがつかない。
+func next_color(from: Color) -> Color:
+	var used := {}
+	for h in villagers:
+		used[Color(h["color"]).to_html(false)] = true
+	var start := 0
+	for i in range(PALETTE.size()):
+		if PALETTE[i].is_equal_approx(from):
+			start = i + 1
+			break
+	for k in range(PALETTE.size()):
+		var c: Color = PALETTE[(start + k) % PALETTE.size()]
+		if not used.has(c.to_html(false)):
+			return c
+	return PALETTE[(start) % PALETTE.size()]
 
 
 # ---------------------------------------------------------------------------

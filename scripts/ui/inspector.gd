@@ -18,7 +18,7 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(334, 0)
 	add_theme_stylebox_override("panel", UIKit.panel_style())
 
-	_body = UIKit.scroll_body(self)
+	_body = UIKit.scroll_body(self, UIKit.BG)
 
 	Schema.parameters_changed.connect(rebuild)
 	rebuild()
@@ -68,18 +68,33 @@ func _build_header() -> void:
 	_body.add_child(UIKit.label(subject.personality.quirk, 11, UIKit.TEXT_DIM))
 	UIKit.spacer(_body, 2)
 
-	var carried := ""
+	# 持ち物は名前ではなく、世界にある物の絵で。村人一覧と同じ絵にして読み方を揃える。
+	var have := HBoxContainer.new()
+	have.add_theme_constant_override("separation", UIKit.GAP_S)
+	_body.add_child(have)
+	var empty := true
 	for item in Schema.all_items():
 		var n: int = subject.item_count(String(item))
 		if n <= 0:
 			continue
-		if carried != "":
-			carried += " / "
-		carried += "%s %d" % [Schema.item_label(String(item)), n]
-	if carried == "":
-		carried = "手ぶら"
-	_body.add_child(UIKit.label("%s　%s"
-		% [carried, "家なし" if subject.home == null else "家あり"], 11, UIKit.TEXT_DIM))
+		empty = false
+		var cell := HBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
+		cell.tooltip_text = Schema.item_label(String(item))
+		have.add_child(cell)
+		cell.add_child(ItemIcon.of_item(String(item), 18))
+		cell.add_child(UIKit.label(str(n), 11, UIKit.TEXT))
+	if empty:
+		have.add_child(UIKit.label("手ぶら", 11, UIKit.TEXT_DIM))
+	var sep := Control.new()
+	sep.custom_minimum_size = Vector2(8, 0)
+	have.add_child(sep)
+	# 家の有無も絵で言う。濃い＝あり、薄い＝なし。村人一覧と読み方を揃える。
+	var house := ItemIcon.of_art("house", 18)
+	house.tooltip_text = "家あり" if subject.home != null else "家なし"
+	house.mouse_filter = Control.MOUSE_FILTER_PASS
+	house.modulate = Color(1, 1, 1, 1.0 if subject.home != null else 0.22)
+	have.add_child(house)
 	# この村人について分単位で変わるのはここだけ。パネルで一番強くする。
 	UIKit.spacer(_body, 2)
 	var now := UIKit.card(Color(0.87, 0.81, 0.68), UIKit.GAP_S)

@@ -328,8 +328,11 @@ func _draw() -> void:
 	Iso.draw_shadow(self, 0.5, 0.26)
 
 	if selected:
+		# パネルの数字と世界の姿を結ぶ線。夜でも沈まないよう、外側に淡い輪をもう1本置く
+		var halo := Iso.rounded(Iso.diamond(1.24), 7.0)
+		draw_polyline(halo + PackedVector2Array([halo[0]]), Color(1, 0.95, 0.5, 0.35), 4.0)
 		var ring := Iso.rounded(Iso.diamond(1.0), 6.0)
-		draw_polyline(ring + PackedVector2Array([ring[0]]), Color(1, 0.95, 0.5), 2.5)
+		draw_polyline(ring + PackedVector2Array([ring[0]]), Color(1, 0.95, 0.5), 3.0)
 
 	# 夜は世界全体が暗く落ちるので、村人だけ持ち上げて見失わないようにする
 	var night := SimClock.darkness()

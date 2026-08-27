@@ -39,6 +39,12 @@ func _draw() -> void:
 	var lo: float = minf(origin, t)
 	var hi: float = maxf(origin, t)
 
+	# 積み木の数だけでなく、色の濃さでも振れ幅を語らせる。
+	# 数だけだと、たとえば緑の「孤独」がたくさん並んでいても健やかに見えてしまう。
+	var reach: float = maxf(maxf(origin, 1.0 - origin), 0.001)
+	var amount: float = clampf(absf(t - origin) / reach, 0.0, 1.0)
+	var fill := tint.lightened(0.34 * (1.0 - amount)).darkened(0.22 * amount)
+
 	var w := (size.x - GAP * float(PIPS - 1)) / float(PIPS)
 	for i in range(PIPS):
 		var c := (float(i) + 0.5) / float(PIPS)
@@ -47,4 +53,4 @@ func _draw() -> void:
 		draw_colored_polygon(Iso.rounded(PackedVector2Array([
 			Vector2(x, 0), Vector2(x + w, 0),
 			Vector2(x + w, size.y), Vector2(x, size.y),
-		]), 2.0), tint if on else EMPTY)
+		]), 2.0), fill if on else EMPTY)

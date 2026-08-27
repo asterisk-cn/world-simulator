@@ -85,8 +85,9 @@ func _draw() -> void:
 			Vector2(x + w, size.y), Vector2(x, size.y),
 		]), 2.0), tint if on else Color(0.30, 0.22, 0.14, 0.13))
 
-	# 0 の位置に印。これが無いと「右半分が塗られている＝値が高い」に読めてしまう
+	# 0 の位置に印。これが無いと「右半分が塗られている＝値が高い」に読めてしまう。
+	# 薄い髪の毛では見つけられないので、積み木の上下へはっきり突き出させる。
 	if min_value < 0.0 and max_value > 0.0:
 		var zx: float = _pos_of(0.0)
-		draw_line(Vector2(zx, -1.0), Vector2(zx, size.y + 1.0),
-			Color(0.30, 0.22, 0.14, 0.40), 1.0)
+		draw_line(Vector2(zx, -4.0), Vector2(zx, size.y + 4.0),
+			Color(0.46, 0.33, 0.21, 0.75), 2.0)

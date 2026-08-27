@@ -77,27 +77,12 @@ func draw_on(node: CanvasItem, at: Vector2) -> void:
 func _draw_art(node: CanvasItem, c: Vector2, fade: float) -> void:
 	var paper := Color(tint.r, tint.g, tint.b, fade)
 	match art:
-		"berry":
-			# 茂みと赤い実
-			_blk(node, c + Vector2(0, 3.0), 6.0, 2.4, Color(0.30, 0.56, 0.32, fade))
-			for dx in [-3.2, 0.0, 3.2]:
-				node.draw_circle(c + Vector2(dx, -1.6), 2.0, Color(0.88, 0.30, 0.36, fade))
-		"tree":
-			# 幹と葉
-			_blk(node, c + Vector2(0, 4.0), 1.3, 2.6, Color(0.44, 0.31, 0.20, fade))
-			_blk(node, c + Vector2(0, -1.5), 5.0, 4.0, Color(0.26, 0.52, 0.30, fade))
-		"rock":
-			_blk(node, c + Vector2(0, 1.0), 5.4, 4.0, Color(0.62, 0.62, 0.67, fade))
+		# 世界の物そのものは UI と同じ絵を使う（`ui/item_icon.gd`）。
+		# 同じ物が場所によって違う姿で出ると、繋がりが切れる。
+		"berry", "tree", "rock", "house":
+			ItemIcon.draw_art(node, c, 1.0, art, fade)
 		"craft":
-			# 2つが1つになる
-			_blk(node, c + Vector2(-4.6, 2.0), 2.4, 2.4, Color(0.44, 0.31, 0.20, fade))
-			_blk(node, c + Vector2(4.6, 2.0), 2.4, 2.4, Color(0.62, 0.62, 0.67, fade))
-			_blk(node, c + Vector2(0, -3.4), 3.0, 2.6, Color(0.78, 0.60, 0.28, fade))
-		"house":
-			_blk(node, c + Vector2(0, 2.6), 5.0, 2.8, Color(0.86, 0.79, 0.66, fade))
-			node.draw_colored_polygon(PackedVector2Array([
-				c + Vector2(-6.4, -0.4), c + Vector2(6.4, -0.4), c + Vector2(0, -6.0),
-			]), Color(0.78, 0.36, 0.32, fade))
+			ItemIcon.draw_art(node, c, 1.0, "crafted", fade)
 		"eat":
 			# かじられた木の実
 			node.draw_circle(c, 4.4, Color(0.88, 0.30, 0.36, fade))
@@ -115,19 +100,12 @@ func _draw_art(node: CanvasItem, c: Vector2, fade: float) -> void:
 					Color(0.30, 0.34, 0.55, fade), 1.4)
 		"talk":
 			# 小さな吹き出しが2つ向き合う
-			_blk(node, c + Vector2(-4.0, -1.5), 3.4, 2.6, Color(0.34, 0.52, 0.66, fade))
-			_blk(node, c + Vector2(4.0, 2.0), 3.4, 2.6, Color(0.52, 0.66, 0.76, fade))
+			ItemIcon.blk(node, c + Vector2(-4.0, -1.5), 3.4, 2.6, Color(0.34, 0.52, 0.66, fade))
+			ItemIcon.blk(node, c + Vector2(4.0, 2.0), 3.4, 2.6, Color(0.52, 0.66, 0.76, fade))
 		"post", "read":
 			# 貼り紙
-			_blk(node, c, 4.0, 5.0, Color(0.86, 0.60, 0.20, fade) if art == "post"
+			ItemIcon.blk(node, c, 4.0, 5.0, Color(0.86, 0.60, 0.20, fade) if art == "post"
 				else Color(0.55, 0.45, 0.32, fade))
 			for i in range(2):
 				var y := c.y - 1.6 + float(i) * 3.2
 				node.draw_line(Vector2(c.x - 2.4, y), Vector2(c.x + 2.4, y), paper, 1.0)
-
-
-static func _blk(node: CanvasItem, c: Vector2, hw: float, hh: float, col: Color) -> void:
-	node.draw_colored_polygon(Iso.rounded(PackedVector2Array([
-		c + Vector2(-hw, -hh), c + Vector2(hw, -hh),
-		c + Vector2(hw, hh), c + Vector2(-hw, hh),
-	]), 1.4), col)

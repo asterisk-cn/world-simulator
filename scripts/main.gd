@@ -23,6 +23,7 @@ var rules_panel = null
 var started := false
 
 var _panning := false
+var _cam_tween: Tween
 var _next_id := 1
 
 
@@ -55,6 +56,7 @@ func _ready() -> void:
 	# ヘッドレス観察用。既定の定義のまま即座に始める
 	if OS.get_cmdline_user_args().has("--autostart"):
 		_start_world.call_deferred()
+
 
 
 ## 定義が確定したら村人を置いて世界を動かす。以降、定義は閲覧のみ。
@@ -137,7 +139,7 @@ func _setup_ui() -> void:
 	inspector.offset_top = 12
 	inspector.offset_bottom = -12
 	hud.add_child(inspector)
-	inspector.select_requested.connect(_select)
+	inspector.select_requested.connect(func(v) -> void: _select(v, true))
 
 	var roster = preload("res://scripts/ui/roster_panel.gd").new()
 	roster.world = world
@@ -145,12 +147,12 @@ func _setup_ui() -> void:
 	roster.offset_left = 12
 	roster.offset_right = 452
 	roster.offset_top = 78
-	roster.offset_bottom = 434
+	roster.offset_bottom = 474
 	roster.visible = false
 	hud.add_child(roster)
 	hud.roster_panel = roster
 	roster.closed.connect(hud.close_panels)
-	roster.select_requested.connect(_select)
+	roster.select_requested.connect(func(v) -> void: _select(v, true))
 
 	var matrix = preload("res://scripts/ui/matrix_panel.gd").new()
 	matrix.world = world
@@ -272,10 +274,22 @@ func _try_select(world_pos: Vector2) -> void:
 	_select(best)
 
 
-func _select(v) -> void:
+## 一覧や間柄から選んだときは、世界の側でもその村人へ寄る。
+## パネルの数字と世界の姿が繋がらないと、観察する遊びの回路が切れる。
+func _select(v, focus: bool = false) -> void:
 	if selected != null and is_instance_valid(selected):
 		selected.selected = false
 	selected = v
 	if selected != null:
 		selected.selected = true
+		if focus:
+			_focus_on(selected)
 	inspector.set_subject(selected)
+
+
+func _focus_on(v) -> void:
+	if _cam_tween != null and _cam_tween.is_valid():
+		_cam_tween.kill()
+	_cam_tween = create_tween()
+	_cam_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_cam_tween.tween_property(camera, "position", v.position, 0.45)

@@ -175,7 +175,9 @@ func _update_cells() -> void:
 			btn.text = ""
 			_paint(btn, Color(0.90, 0.86, 0.78))
 			continue
-		btn.text = "%d" % int(val)
+		# 数字を並べると表計算になる。眺めて異変に気づく道具にするため、色だけで見せる。
+		# 実際の数は、マスを選んだときに内訳側で読む。
+		btn.text = ""
 		_paint(btn, _value_color(val, lo, hi))
 
 
@@ -184,9 +186,9 @@ func _value_color(val: float, lo: float, hi: float) -> Color:
 	var col := Schema.param_color(_param_id)
 	if lo < 0.0:
 		if val >= 0.0:
-			return base.lerp(col, clampf(val / maxf(hi, 1.0), 0.0, 1.0) * 0.85)
-		return base.lerp(Color(0.78, 0.30, 0.26), clampf(-val / maxf(-lo, 1.0), 0.0, 1.0) * 0.85)
-	return base.lerp(col, clampf((val - lo) / maxf(hi - lo, 1.0), 0.0, 1.0) * 0.85)
+			return base.lerp(col.darkened(0.10), clampf(val / maxf(hi, 1.0), 0.0, 1.0))
+		return base.lerp(Color(0.74, 0.26, 0.22), clampf(-val / maxf(-lo, 1.0), 0.0, 1.0))
+	return base.lerp(col.darkened(0.10), clampf((val - lo) / maxf(hi - lo, 1.0), 0.0, 1.0))
 
 
 func _paint(btn: Button, col: Color) -> void:

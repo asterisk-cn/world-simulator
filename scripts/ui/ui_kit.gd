@@ -72,22 +72,23 @@ static func build_theme(font: Font) -> Theme:
 	# 名前欄はインクの罫線。箱で塗ると「無効になった入力欄」に見えて、
 	# 言葉を書き込む場所だと伝わらない。
 	var ruled := func(alpha: float, width: int) -> StyleBoxFlat:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.30, 0.22, 0.14, alpha)
-		sb.corner_radius_top_left = 4
-		sb.corner_radius_top_right = 4
-		sb.border_color = Color(0.46, 0.33, 0.21, 0.55)
-		sb.border_width_bottom = width
-		sb.content_margin_left = 6
-		sb.content_margin_right = 6
-		sb.content_margin_top = 4
-		sb.content_margin_bottom = 3
-		return sb
+		return ruled_style(alpha, width)
 	th.set_stylebox("normal", "LineEdit", ruled.call(0.04, 1))
 	th.set_stylebox("focus", "LineEdit", ruled.call(0.10, 2))
 	th.set_color("font_color", "LineEdit", TEXT)
 	th.set_color("font_placeholder_color", "LineEdit", Color(0.30, 0.26, 0.20, 0.45))
 	th.set_color("caret_color", "LineEdit", TEXT)
+
+	# 選ぶ欄も、書く欄と同じ罫線にする。角丸の箱だけがOSの部品として残ると、
+	# そこだけ設定画面の顔になる。
+	for t2 in ["OptionButton", "MenuButton"]:
+		th.set_stylebox("normal", t2, ruled.call(0.03, 1))
+		th.set_stylebox("hover", t2, ruled.call(0.08, 1))
+		th.set_stylebox("pressed", t2, ruled.call(0.12, 2))
+		th.set_stylebox("focus", t2, StyleBoxEmpty.new())
+	th.set_icon("arrow", "OptionButton", _ink_arrow())
+	th.set_constant("arrow_margin", "OptionButton", 4)
+	th.set_constant("modulate_arrow", "OptionButton", 1)
 
 	th.set_stylebox("panel", "PopupMenu", flat.call(BG_SOFT, 8, 6, 6))
 	th.set_color("font_color", "PopupMenu", TEXT)
@@ -158,6 +159,35 @@ static func build_theme(font: Font) -> Theme:
 		th.set_stylebox("grabber_highlight", t, grab_on)
 		th.set_stylebox("grabber_pressed", t, grab_on)
 	return th
+
+
+## インクの罫線。書く欄も選ぶ欄も、この一種類だけで作る。
+static func ruled_style(alpha: float = 0.04, width: int = 1) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.30, 0.22, 0.14, alpha)
+	sb.corner_radius_top_left = 4
+	sb.corner_radius_top_right = 4
+	sb.border_color = Color(0.46, 0.33, 0.21, 0.55)
+	sb.border_width_bottom = width
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 3
+	return sb
+
+
+## ドロップダウンの印。エンジン既定の白い矢印は紙の上で浮く。
+static func _ink_arrow() -> ImageTexture:
+	var w := 9
+	var h := 5
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in range(h):
+		var half := int(round(float(w) * 0.5 * (1.0 - float(y) / float(h))))
+		for x in range(w):
+			if absi(x - w / 2) <= half - 1:
+				img.set_pixel(x, y, Color(0.30, 0.22, 0.14, 0.75))
+	return ImageTexture.create_from_image(img)
 
 
 static func panel_style(bg: Color = BG, radius: int = 10, pad: int = PAD) -> StyleBoxFlat:
@@ -354,11 +384,31 @@ static func hairline(parent: Node) -> void:
 
 
 ## 縦スクロールする中身を包み、スクロールバーとの余白を作る。
-static func scroll_body(parent: Node) -> VBoxContainer:
+## 下端は紙の色へ溶かす。文字が水平に切られていると、続きの合図ではなく壊れて見える。
+static func scroll_body(parent: Node, fade: Color = PAGE) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(scroll)
+
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.88, 1.0])
+	grad.colors = PackedColorArray([
+		Color(fade.r, fade.g, fade.b, 0.0),
+		Color(fade.r, fade.g, fade.b, 0.0),
+		fade,
+	])
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill_from = Vector2(0, 0)
+	tex.fill_to = Vector2(0, 1)
+	tex.width = 8
+	tex.height = 64
+	var veil := TextureRect.new()
+	veil.texture = tex
+	veil.stretch_mode = TextureRect.STRETCH_SCALE
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(veil)
 
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_right", SCROLL_GUTTER)
@@ -501,6 +551,37 @@ static func dropdown(keys: Array, labels: Array, current: String) -> OptionButto
 	return opt
 
 
+## 世界にある物を選ぶ欄。絵と語と印を1つの罫線に収めて、「🌲 木 ▾」で1語に見せる。
+## 絵が欄の外にあると、左の罫線に付いた飾りに見えてしまう。
+static func icon_dropdown(art: String, keys: Array, labels: Array,
+		current: String) -> Array:
+	var field := PanelContainer.new()
+	field.add_theme_stylebox_override("panel", ruled_style(0.03, 1))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	field.add_child(row)
+
+	var icon := ItemIcon.of_art(art, 18)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
+
+	var opt := dropdown(keys, labels, current)
+	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 器がもう罫線なので、中の欄は地のまま
+	opt.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	opt.add_theme_stylebox_override("hover", flat_ink(INK_HOVER))
+	opt.add_theme_stylebox_override("pressed", flat_ink(INK_ACTIVE))
+	row.add_child(opt)
+	return [field, opt, icon]
+
+
+static func flat_ink(col: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(4)
+	return sb
+
+
 ## keys と labels は同じ長さ。選ばれた key が on_change に渡る。
 static func option_row(parent: Node, name_text: String, keys: Array, labels: Array,
 		current: String, on_change: Callable, name_width: int = 62) -> OptionButton:
@@ -563,20 +644,41 @@ static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
 	return rs
 
 
+## 数を増減する丸い判。四角いボタンが並ぶとスピナーに見える。
+static func _round_button(glyph: String) -> Button:
+	var b := Button.new()
+	b.text = glyph
+	b.add_theme_font_size_override("font_size", 11)
+	b.custom_minimum_size = Vector2(22, 22)
+	var mk := func(col: Color) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = col
+		sb.set_corner_radius_all(11)
+		sb.content_margin_left = 0
+		sb.content_margin_right = 0
+		sb.content_margin_top = 0
+		sb.content_margin_bottom = 0
+		return sb
+	b.add_theme_stylebox_override("normal", mk.call(INK))
+	b.add_theme_stylebox_override("hover", mk.call(INK_HOVER))
+	b.add_theme_stylebox_override("pressed", mk.call(INK_ACTIVE))
+	return b
+
+
 ## ラベル + −/数/+ の行。on_change(new_count) が呼ばれる。
+## item を渡すと、名前の前に世界にあるものの絵が入る。
 static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
-		on_change: Callable, name_width: int = 62) -> HBoxContainer:
+		on_change: Callable, name_width: int = 62, item: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP_S)
 	parent.add_child(row)
+	if item != "":
+		row.add_child(ItemIcon.of_item(item, 18))
 	var nm := label(name_text, 11, TEXT)
 	nm.custom_minimum_size = Vector2(name_width, 0)
 	row.add_child(nm)
 
-	var minus := Button.new()
-	minus.text = "−"
-	minus.add_theme_font_size_override("font_size", 11)
-	minus.custom_minimum_size = Vector2(24, 22)
+	var minus := _round_button("−")
 	row.add_child(minus)
 
 	var val := label(str(value), 11, TEXT if value > 0 else TEXT_DIM)
@@ -584,10 +686,7 @@ static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(val)
 
-	var plus := Button.new()
-	plus.text = "＋"
-	plus.add_theme_font_size_override("font_size", 11)
-	plus.custom_minimum_size = Vector2(24, 22)
+	var plus := _round_button("＋")
 	row.add_child(plus)
 
 	var count := [value]

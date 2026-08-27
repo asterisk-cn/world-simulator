@@ -24,6 +24,10 @@ var started := false
 
 var _panning := false
 var _cam_tween: Tween
+
+## 世界の目覚め。0＝まだ言葉を持たない青、1＝動いている世界
+var wake := 0.0
+var _starting := false
 var _next_id := 1
 
 
@@ -53,10 +57,35 @@ func _ready() -> void:
 	rules_panel.set_editable(true)
 	_show_setup(true)
 
-	# ヘッドレス観察用。既定の定義のまま即座に始める
+	# ヘッドレス観察用。既定の定義のまま即座に始める（儀式は飛ばす）
 	if OS.get_cmdline_user_args().has("--autostart"):
+		wake = 1.0
 		_start_world.call_deferred()
 
+
+
+## 「この世界を始める」を押してから、実際に時間が動き出すまでの一拍。
+##
+## 確認のダイアログは挟まない（「間違えないか」の話になってしまう）。
+## 紙に封蝋が押され、青く沈んでいた世界が目を覚ます、それだけを見せる。
+func _begin_ritual() -> void:
+	if started or _starting:
+		return
+	_starting = true
+
+	var seal = preload("res://scripts/ui/seal.gd").new()
+	seal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud.add_child(seal)
+
+	var tw := create_tween()
+	tw.tween_property(seal, "pop", 1.0, 0.40).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.30)
+	tw.tween_property(rules_panel, "modulate:a", 0.0, 0.40)
+	tw.parallel().tween_property(seal, "modulate:a", 0.0, 0.55)
+	tw.tween_callback(_start_world)
+	# 世界が目を覚ます。青く沈めていた色をここで解く
+	tw.tween_property(self, "wake", 1.0, 1.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(seal.queue_free)
 
 
 ## 定義が確定したら村人を置いて世界を動かす。以降、定義は閲覧のみ。
@@ -65,6 +94,7 @@ func _start_world() -> void:
 		return
 	started = true
 	_show_setup(false)
+	rules_panel.modulate.a = 1.0  # 儀式で薄くした紙は、閲覧用の窓として戻ってくる
 	rules_panel.set_editable(false)
 	_spawn_villagers()
 	SimClock.paused = false
@@ -130,6 +160,8 @@ func _setup_ui() -> void:
 	hud = preload("res://scripts/ui/hud.gd").new()
 	add_child(hud)
 	hud.setup(world)
+	hud.jump_requested.connect(_on_jump)
+	hud.god_posted.connect(_on_god_posted)
 
 	inspector = preload("res://scripts/ui/inspector.gd").new()
 	inspector.world = world
@@ -188,7 +220,7 @@ func _setup_ui() -> void:
 	hud.add_child(rules)
 	hud.rules_panel = rules
 	rules_panel = rules
-	rules.started.connect(_start_world)
+	rules.started.connect(_begin_ritual)
 	rules.closed.connect(hud.close_panels)
 
 	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。
@@ -204,14 +236,16 @@ func _process(_delta: float) -> void:
 	modulate_node.color = Color.WHITE.lerp(night, d * 0.82)
 
 	# 始まる前の世界は、まだ言葉を持たない場所として沈めておく
-	if not started:
-		modulate_node.color = Color(0.44, 0.48, 0.62)
+	if wake < 1.0:
+		modulate_node.color = modulate_node.color.lerp(Color(0.44, 0.48, 0.62), 1.0 - wake)
 
-	# 紙のUIは夜でも明るいままだと、観察したい世界より前に出てしまう
+	# 紙のUIは夜でも明るいままだと、観察したい世界より前に出てしまう。
+	# 透明度はその部品自身のもの（儀式の淡出しなど）なので触らない。
 	var dim := Color.WHITE.lerp(Color(0.80, 0.81, 0.88), d)
 	for c in hud.get_children():
 		if c is Control:
-			(c as Control).modulate = dim
+			var ctl := c as Control
+			ctl.modulate = Color(dim.r, dim.g, dim.b, ctl.modulate.a)
 
 
 func _on_night(_day: int) -> void:
@@ -287,9 +321,37 @@ func _select(v, focus: bool = false) -> void:
 	inspector.set_subject(selected)
 
 
+## 記録の行から、その出来事が起きた場所へ。
+## 相手が分かっていればその村人を選び、場所しか無ければそこへ寄る。
+func _on_jump(at: Vector2, who: int) -> void:
+	if who >= 0:
+		var v = world.villager_by_id(who)
+		if v != null:
+			_select(v, true)
+			return
+	if at.x != INF:
+		_focus_at(at)
+
+
+## 神が放った紙を世界へ飛ばす。板に着いたところで初めて貼られる。
+func _on_god_posted(from_screen: Vector2, text: String) -> void:
+	if world.board == null:
+		return
+	var paper = preload("res://scripts/world/paper_fly.gd").new()
+	add_child(paper)
+	var to: Vector2 = world.board.position + Vector2(0, -26)
+	paper.setup(get_canvas_transform().affine_inverse() * from_screen, to)
+	paper.landed.connect(func() -> void:
+		world.board.post(-1, "差出人不明", text))
+
+
 func _focus_on(v) -> void:
+	_focus_at(v.position)
+
+
+func _focus_at(at: Vector2) -> void:
 	if _cam_tween != null and _cam_tween.is_valid():
 		_cam_tween.kill()
 	_cam_tween = create_tween()
 	_cam_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_cam_tween.tween_property(camera, "position", v.position, 0.45)
+	_cam_tween.tween_property(camera, "position", at, 0.45)

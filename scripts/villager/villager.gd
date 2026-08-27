@@ -250,7 +250,8 @@ func _do_build() -> void:
 	add_item("stone", -Rules.BUILD_STONE)
 	home = world.add_structure(Structure.Kind.HOUSE, c, id, color)
 	memory.record("建築：自分の家を建てた")
-	EventLog.notable("%s が家を建てた" % vname)
+	EventLog.notable("%s が家を建てた" % vname,
+		home.position if home != null else position, id)
 
 
 ## 会話。起きた事実だけを双方に記録する。

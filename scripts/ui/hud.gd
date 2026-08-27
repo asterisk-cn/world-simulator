@@ -1,6 +1,11 @@
 extends CanvasLayer
 ## 上部バー（時計・速度）、イベントログ、掲示板パネル。
 
+signal jump_requested(at: Vector2, who: int)
+
+## 神が紙を放った。画面上のどこから飛び出すかを添える。
+signal god_posted(from_screen: Vector2, text: String)
+
 var world = null
 
 var _clock_label: Label
@@ -198,7 +203,12 @@ func _build_log() -> void:
 	_log.scroll_following = true
 	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_log.add_theme_font_size_override("normal_font_size", 11)
+	# 下線は「ここには行き先がある」の印。全行に付けないので飾りにならない。
+	_log.meta_underlined = true
 	box.add_child(_log)
+	_log.meta_clicked.connect(_on_log_meta)
+	_log.meta_hover_started.connect(_on_meta_hover)
+	_log.meta_hover_ended.connect(_on_meta_unhover)
 
 
 ## 角括弧のタイムスタンプはサーバーログの記法で、「村の記録」の名前と衝突する。
@@ -212,9 +222,29 @@ func _on_log_entry(e: Dictionary) -> void:
 		_log.append_text("[color=#%s]──　%d日目　──[/color]\n"
 			% [Color(0.46, 0.41, 0.34, 0.75).to_html(true), day])
 	var col: Color = e["color"]
+	var body := String(e["text"])
+	# 行き先を持つ出来事は、そこへ飛べる。下線がその印。
+	if EventLog.has_place(e):
+		body = "[url=%d]%s[/url]" % [int(e["id"]), body]
 	_log.append_text("[color=#%s]%s[/color]  [color=#%s]%s[/color]\n"
 		% [Color(0.46, 0.41, 0.34, 0.70).to_html(true), String(e["time"]),
-			col.to_html(false), String(e["text"])])
+			col.to_html(false), body])
+
+
+## 記録の行を押したら、その出来事が起きた場所（と相手）へ
+func _on_log_meta(meta: Variant) -> void:
+	var e := EventLog.by_id(int(String(meta)))
+	if e.is_empty():
+		return
+	jump_requested.emit(Vector2(e["at"]), int(e["who"]))
+
+
+func _on_meta_hover(_meta: Variant) -> void:
+	_log.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+
+func _on_meta_unhover(_meta: Variant) -> void:
+	_log.mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 
 func _build_board_panel() -> void:
@@ -294,14 +324,19 @@ func _paper_style(by_god: bool) -> StyleBoxFlat:
 	return sb
 
 
+## 押した瞬間に貼られると、神が紙を落とした感じにならない。
+## 紙を世界へ放って、板に着いたところで貼られる（main が受ける）。
 func _submit_post() -> void:
 	if world == null or world.board == null:
 		return
 	var text := _post_text.text.strip_edges()
 	if text == "":
 		return
-	world.board.post(-1, "差出人不明", text)
+	var from: Vector2 = _post_text.get_global_rect().get_center()
 	_post_text.text = ""
+	# 窓を閉じて、紙が板に着くところを世界の上で見せる
+	_show_only(null)
+	god_posted.emit(from, text)
 
 
 func _refresh_board() -> void:

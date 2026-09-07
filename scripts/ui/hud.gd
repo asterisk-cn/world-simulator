@@ -44,6 +44,21 @@ func setup(p_world) -> void:
 	_refresh_board()
 
 
+## 世界が作り直されたとき。記録の紙を替え、掲示板を新しい板に繋ぎ直す。
+func on_world_reset() -> void:
+	_log_day = -1
+	if _log != null:
+		_log.clear()
+	if world != null and world.board != null:
+		world.board.posts_changed.connect(_refresh_board)
+	_refresh_board()
+	# 誰がいるかも何を思っているかも入れ替わるので、窓の中身は作り直す
+	if matrix_panel != null:
+		matrix_panel.on_world_reset()
+	if roster_panel != null:
+		roster_panel.on_world_reset()
+
+
 func _process(_delta: float) -> void:
 	if _clock_label:
 		var phase := "夜" if SimClock.is_night else "昼"

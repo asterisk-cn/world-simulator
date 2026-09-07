@@ -56,6 +56,11 @@ func _close() -> void:
 	closed.emit()
 
 
+## 村人ごと入れ替わったので、見出しも行も次に開くときに作り直す
+func on_world_reset() -> void:
+	_item_count = -1
+
+
 func _process(delta: float) -> void:
 	if not visible or world == null:
 		return
@@ -113,10 +118,16 @@ func _rebuild() -> void:
 
 func _refresh() -> void:
 	var houses := 0
+	var built := 0
 	for s in world.structures:
-		if s.kind == Structure.Kind.HOUSE:
+		if s.is_house():
 			houses += 1
+		else:
+			built += 1
 	_summary.text = "%d人　家 %d軒" % [world.villagers.size(), houses]
+	if built > 0:
+		# 村のものが建ったら、家とは別に数える（村に何が在るかは家の数では読めない）
+		_summary.text += "　村のもの %d" % built
 
 	for i in range(mini(_rows.get_child_count(), world.villagers.size())):
 		var v = world.villagers[i]

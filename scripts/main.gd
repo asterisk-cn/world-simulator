@@ -17,6 +17,7 @@ var _cam_tween: Tween
 ## 世界の目覚め。0＝まだ言葉を持たない青、1＝動いている世界
 var wake := 0.0
 var _starting := false
+var _ending := false
 var _next_id := 1
 
 
@@ -88,6 +89,44 @@ func _start_world() -> void:
 	_spawn_villagers()
 	SimClock.paused = false
 	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
+
+
+## 「この世界を終える」を押してから、言葉のところへ戻るまでの一拍。
+##
+## 始める一拍の逆をたどる。時間が止まり、目を覚ましていた世界が青へ沈み、
+## 決めた言葉の紙が戻ってくる。ここでも確認のダイアログは挟まない（紙の側で一拍置いている）。
+func _end_ritual() -> void:
+	if not started or _ending:
+		return
+	_ending = true
+	SimClock.paused = true
+	hud.close_panels()
+	_select(null)
+
+	var tw := create_tween()
+	tw.tween_property(self, "wake", 0.0, 0.9).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(_reset_world)
+	tw.tween_property(rules_panel, "modulate:a", 1.0, 0.45)
+
+
+## 村を畳んで、言葉のところへ戻す。島も資源も新しくなる。
+## 神が決めた言葉と顔ぶれ（Schema）はそのまま残るので、書き足してまた始められる。
+func _reset_world() -> void:
+	started = false
+	_starting = false
+	_ending = false
+	_next_id = 1
+
+	world.regenerate()
+	hud.on_world_reset()
+	EventLog.clear()
+	SimClock.reset()
+	camera.position = Iso.cell_to_world(Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0))
+	camera.zoom = Vector2(0.85, 0.85)
+
+	rules_panel.modulate.a = 0.0
+	rules_panel.set_editable(true)
+	_show_setup(true)
 
 
 ## セットアップ中は定義パネルを大きく中央に出し、他の面を隠す
@@ -217,6 +256,7 @@ func _setup_ui() -> void:
 	hud.rules_panel = rules
 	rules_panel = rules
 	rules.started.connect(_begin_ritual)
+	rules.ended.connect(_end_ritual)
 	rules.closed.connect(hud.close_panels)
 
 	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。

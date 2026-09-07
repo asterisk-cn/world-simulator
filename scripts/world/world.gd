@@ -36,6 +36,28 @@ func _ready() -> void:
 	queue_redraw()
 
 
+## 世界を作り直す。村を終えて言葉のところへ戻るときに呼ばれる。
+##
+## 同じ島に別の村を建て直すのではなく、島も資源も新しくする。
+## 前の村の跡が残った土地に次の言葉を置くと、そこが「同じ世界の続き」に見えてしまう。
+func regenerate() -> void:
+	for c in entities.get_children():
+		entities.remove_child(c)
+		c.queue_free()
+	harvests.clear()
+	structures.clear()
+	villagers.clear()
+	board = null
+
+	ground.clear()
+	astar.clear()
+	_generate_ground()
+	_scatter_resources()
+	_place_board()
+	_setup_astar()
+	queue_redraw()
+
+
 func _setup_astar() -> void:
 	astar.region = Rect2i(0, 0, GRID_W, GRID_H)
 	astar.cell_size = Vector2.ONE
@@ -115,15 +137,16 @@ func register_villager(v) -> void:
 	villagers.append(v)
 
 
-func add_structure(kind: int, cell: Vector2i, owner_id: int, color: Color) -> Structure:
+## 建てられたものを世界に置く。何が建つかは神の定義（`Schema.buildings`）で決まる。
+func add_structure(def_id: String, cell: Vector2i, owner_id: int, color: Color) -> Structure:
 	var s := Structure.new()
-	s.setup(kind, cell, owner_id, color)
+	s.setup(def_id, cell, owner_id, color)
 	entities.add_child(s)
 	structures.append(s)
-	if kind == Structure.Kind.HOUSE:
-		for c in s.footprint():
-			if in_bounds(c):
-				astar.set_point_solid(c, true)
+	# 建物はどれも通り抜けられない
+	for c in s.footprint():
+		if in_bounds(c):
+			astar.set_point_solid(c, true)
 	return s
 
 
@@ -202,7 +225,7 @@ func free_cell_around(house_cell: Vector2i) -> Vector2i:
 				taken = true
 				break
 		for h in harvests:
-			if h.cell == c and not h.depleted():
+			if h.cell == c:
 				taken = true
 				break
 		if not taken:
@@ -241,7 +264,7 @@ func nearest_harvest(from_cell: Vector2, kind: int, max_dist: float = 999.0) -> 
 	var best: HarvestNode = null
 	var best_d := max_dist
 	for h in harvests:
-		if h.kind != kind or h.depleted():
+		if h.kind != kind:
 			continue
 		var d := from_cell.distance_to(Vector2(h.cell))
 		if d < best_d:
@@ -250,16 +273,25 @@ func nearest_harvest(from_cell: Vector2, kind: int, max_dist: float = 999.0) -> 
 	return best
 
 
-func house_at(c: Vector2i) -> Structure:
+func building_at(c: Vector2i) -> Structure:
 	for s in structures:
-		if s.kind == Structure.Kind.HOUSE and s.contains_cell(c):
+		if s.contains_cell(c):
 			return s
 	return null
 
 
+## その人の家。家だけは建てた人のもので、一人に一軒。
 func house_of(owner_id: int) -> Structure:
 	for s in structures:
-		if s.kind == Structure.Kind.HOUSE and s.owner_id == owner_id:
+		if s.is_house() and s.owner_id == owner_id:
+			return s
+	return null
+
+
+## 村のその建物。家以外は村のもので、村に一つ。
+func building_of(def_id: String) -> Structure:
+	for s in structures:
+		if s.def_id == def_id:
 			return s
 	return null
 
@@ -281,8 +313,8 @@ func neighbors_within(from_cell: Vector2, radius: float, exclude_id: int) -> Arr
 	return out
 
 
-## 家を建てられる空きマス（村の中心から外へらせん状に探す）
-## 建てる場所を探す。他の村人が立っているマスは避ける（上に家が建ってしまうので）。
+## 建てられる空きマス（村の中心から外へらせん状に探す）。
+## 他の村人が立っているマスは避ける（上に建物が建ってしまうので）。
 func find_build_cell(near: Vector2, builder_id: int = -1) -> Vector2i:
 	var start := Vector2i(roundi(near.x), roundi(near.y))
 	for radius in range(1, 14):
@@ -299,7 +331,7 @@ func find_build_cell(near: Vector2, builder_id: int = -1) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
-## 家の敷地に他の村人が立っていないか
+## 敷地に他の村人が立っていないか
 func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 	for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
 		var cc: Vector2i = c + d
@@ -311,14 +343,12 @@ func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 	return false
 
 
-## 家どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
+## 建物どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
 const HOUSE_SPACING := 3
 
 
 func _can_build_at(c: Vector2i) -> bool:
 	for s in structures:
-		if s.kind != Structure.Kind.HOUSE:
-			continue
 		for oc in s.footprint():
 			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < HOUSE_SPACING:
 				return false
@@ -326,12 +356,12 @@ func _can_build_at(c: Vector2i) -> bool:
 		var cc: Vector2i = c + d
 		if not in_bounds(cc):
 			return false
-		if house_at(cc) != null:
+		if building_at(cc) != null:
 			return false
 		if board and board.cell == cc:
 			return false
 		for h in harvests:
-			if h.cell == cc and not h.depleted():
+			if h.cell == cc:
 				return false
 	return true
 

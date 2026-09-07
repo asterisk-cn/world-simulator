@@ -221,6 +221,39 @@ static func card(bg: Color = BG_SOFT, pad: int = PAD_S) -> PanelContainer:
 	return p
 
 
+## 束（カテゴリ）の紙。■と名前の見出しを持ち、中の行を髪の毛ほどの罫で区切る。
+## 言葉を決める場（この世界の言葉）と、値を見る場（胸のうち）で同じ形にする。
+## 束の名前が場によって違うもの（開始前は書き換えられる欄）になるので、
+## 見出しの行と、行を並べる箱の2つを返して中身は呼ぶ側に任せる。
+static func category_card(parent: Node, col: Color) -> Array:
+	var holder := card()
+	parent.add_child(holder)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", GAP_S)
+	holder.add_child(box)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	box.add_child(head)
+	head.add_child(label("■", 14, col.darkened(0.28)))
+
+	box.add_child(HSeparator.new())
+
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 0)
+	box.add_child(rows)
+	return [head, rows]
+
+
+## 罫で区切られた一覧の1行ぶんの器。行と罫が触れていると帳簿の罫線に見える。
+static func row_pad(parent: Node) -> MarginContainer:
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_top", 3)
+	pad.add_theme_constant_override("margin_bottom", 3)
+	parent.add_child(pad)
+	return pad
+
+
 static func panel(bg: Color = BG, radius: int = 10, pad: int = PAD) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", panel_style(bg, radius, pad))
@@ -650,42 +683,6 @@ static func check_row(parent: Node, name_text: String, value: bool, on_toggle: C
 	parent.add_child(cb)
 	cb.toggled.connect(on_toggle)
 	return cb
-
-
-## 下限と上限を1本で決める行
-static func range_row(parent: Node, name_text: String, vmin: float, vmax: float,
-		lo: float, hi: float, step: float, on_change: Callable, col: Color,
-		name_width: int = 62, plain: String = "") -> RangeSlider:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GAP_INLINE)
-	parent.add_child(row)
-	var nm := label(name_text, 11, TEXT)
-	nm.custom_minimum_size = Vector2(name_width, 0)
-	row.add_child(nm)
-
-	# 手つかずの範囲は薄く。全行に同じ数字が並ぶと、読む値が無いのと同じになる
-	var faint := Color(0.30, 0.26, 0.20, 0.40)
-	var txt := func(l: float, h: float) -> String:
-		return "%d〜%d" % [int(l), int(h)]
-	var val := label(txt.call(lo, hi), 11, TEXT_DIM)
-	val.custom_minimum_size = Vector2(58, 0)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(val)
-	if val.text == plain:
-		val.add_theme_color_override("font_color", faint)
-
-	var rs := RangeSlider.new()
-	rs.custom_minimum_size = Vector2(112, ROW_H)
-	row.add_child(rs)
-	rs.setup(vmin, vmax, lo, hi, step, col)
-
-	rs.changed.connect(func(l: float, h: float) -> void:
-		val.text = txt.call(l, h)
-		val.add_theme_color_override("font_color",
-			faint if val.text == plain else TEXT_DIM)
-		on_change.call(l, h)
-	)
-	return rs
 
 
 ## 数を増減する丸い判。四角いボタンが並ぶとスピナーに見える。

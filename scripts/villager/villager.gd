@@ -179,39 +179,25 @@ func _execute(dt: float) -> void:
 
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
 ## その結果パラメータがどう動くかはここには書かれていない（AIの担当）。
+##
+## 作る／建てる／使う は、本人が決めたこと（何を払うか・そこで何をするか）を
+## `current_action` から受け取って適用するだけ。決めているのは Brain のほう。
 func _complete_action() -> void:
 	var kind := String(current_action.get("kind", "move"))
 	var target := String(current_action.get("target", ""))
 	var obj = current_action.get("obj", null)
-	var before := carried()
+	var done := true
 
 	match kind:
 		"move":
-			if target == "away" and obj != null and is_instance_valid(obj):
-				memory.record("移動：%s から離れた" % obj.vname)
-			elif target == "toward" and obj != null and is_instance_valid(obj):
-				memory.record("移動：%s に近づいた" % obj.vname)
-		"gather":
-			if obj != null and is_instance_valid(obj) and not obj.depleted():
-				var got: int = obj.take(1)
-				var item: String = obj.item_key()
-				add_item(item, got)
-				if got > 0:
-					memory.record("採取：%s を手に入れた" % HarvestNode.KIND_NAME[obj.kind])
-		"craft":
-			_do_craft(target)
-		"build":
-			if target == "house":
-				_do_build()
+			if (target == "toward" or target == "away") and obj != null \
+					and is_instance_valid(obj):
+				memory.record("移動：%s" % action_label())
 		"use":
-			match target:
-				"food":
-					if item_count("food") > 0:
-						add_item("food", -1)
-						memory.record("食事：木の実を食べた")
-				"home":
-					memory.record("睡眠：家で眠った")
-		"social":
+			done = _do_use(target, obj)
+		"make":
+			done = _do_make(target)
+		"talk":
 			match target:
 				"talk":
 					if obj != null and is_instance_valid(obj):
@@ -221,37 +207,137 @@ func _complete_action() -> void:
 				"read":
 					_do_read_board()
 
-	# 採取は空振りすることがあるので、実際に手に入ったときだけ見せる
-	if kind != "gather" or carried() > before:
+	# 使うのは空振りすることがあり（採り尽くされていた）、
+	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
+	if done:
 		say(kind, target)
 
 
-## 材料を消して、できたものを1つ持つ
-func _do_craft(recipe_id: String) -> void:
-	var r = Schema.recipe_def(recipe_id)
-	if r == null:
-		return
-	for item in r["inputs"]:
-		if item_count(String(item)) < int(r["inputs"][item]):
-			return
-	for item in r["inputs"]:
-		add_item(String(item), -int(r["inputs"][item]))
-	add_item(recipe_id, 1)
-	memory.record("制作：%s を作った" % Schema.item_label(recipe_id))
+## 本人が答えたぶん（`Brain._how_much`）を、そのまま世界に映す。
+##
+## **量については何も見ない。** いくつ取るか、何をどれだけ使うか、いくつできるかは
+## 全部その人の答えで、世界の物は尽きないし、上限もどこにも無い。
+## プログラムが見るのは、**それが何であるか**にまつわる3つだけ。
+##
+##   無いものは払えない       — 減らせるのは、持っているぶんまで
+##   世界に無い物は生まれない — 名前があるのは、神がこの世界に置いた物だけ
+##   増えるのは、世界の物に触れているときか、作っているとき
+##       手の中のものを「使う」だけで物が増えるなら、「作る」という型が要らなくなる。
+##       これは量の話ではなく、動詞の意味の話。
+##
+## 何が寄越されるかも、それが何かを知っている側が答える。
+##   世界に元から在るもの（茂み・木・岩）… プログラムはそれが何かを知っているので、
+##       寄越すのはその物だけ
+##   建てたもの … プログラムは神がつけた名前しか知らないので、何を寄越すかは
+##       名前を読んだ本人が答える（井戸と水が並んでいれば、汲めると分かる）
+##   作る … 何ができるかも本人の答え。削りかすが一緒に出てもいい
+func _apply(want: Dictionary, kind: String, target: String, obj) -> Dictionary:
+	var moved := {}
+	for item in want:
+		var n := int(want[item])
+		if n >= 0:
+			continue
+		var pay: int = mini(-n, item_count(String(item)))
+		if pay <= 0:
+			continue
+		add_item(String(item), -pay)
+		moved[String(item)] = -pay
+
+	var touching = obj if obj != null and is_instance_valid(obj) else null
+	for item in want:
+		var n := int(want[item])
+		var iid := String(item)
+		if n <= 0 or not Schema.all_items().has(iid):
+			continue
+		if touching is HarvestNode and iid != target:
+			continue  # 茂みが寄越すのは木の実だけ
+		if touching == null and kind != "make":
+			continue  # 手の中のものを使っただけでは増えない
+		add_item(iid, n)
+		moved[iid] = int(moved.get(iid, 0)) + n
+	return moved
 
 
-func _do_build() -> void:
-	if item_count("wood") < Rules.BUILD_WOOD or item_count("stone") < Rules.BUILD_STONE:
-		return
+## 動いた持ち物を「2つ手に入れた」「木×2 石×1」のように言う。
+## 行動の名前が既に言っていることは足さない——対象そのものを1つ使っただけのときと、
+## 払って1つできただけのとき。
+func _moved_text(moved: Dictionary, target: String) -> String:
+	var paid: Array = []
+	for item in moved:
+		var iid := String(item)
+		var n := int(moved[iid])
+		if n < 0 and not (iid == target and n == -1):
+			paid.append("%s×%d" % [Schema.item_label(iid), -n])
+
+	var got: Array = []
+	for item in moved:
+		var iid := String(item)
+		var n := int(moved[iid])
+		if n <= 0:
+			continue
+		if iid == target:
+			if n > 1 or paid.is_empty():
+				got.append("%dつ手に入れた" % n)
+		else:
+			# 名前が違うもの（井戸から水）は、何を手にしたのかを言う
+			got.append("%sを%dつ手に入れた" % [Schema.item_label(iid), n])
+
+	var parts: Array = []
+	if not paid.is_empty():
+		parts.append(" ".join(paid))
+	parts.append_array(got)
+	return "" if parts.is_empty() else "（%s）" % "、".join(parts)
+
+
+## 払ったぶんが、手の中の1つになるか、世界の上に建つ。
+##
+## 建てはじめてから建て終わるまでに、誰かが同じものを建ててしまうことがある。
+## 家は一人に一軒、村のものは村に一つなので、置く直前にもう一度確かめる。
+func _do_make(target: String) -> bool:
+	if not Schema.is_building(target):
+		if Schema.recipe_def(target) == null:
+			return false
+		var moved := _apply(current_action.get("move", {}), "make", target, null)
+		if moved.is_empty():
+			return false
+		memory.record("制作：%s%s" % [action_label(), _moved_text(moved, target)])
+		return true
+
+	if Schema.building_def(target) == null:
+		return false
+	var already := ((home != null) if target == Schema.HOUSE
+		else (world.building_of(target) != null))
+	if already:
+		return false
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if c.x < 0 or not world._can_build_at(c):
-		return
-	add_item("wood", -Rules.BUILD_WOOD)
-	add_item("stone", -Rules.BUILD_STONE)
-	home = world.add_structure(Structure.Kind.HOUSE, c, id, color)
-	memory.record("建築：自分の家を建てた")
-	EventLog.notable("%s が家を建てた" % vname,
-		home.position if home != null else position, id)
+		return false
+	var paid := _apply(current_action.get("move", {}), "make", target, null)
+	if paid.is_empty():
+		return false  # 持ち物が何も動かないなら、その人は建てなかった
+	var s: Structure = world.add_structure(target, c, id, color)
+	if s.is_house():
+		home = s
+	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
+	EventLog.notable("%s が%sを建てた" % [vname, s.label()], s.position, id)
+	return true
+
+
+## 使う。何をしたか（採る／食べる／祈る）は本人の言葉（`Brain._name_act`）で、
+## 世界の側で起きるのは「どこにあるものを使ったか」だけで決まる。
+##   そこに在るもの … 1つ手に入る（採るのはこれ）
+##   手の中のもの   … 1つ減る
+##   建物           … 何も減らない
+func _do_use(target: String, obj) -> bool:
+	var where := String(current_action.get("where", "hand"))
+	if where == "building" and (obj == null or not is_instance_valid(obj)):
+		return false
+	var moved := _apply(current_action.get("move", {}), "use", target, obj)
+	# 建物に入るように、持ち物が何も動かない使い方もある。それは空振りではない。
+	if where != "building" and moved.is_empty():
+		return false
+	memory.record("使用：%s%s" % [action_label(), _moved_text(moved, target)])
+	return true
 
 
 ## 会話。起きた事実だけを双方に記録する。
@@ -265,7 +351,7 @@ func _do_talk(other) -> void:
 	memory.record("会話：%s と話した" % other.vname)
 	other.memory.record("会話：%s と話した" % vname)
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
-	other.say("social", "talk", 2.2)
+	other.say("talk", "talk", 2.2)
 
 
 ## 掲示板に貼る。いまは観測した事実だけを貼る。

@@ -88,6 +88,13 @@ func _on_param_selected(i: int) -> void:
 
 
 
+## 前の村で選んでいたマスは、次の村では別人どうしの組になってしまう
+func on_world_reset() -> void:
+	_sel_from = -1
+	_sel_to = -1
+	rebuild()
+
+
 func _process(delta: float) -> void:
 	if not visible:
 		return

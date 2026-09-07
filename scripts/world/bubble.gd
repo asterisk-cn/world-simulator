@@ -12,34 +12,42 @@ extends RefCounted
 
 const PAPER := Color(0.99, 0.98, 0.94)
 
-## 型と対象の組から、何を描くかを引く。Schema の TARGETS と対で保つ。
-const FOR := {
-	"gather/berry": "berry",
-	"gather/tree": "tree",
-	"gather/rock": "rock",
-	"craft": "craft",
-	"build/house": "house",
-	"use/food": "eat",
-	"use/home": "sleep",
-	"social/talk": "talk",
-	"social/post": "post",
-	"social/read": "read",
+## 話すだけは相手が物ではないので、何を描くかをここで決める。
+## 使う／作る は、その対象そのものを描く（`Schema.thing_art`）。
+const FOR_SOCIAL := {
+	"talk": "talk",
+	"post": "post",
+	"read": "read",
 }
 
 var art: String = "talk"
 var life: float = 0.0
 var span: float = 1.0
 var tint: Color = PAPER
+var accent: Color = ItemIcon.NO_TINT
 
 
 ## 型と対象から吹き出しを作る。対応がなければ出さない。
+##
+## 使うときに何をしたか（食べる／祈る）は本人の言葉なので、絵には描けない。
+## 絵になるのは**何に対してだったか**のほう。木の実の絵が出れば木の実に、
+## 教会の絵が出れば教会に、その人が何かをしたと読める。
 static func of(kind: String, target: String, span: float = 1.8,
 		tint: Color = PAPER) -> Bubble:
-	var key := "%s/%s" % [kind, target]
-	var art: String = String(FOR.get(key, FOR.get(kind, "")))
+	var art := ""
+	var accent: Color = ItemIcon.NO_TINT
+	match kind:
+		"talk":
+			art = String(FOR_SOCIAL.get(target, ""))
+		"use", "make":
+			art = Schema.thing_art(target)
+			if Schema.is_building(target):
+				accent = Schema.building_color(target)
 	if art == "":
 		return null
-	return Bubble.new(art, span, tint)
+	var b := Bubble.new(art, span, tint)
+	b.accent = accent
+	return b
 
 
 func _init(p_art: String, p_span: float = 1.8, p_tint: Color = PAPER) -> void:
@@ -77,27 +85,6 @@ func draw_on(node: CanvasItem, at: Vector2) -> void:
 func _draw_art(node: CanvasItem, c: Vector2, fade: float) -> void:
 	var paper := Color(tint.r, tint.g, tint.b, fade)
 	match art:
-		# 世界の物そのものは UI と同じ絵を使う（`ui/item_icon.gd`）。
-		# 同じ物が場所によって違う姿で出ると、繋がりが切れる。
-		"berry", "tree", "rock", "house":
-			ItemIcon.draw_art(node, c, 1.0, art, fade)
-		"craft":
-			ItemIcon.draw_art(node, c, 1.0, "crafted", fade)
-		"eat":
-			# かじられた木の実
-			node.draw_circle(c, 4.4, Color(0.88, 0.30, 0.36, fade))
-			node.draw_circle(c + Vector2(3.4, -2.8), 2.4, paper)
-		"sleep":
-			# 眠り
-			for i in range(2):
-				var s := 3.2 - float(i) * 1.3
-				var o := c + Vector2(-2.4 + float(i) * 4.6, -1.0 + float(i) * 3.0)
-				node.draw_line(o + Vector2(-s, -s), o + Vector2(s, -s),
-					Color(0.30, 0.34, 0.55, fade), 1.4)
-				node.draw_line(o + Vector2(s, -s), o + Vector2(-s, s),
-					Color(0.30, 0.34, 0.55, fade), 1.4)
-				node.draw_line(o + Vector2(-s, s), o + Vector2(s, s),
-					Color(0.30, 0.34, 0.55, fade), 1.4)
 		"talk":
 			# 小さな吹き出しが2つ向き合う
 			ItemIcon.blk(node, c + Vector2(-4.0, -1.5), 3.4, 2.6, Color(0.34, 0.52, 0.66, fade))
@@ -109,3 +96,7 @@ func _draw_art(node: CanvasItem, c: Vector2, fade: float) -> void:
 			for i in range(2):
 				var y := c.y - 1.6 + float(i) * 3.2
 				node.draw_line(Vector2(c.x - 2.4, y), Vector2(c.x + 2.4, y), paper, 1.0)
+		_:
+			# 世界の物そのものは UI と同じ絵を使う（`ui/item_icon.gd`）。
+			# 同じ物が場所によって違う姿で出ると、繋がりが切れる。
+			ItemIcon.draw_art(node, c, 1.0, art, fade, accent)

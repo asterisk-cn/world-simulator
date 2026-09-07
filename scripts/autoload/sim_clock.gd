@@ -16,6 +16,15 @@ var speed: float = 1.0
 var paused: bool = false
 
 
+## 次の世界のために時間を巻き戻す。日数も速さも持ち越さない。
+func reset() -> void:
+	day = 1
+	time_of_day = 0.25
+	is_night = false
+	speed = 1.0
+	paused = true
+
+
 func _process(delta: float) -> void:
 	if paused:
 		return

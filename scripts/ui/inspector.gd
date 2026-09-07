@@ -106,22 +106,30 @@ func _build_header() -> void:
 	UIKit.wrapped(now_box, subject.action_label(), 14, UIKit.TEXT)
 
 
+## 束は、開始前に言葉を決めた紙と同じ形で見せる。
+## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
 	UIKit.section(_body, "胸のうち")
 	if Schema.self_params().is_empty():
-		_body.add_child(UIKit.label("　定義されていない", 11, UIKit.TEXT_DIM))
+		_body.add_child(UIKit.label("定義されていない", 11, UIKit.TEXT_DIM))
 		return
 	for cat in Schema.categories_in(Schema.SCOPE_SELF):
-		_body.add_child(UIKit.label("　" + String(cat), 11, _category_color(String(cat)).darkened(0.30)))
+		var col := Schema.category_color(String(cat))
+		var parts := UIKit.category_card(_body, col)
+		(parts[0] as HBoxContainer).add_child(UIKit.label(String(cat), 13, col.darkened(0.28)))
+		var rows: VBoxContainer = parts[1]
+
+		var first := true
 		for d in Schema.self_params():
 			if String(d["category"]) != String(cat):
 				continue
-			UIKit.bar_row(_body, String(d["label"]), subject.params.get_v(String(d["id"])),
+			if not first:
+				UIKit.hairline(rows)
+			first = false
+			# 印は積み木の色が担うので、決める紙の ● は置かない
+			UIKit.bar_row(UIKit.row_pad(rows), String(d["label"]),
+				subject.params.get_v(String(d["id"])),
 				float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
-
-
-func _category_color(cat: String) -> Color:
-	return Schema.category_color(cat)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +148,7 @@ func _build_pairs() -> void:
 	UIKit.section(_body, "間柄")
 
 	if subject.pairs.is_empty():
-		_body.add_child(UIKit.label("　まだ誰とも会っていない", 11, UIKit.TEXT_DIM))
+		_body.add_child(UIKit.label("まだ誰とも会っていない", 11, UIKit.TEXT_DIM))
 		return
 
 	for oid in subject.pairs.keys():
@@ -206,12 +214,12 @@ func _build_memory() -> void:
 	UIKit.section(_body, "記憶")
 	UIKit.wrapped(_body, subject.memory.recent_summary(2), 10, UIKit.TEXT_DIM)
 
-	_body.add_child(UIKit.label("　今日の出来事", 10, UIKit.TEXT_DIM))
+	_body.add_child(UIKit.label("今日の出来事", 10, UIKit.TEXT_DIM))
 	var eps: Array = subject.memory.episodes
 	var tail: Array = eps.slice(maxi(0, eps.size() - 8))
 	if tail.is_empty():
-		_body.add_child(UIKit.label("　（まだ何もない）", 10, UIKit.TEXT_DIM))
+		_body.add_child(UIKit.label("（まだ何もない）", 10, UIKit.TEXT_DIM))
 	for e in tail:
-		UIKit.wrapped(_body, "　・" + String(e), 10, UIKit.TEXT_DIM)
+		UIKit.wrapped(_body, "・" + String(e), 10, UIKit.TEXT_DIM)
 	UIKit.spacer(_body, 14)
 

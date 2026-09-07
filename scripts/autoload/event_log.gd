@@ -38,6 +38,13 @@ func add(text: String, color: Color = Color(0.28, 0.24, 0.19),
 	entry_added.emit(e)
 
 
+## 前の村の記録は次の村へ持ち越さない。同じ紙に続けて書くと、
+## 別の世界の出来事が地続きに読めてしまう。
+func clear() -> void:
+	entries.clear()
+	_next_id = 1
+
+
 ## 村の姿が変わった出来事（家が建った、など）
 func notable(text: String, at: Vector2 = NOWHERE, who: int = -1) -> void:
 	add(text, Color(0.72, 0.44, 0.10), at, who)

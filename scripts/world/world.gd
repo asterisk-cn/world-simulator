@@ -20,7 +20,7 @@ var structures: Array = []
 var villagers: Array = []
 var board: BulletinBoard
 
-## 家は通り抜けられない。家どうしの間は必ず空いているのでそこを通る。
+## 建物は通り抜けられない（持ち主だけは中を通れる）。建物どうしの間は必ず空いているのでそこを通る。
 var astar := AStarGrid2D.new()
 
 
@@ -138,7 +138,10 @@ func register_villager(v) -> void:
 
 
 ## 建てられたものを世界に置く。何が建つかは神の定義（`Schema.buildings`）で決まる。
-func add_structure(def_id: String, cell: Vector2i, owner_id: int, color: Color) -> Structure:
+## **建てた人のものになる**（屋根がその人の色になる）。
+## 持ち主のないもの（神が建てたもの）は owner_id を渡さない。
+func add_structure(def_id: String, cell: Vector2i, owner_id: int = -1,
+		color: Color = Color.WHITE) -> Structure:
 	var s := Structure.new()
 	s.setup(def_id, cell, owner_id, color)
 	entities.add_child(s)
@@ -158,19 +161,20 @@ func is_blocked(c: Vector2i) -> bool:
 	return in_bounds(c) and astar.is_point_solid(c)
 
 
-## from から to までの経路。自分の家の中だけは通れる。
+## from から to までの経路。建物は通り抜けられないが、**自分のものの中は通れる**。
 func find_path(from_cell: Vector2, to_cell: Vector2, own_id: int = -1) -> PackedVector2Array:
 	var a := Vector2i(roundi(from_cell.x), roundi(from_cell.y))
 	var b := Vector2i(roundi(to_cell.x), roundi(to_cell.y))
 	if not in_bounds(a) or not in_bounds(b):
 		return PackedVector2Array([from_cell])
 
-	# 自分の家は一時的に通れるようにする
+	# 自分のものは一時的に通れるようにする（中に入るため）
 	var opened: Array = []
 	if own_id >= 0:
-		var h := house_of(own_id)
-		if h != null:
-			for c in h.footprint():
+		for s in structures:
+			if s.owner_id != own_id:
+				continue
+			for c in s.footprint():
 				if in_bounds(c) and astar.is_point_solid(c):
 					astar.set_point_solid(c, false)
 					opened.append(c)
@@ -207,14 +211,14 @@ func _nearest_open(c: Vector2i) -> Vector2i:
 	return c
 
 
-## 家のまわりで空いているマス（チェストを置く場所に使う）
-func free_cell_around(house_cell: Vector2i) -> Vector2i:
+## 建物のまわりで空いているマス
+func free_cell_around(at: Vector2i) -> Vector2i:
 	var ring := [
 		Vector2i(2, 0), Vector2i(2, 1), Vector2i(-1, 0), Vector2i(-1, 1),
 		Vector2i(0, 2), Vector2i(1, 2), Vector2i(0, -1), Vector2i(1, -1),
 	]
 	for d in ring:
-		var c: Vector2i = house_cell + d
+		var c: Vector2i = at + d
 		if not in_bounds(c) or is_blocked(c):
 			continue
 		if board != null and board.cell == c:
@@ -230,7 +234,7 @@ func free_cell_around(house_cell: Vector2i) -> Vector2i:
 				break
 		if not taken:
 			return c
-	return house_cell + Vector2i(2, 1)
+	return at + Vector2i(2, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -280,20 +284,34 @@ func building_at(c: Vector2i) -> Structure:
 	return null
 
 
-## その人の家。家だけは建てた人のもので、一人に一軒。
-func house_of(owner_id: int) -> Structure:
+## その建物のうち、いちばん近いもの。
+## 同じものが何軒建つかは誰も決めていないので、「村のその1つ」を指す言い方はしない。
+func nearest_building(def_id: String, from_cell: Vector2) -> Structure:
+	var best: Structure = null
+	var best_d := INF
 	for s in structures:
-		if s.is_house() and s.owner_id == owner_id:
-			return s
-	return null
+		if s.def_id != def_id:
+			continue
+		var d: float = from_cell.distance_to(s.center_cell())
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
 
 
-## 村のその建物。家以外は村のもので、村に一つ。
-func building_of(def_id: String) -> Structure:
+## その人のものの中で、いちばん近いもの。「自分のところ」の行き先になる。
+## 何軒持っているかは決まっていないので、「その人の1軒」を指す言い方はしない。
+func nearest_owned(owner_id: int, from_cell: Vector2) -> Structure:
+	var best: Structure = null
+	var best_d := INF
 	for s in structures:
-		if s.def_id == def_id:
-			return s
-	return null
+		if s.owner_id != owner_id:
+			continue
+		var d: float = from_cell.distance_to(s.center_cell())
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
 
 
 func villager_by_id(vid: int):
@@ -344,13 +362,13 @@ func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 
 
 ## 建物どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
-const HOUSE_SPACING := 3
+const BUILD_SPACING := 3
 
 
 func _can_build_at(c: Vector2i) -> bool:
 	for s in structures:
 		for oc in s.footprint():
-			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < HOUSE_SPACING:
+			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < BUILD_SPACING:
 				return false
 	for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
 		var cc: Vector2i = c + d
@@ -364,16 +382,6 @@ func _can_build_at(c: Vector2i) -> bool:
 			if h.cell == cc:
 				return false
 	return true
-
-
-## 村全体の平均的な豊かさ。不公平パラメータの基準になる。
-func wealth_average() -> float:
-	if villagers.is_empty():
-		return 0.0
-	var total := 0.0
-	for v in villagers:
-		total += v.wealth()
-	return total / float(villagers.size())
 
 
 # ---------------------------------------------------------------------------

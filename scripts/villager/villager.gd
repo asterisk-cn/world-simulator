@@ -26,7 +26,6 @@ var memory: Memory
 var pairs := {}
 
 var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決める
-var home: Structure = null
 
 var current_action := {}
 var action_phase := "idle"  ## "move" | "act"
@@ -84,13 +83,6 @@ func add_item(item: String, n: int) -> void:
 	inventory[item] = maxi(0, item_count(item) + n)
 
 
-func wealth() -> float:
-	var w := float(carried())
-	if home != null:
-		w += 20.0
-	return w
-
-
 func carried() -> int:
 	var t := 0
 	for k in inventory:
@@ -140,7 +132,7 @@ func _decide() -> void:
 	current_action = _brain.choose()
 	action_phase = "move"
 	act_timer = 0.0
-	# 家は通り抜けられないので、間の空きを通って回り込む
+	# 建物は通り抜けられないので、間の空きを通って回り込む
 	_path = world.find_path(cell, current_action.get("target_cell", cell), id)
 	_path_i = 0
 
@@ -291,8 +283,8 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 
 ## 払ったぶんが、手の中の1つになるか、世界の上に建つ。
 ##
-## 建てはじめてから建て終わるまでに、誰かが同じものを建ててしまうことがある。
-## 家は一人に一軒、村のものは村に一つなので、置く直前にもう一度確かめる。
+## 何軒建つかは誰も決めていない。見るのは置ける場所が空いているかだけで、
+## 建てはじめてから建て終わるまでにそこが埋まっていれば、その人は建てられなかった。
 func _do_make(target: String) -> bool:
 	if not Schema.is_building(target):
 		if Schema.recipe_def(target) == null:
@@ -305,10 +297,6 @@ func _do_make(target: String) -> bool:
 
 	if Schema.building_def(target) == null:
 		return false
-	var already := ((home != null) if target == Schema.HOUSE
-		else (world.building_of(target) != null))
-	if already:
-		return false
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if c.x < 0 or not world._can_build_at(c):
 		return false
@@ -316,8 +304,6 @@ func _do_make(target: String) -> bool:
 	if paid.is_empty():
 		return false  # 持ち物が何も動かないなら、その人は建てなかった
 	var s: Structure = world.add_structure(target, c, id, color)
-	if s.is_house():
-		home = s
 	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
 	EventLog.notable("%s が%sを建てた" % [vname, s.label()], s.position, id)
 	return true

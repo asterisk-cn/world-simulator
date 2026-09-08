@@ -18,8 +18,10 @@ var vmax := 100.0
 var tint := Color(0.6, 0.6, 0.6)
 
 
+## 大きさは作る側（`UIKit.bar_row` / `pole_row`）が決める。
+## ここから UIKit を参照すると UIKit → PipBar → UIKit の輪ができて、
+## UIKit に関数を1つ足すたびにエディタが古い UIKit を見たまま止まる。
 func _ready() -> void:
-	custom_minimum_size = Vector2(90, UIKit.BAR_H)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 

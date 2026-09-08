@@ -1,37 +1,44 @@
 extends PanelContainer
 ## 相手ごとのパラメータのマトリクス。行 = 見ている側、列 = 見られている側。
+##
+## **内訳はここに出さない。** 同じ数を2か所で見せると、どちらが本体か分からなくなる。
+## マスは「その人の、その相手についてのところ」への入口で、押すと個人UIへ送る。
+## 表は眺めて異変に気づくための面、値を読むのは個人UIの側。
 
-const CELL_W := 52
-const CELL_H := 24
-const HEAD_W := 62
+const CELL_W := 60
+const CELL_H := 28
+const HEAD_W := 76
+
+## マスどうしの隙。表なので余白の段より詰める（1つのまとまりとして読ませる）
+const CELL_GAP := 2
 
 var world = null
 
 var _param_id: String = "affinity"
 var _grid: GridContainer
 var _cells := {}             ## "from:to" -> Button
-var _detail: VBoxContainer
-var _sel_from: int = -1
-var _sel_to: int = -1
 var _accum := 0.0
 var _param_opt: OptionButton
 var _scroll: ScrollContainer
 
 signal closed
 
+## 押されたマスの「主体 → 相手」。個人UIのその相手のところへ送る。
+signal pair_requested(from_id: int, to_id: int)
+
 
 func _ready() -> void:
-	add_theme_stylebox_override("panel", UIKit.panel_style())
-
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", UIKit.GAP)
-	add_child(root)
+	UIKit.paper_sheet(self).add_child(root)
 
-	var head := UIKit.window_header(root, "間柄", _close)
+	var head := UIKit.window_header(root, "間柄", _close, UIKit.HEAD,
+		"行が見ている側、列が見られている側。\nA→B と B→A は別の値で、揃わない。\nマスを押すと下に内訳が出る。")
 	_param_opt = UIKit.dropdown([], [], "")
-	_param_opt.custom_minimum_size = Vector2(110, UIKit.ROW_H)
+	_param_opt.custom_minimum_size = Vector2(130, UIKit.ROW_H)
 	head.add_child(_param_opt)
-	head.move_child(_param_opt, 1)
+	# 題と「?」の対はひとまとまり。そのあとに、どの言葉で見るかの欄を置く
+	head.move_child(_param_opt, 2)
 	_param_opt.item_selected.connect(_on_param_selected)
 
 	_scroll = ScrollContainer.new()
@@ -40,13 +47,9 @@ func _ready() -> void:
 	var scroll := _scroll
 
 	_grid = GridContainer.new()
-	_grid.add_theme_constant_override("h_separation", 2)
-	_grid.add_theme_constant_override("v_separation", 2)
+	_grid.add_theme_constant_override("h_separation", CELL_GAP)
+	_grid.add_theme_constant_override("v_separation", CELL_GAP)
 	scroll.add_child(_grid)
-
-	_detail = VBoxContainer.new()
-	_detail.add_theme_constant_override("separation", UIKit.GAP_S)
-	root.add_child(_detail)
 
 	Schema.parameters_changed.connect(_on_schema_changed)
 	_refresh_param_options()
@@ -84,14 +87,10 @@ func _on_param_selected(i: int) -> void:
 	if i < ids.size():
 		_param_id = String(ids[i])
 	_update_cells()
-	_build_detail()
 
 
 
-## 前の村で選んでいたマスは、次の村では別人どうしの組になってしまう
 func on_world_reset() -> void:
-	_sel_from = -1
-	_sel_to = -1
 	rebuild()
 
 
@@ -102,7 +101,8 @@ func _process(delta: float) -> void:
 	if _accum < 0.25:
 		return
 	_accum = 0.0
-	if world != null and _cells.size() != world.villagers.size() * world.villagers.size():
+	# 対角はマスにしないので、あるべき数は n×n から n を引いたぶん
+	if world != null and _cells.size() != _cell_count():
 		rebuild()
 	else:
 		_update_cells()
@@ -123,35 +123,44 @@ func rebuild() -> void:
 	# 人数ぶんの高さを持たせる。増えすぎたら中でスクロールする。
 	if _scroll != null:
 		_scroll.custom_minimum_size = Vector2(0,
-			minf(float(vs.size() + 1) * (CELL_H + 2.0) + 6.0, 420.0))
+			minf(float(vs.size() + 1) * (CELL_H + CELL_GAP) + UIKit.GAP_S, 420.0))
 
-	var corner := UIKit.label("主体 ↓ ／ 相手 →", 9, UIKit.TEXT_DIM)
+	# 隅の「主体↓／相手→」は題の横の「?」へ移した。表の中に説明を置くと、
+	# いちばん字が小さいマスに、いちばん読ませたいことが載る。
+	var corner := Control.new()
 	corner.custom_minimum_size = Vector2(HEAD_W, CELL_H)
 	_grid.add_child(corner)
 	for v in vs:
-		var h := UIKit.label(String(v.vname), 10, v.color.darkened(0.38))
+		var h := UIKit.label(String(v.vname), UIKit.FS_NOTE, v.color.darkened(0.38))
 		h.custom_minimum_size = Vector2(CELL_W, CELL_H)
 		h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_grid.add_child(h)
 
 	for a in vs:
-		var rh := UIKit.label(String(a.vname), 10, a.color.darkened(0.38))
+		var rh := UIKit.label(String(a.vname), UIKit.FS_NOTE, a.color.darkened(0.38))
 		rh.custom_minimum_size = Vector2(HEAD_W, CELL_H)
 		_grid.add_child(rh)
 		for b in vs:
+			# 対角は自分自身。**間柄が無いのではなく、そういう値が存在しない。**
+			# 他のマスと同じ色を敷いていたので「値0」や「まだ会っていない」に見えていた。
+			# 表に穴を空けて、読むところではないことを地の色で言う。
+			if a.id == b.id:
+				var hole := Control.new()
+				hole.custom_minimum_size = Vector2(CELL_W, CELL_H)
+				_grid.add_child(hole)
+				continue
 			var btn := Button.new()
-			btn.add_theme_font_size_override("font_size", 10)
 			btn.custom_minimum_size = Vector2(CELL_W, CELL_H)
 			btn.flat = false
 			_grid.add_child(btn)
-			if a.id == b.id:
-				btn.text = ""
-				btn.disabled = true
-			else:
-				btn.pressed.connect(_on_cell_pressed.bind(int(a.id), int(b.id)))
+			btn.pressed.connect(_on_cell_pressed.bind(int(a.id), int(b.id)))
 			_cells["%d:%d" % [a.id, b.id]] = btn
 	_update_cells()
-	_build_detail()
+
+
+func _cell_count() -> int:
+	var n: int = world.villagers.size()
+	return n * (n - 1)
 
 
 func _update_cells() -> void:
@@ -166,9 +175,6 @@ func _update_cells() -> void:
 		var parts: PackedStringArray = String(key).split(":")
 		var fid := int(parts[0])
 		var tid := int(parts[1])
-		if fid == tid:
-			_paint(btn, Color(0.84, 0.79, 0.68))
-			continue
 		var from_v = world.villager_by_id(fid)
 		if from_v == null:
 			continue
@@ -213,51 +219,6 @@ func _paint(btn: Button, col: Color) -> void:
 
 # ---------------------------------------------------------------------------
 
+## 押されたマスは、その人の、その相手についてのところへの入口
 func _on_cell_pressed(from_id: int, to_id: int) -> void:
-	_sel_from = from_id
-	_sel_to = to_id
-	_build_detail()
-
-
-func _get_cell(key: String) -> float:
-	var f = world.villager_by_id(_sel_from)
-	if f == null:
-		return 0.0
-	var pp = f.pair_peek(_sel_to)
-	return 0.0 if pp == null else pp.get_v(key)
-
-
-func _swap_pair() -> void:
-	var t := _sel_from
-	_sel_from = _sel_to
-	_sel_to = t
-	_build_detail()
-
-
-func _build_detail() -> void:
-	for c in _detail.get_children():
-		_detail.remove_child(c)
-		c.queue_free()
-	if world == null or _sel_from < 0:
-		_detail.add_child(UIKit.label("マスを選ぶと内訳が出る", 10, UIKit.TEXT_DIM))
-		return
-	var f = world.villager_by_id(_sel_from)
-	var t = world.villager_by_id(_sel_to)
-	if f == null or t == null:
-		return
-
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", UIKit.GAP)
-	_detail.add_child(head)
-	head.add_child(UIKit.label("%s → %s" % [f.vname, t.vname], 12, UIKit.TEXT))
-	if f.pair_peek(_sel_to) == null:
-		head.add_child(UIKit.label("まだ会っていない", 10, UIKit.TEXT_DIM))
-	var sw := SwapButton.new()
-	head.add_child(sw)
-	sw.pressed.connect(_swap_pair)
-
-	for d in Schema.pair_params():
-		var key := String(d["id"])
-		UIKit.bar_row(_detail, String(d["label"]), _get_cell(key),
-			float(d["min"]), float(d["max"]), Schema.param_color(String(d["id"])))
-
+	pair_requested.emit(from_id, to_id)

@@ -5,7 +5,6 @@ extends PanelContainer
 
 signal started
 signal closed
-signal ended
 
 var world = null
 var editable := true
@@ -17,56 +16,58 @@ var _param_box: VBoxContainer
 var _recipe_box: VBoxContainer
 var _world_box: VBoxContainer
 var _title: Label
+var _title_lead: Control
+var _help_btn: Control
 var _start_btn: Button
 var _reset_btn: Button
 var _delete_btn: Button
 var _close_btn: Button
-var _start_note: Label
-var _end_btn: Button
-var _end_note: Label
-var _lead: Label
 var _mode_label: Label
 var _delete_mode := false
-var _end_armed := false
 
 
 func _ready() -> void:
-	add_theme_stylebox_override("panel", UIKit.panel_style())
-
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", UIKit.GAP)
-	add_child(root)
+	UIKit.paper_sheet(self).add_child(root)
 
-	# 題は舞台の名前。設定ダイアログではなく、世界に言葉を与える場に見せる。
-	# 閉じるは題と同じ行の右端。副題の下に置くと、行き場のない印として浮く。
+	# 題の出しかたは、開始前と進行中で変わる（`set_editable`）。
+	#
+	# 開始前は**この紙が主役**なので、題を中央に大きく置く。
+	# 進行中は世界を見るための窓の1枚なので、村人・掲示板・間柄と同じ顔にする
+	# （`UIKit.window_header` と同じ形——左に題、右端に ✕）。
+	# 同じ紙が同じ大きさの題で残っていると、そこだけ別の種類の窓に見える。
 	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(title_row)
-	var lead_gap := Control.new()
-	lead_gap.custom_minimum_size = Vector2(26, 0)
-	title_row.add_child(lead_gap)
-	_title = UIKit.label("この世界の言葉", 22, UIKit.HEAD)
-	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_lead = Control.new()
+	_title_lead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(_title_lead)
+	_title = UIKit.label("この世界の言葉", UIKit.FS_TITLE, UIKit.HEAD)
 	title_row.add_child(_title)
-	_close_btn = UIKit.icon_button(title_row, "✕", "閉じる", _close, 26, UIKit.ROW_H - 3, 13)
+	# 何をする場かは題の横の「?」で言う。紙に副題として書き足すと、
+	# 決めるための面の一番上が読み物になる。
+	# 右端の ✕ の隣に置くと、押せる印が2つ並んだ塊に見えるので、題にくっつける。
+	_help_btn = UIKit.help(title_row, "")
+	var gap_after := Control.new()
+	gap_after.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(gap_after)
+	_close_btn = UIKit.icon_button(title_row, "✕", "閉じる", _close, 30, UIKit.ROW_H, UIKit.FS_SUB)
 	_close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_lead = UIKit.label("", 11, UIKit.TEXT_DIM)
-	_lead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(_lead)
 
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(head)
 	_head_row = head
-	_mode_label = UIKit.label("", 11, Color(0.72, 0.30, 0.20))
+	_mode_label = UIKit.label("", UIKit.FS_NOTE, Color(0.72, 0.30, 0.20))
 	head.add_child(_mode_label)
 
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(gap)
 
-	_reset_btn = UIKit.button(head, "はじめに戻す", _reset_all, 10)
-	_reset_btn.custom_minimum_size = Vector2(84, UIKit.ROW_H - 3)
+	_reset_btn = UIKit.button(head, "はじめに戻す", _reset_all)
+	_reset_btn.custom_minimum_size = Vector2(112, UIKit.ROW_H - UIKit.HAIR)
 
 	_delete_btn = UIKit.trash_toggle(head, "消すものを選ぶ")
 	_delete_btn.toggled.connect(_on_delete_toggled)
@@ -76,33 +77,15 @@ func _ready() -> void:
 	root.add_child(_tabs)
 	_tabs.tab_changed.connect(_on_tab_changed)
 
-	_param_box = _make_tab("ことば")
-	_recipe_box = _make_tab("つくりかた")
-	_world_box = _make_tab("世界")
-	_people_box = _make_tab("村人")
+	# 決める順に並べる。誰がいるかを決めてから、その世界の流れかたを決める。
+	# 「世界」は数字の面なので、いちばん後ろでいい。
+	_param_box = _make_tab("ことば", "村人が自分と他人について語れる言葉。\nAIに渡す語彙そのものになる。")
+	_recipe_box = _make_tab("つくりかた", "この世界で作れるものと、建てられるもの。")
+	_people_box = _make_tab("村人", "この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。")
+	_world_box = _make_tab("世界", "世界そのものの流れかた。")
 
-	# 大事なことほど、注記の書式で書かない
-	_start_note = UIKit.label("これがこの世界の、最初で最後の言葉になる。", 12, UIKit.HEAD)
-	_start_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(_start_note)
-	_start_btn = UIKit.accent_button(root, "この世界を始める", _on_start, 14)
-	_start_btn.custom_minimum_size = Vector2(0, 38)
-
-	# 始まった世界にできることは、見ることと、終えること。
-	# 終えれば言葉のところへ戻る（この紙が、そのままこの遊びのメニュー）。
-	# 始めるボタンと同じ場所に置く。出口を別の隅へ隠すと、探すものになってしまう。
-	_end_note = UIKit.label("", 12, UIKit.HEAD)
-	_end_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_end_note.visible = false
-	root.add_child(_end_note)
-	_end_btn = UIKit.button(root, "この世界を終える", _on_end, 12)
-	_end_btn.custom_minimum_size = Vector2(0, 32)
-	_end_btn.visible = false
-
-	# 窓を閉じたら、押しかけていた手も戻す
-	visibility_changed.connect(func() -> void:
-		if not visible:
-			_disarm_end())
+	_start_btn = UIKit.accent_button(root, "この世界を始める", _on_start, UIKit.FS_HEAD)
+	_start_btn.custom_minimum_size = Vector2(0, 46)
 
 	Schema.parameters_changed.connect(_rebuild_params)
 	Schema.recipes_changed.connect(_rebuild_recipes)
@@ -116,15 +99,17 @@ func _ready() -> void:
 
 func set_editable(on: bool) -> void:
 	editable = on
-	_lead.text = ("村人が使える言葉と、この世界にある物を決める。" if on
-		else "始まった世界の言葉は、もう変えられない。")
+	UIKit.set_help(_help_btn, "村人が使える言葉と、この世界にある物と、そこに置く人を決める。\n"
+		+ "始めたあとは、もう変えられない。" if on
+		else "始まった世界の言葉は、もう変えられない。\n見るだけの窓。")
 	_start_btn.visible = on
-	_start_note.visible = on
 	_reset_btn.visible = on
 	_close_btn.visible = not on
 	_head_row.visible = on
-	_end_btn.visible = not on
-	_disarm_end()
+	# 開始前は主役の紙（題は中央に大きく）、進行中は見る窓の1枚（他の窓と同じ顔）
+	_title_lead.visible = on
+	_title.add_theme_font_size_override("font_size",
+		UIKit.FS_TITLE if on else UIKit.FS_HEAD)
 	if not on:
 		_delete_mode = false
 		_delete_btn.set_pressed_no_signal(false)
@@ -144,32 +129,10 @@ func _close() -> void:
 	closed.emit()
 
 
-## 一度目の押しで「終わる」と名乗り、二度目で本当に終える。
-## 確認のダイアログを出さないのは始めるときと同じで、
-## 出したいのは間違いの話ではなく、この村がここで終わるという重さのほう。
-func _on_end() -> void:
-	if not _end_armed:
-		_end_armed = true
-		_end_btn.text = "もう一度押す"
-		_end_note.text = "この村はここで終わり、言葉のところへ戻る。\n記録も間柄も残らない。"
-		_end_note.visible = true
-		return
-	_disarm_end()
-	ended.emit()
-
-
-func _disarm_end() -> void:
-	_end_armed = false
-	if _end_btn != null:
-		_end_btn.text = "この世界を終える"
-	if _end_note != null:
-		_end_note.text = ""
-		_end_note.visible = false
-
-
 func _on_delete_toggled(on: bool) -> void:
 	_delete_mode = on
-	_delete_btn.modulate = Color(1.0, 0.55, 0.5) if on else Color.WHITE
+	# 押されていることはボタンの下地（テーマの pressed）が言う。
+	# 色を被せると、押した瞬間だけ別の部品に化ける。
 	_mode_label.text = "消すものを選んでいる" if on else ""
 	_rebuild_params()
 	_rebuild_recipes()
@@ -180,16 +143,17 @@ func _on_tab_changed(_i: int) -> void:
 	_update_delete_btn()
 
 
-## 世界タブ（3枚目）には消せるものが無い。隠すと右上のボタンの位置が動いてしまうので、
+## 世界タブ（4枚目）には消せるものが無い。隠すと右上のボタンの位置が動いてしまうので、
 ## 置いたまま効かなくする。
 func _update_delete_btn() -> void:
 	if _delete_btn == null or _tabs == null:
 		return
 	_delete_btn.visible = editable
-	var usable := _tabs.current_tab != 2
+	var usable := _tabs.current_tab != _tabs.get_tab_count() - 1
 	_delete_btn.disabled = not usable
-	_delete_btn.modulate = (Color(1.0, 0.55, 0.5) if _delete_mode
-		else Color(1, 1, 1, 1.0 if usable else 0.30))
+	# 薄くするのは効かないときだけ。ゴミ箱の絵は自分で墨を引くので、
+	# 薄めないと押せるように見えてしまう。
+	_delete_btn.modulate = Color(1, 1, 1, 1.0 if usable else 0.30)
 	if not usable and _delete_mode:
 		_delete_btn.set_pressed_no_signal(false)
 		_on_delete_toggled(false)
@@ -199,17 +163,19 @@ func _can_delete() -> bool:
 	return editable and _delete_mode
 
 
-func _make_tab(title: String) -> VBoxContainer:
+## タブの説明はその札のツールチップに持たせる。紙の一番上に1行書くと、
+## 毎回読み飛ばす注記が4枚とも同じ場所に居座る。
+func _make_tab(tab_name: String, tip: String) -> VBoxContainer:
 	var holder := MarginContainer.new()
-	holder.name = title
+	holder.name = tab_name
 	# 紙を見出しの下へ少し差し込む。ここが空くと札が浮いて、紙の束に見えない
 	# （奥の札は選ばれた札ほど下へ伸びないので、その差を紙側で吸う）
-	holder.add_theme_constant_override("margin_top", -3)
+	holder.add_theme_constant_override("margin_top", -UIKit.HAIR)
 	_tabs.add_child(holder)
+	_tabs.set_tab_tooltip(_tabs.get_tab_count() - 1, tip)
 	var page := PanelContainer.new()
-	page.add_theme_stylebox_override("panel", UIKit.page_style())
 	holder.add_child(page)
-	return UIKit.scroll_body(page)
+	return UIKit.scroll_body(UIKit.sheet(page, UIKit.page_style(0), UIKit.PAD_S))
 
 
 func _reset_all() -> void:
@@ -228,34 +194,28 @@ func _clear(box: VBoxContainer) -> void:
 # パラメータ
 # ---------------------------------------------------------------------------
 
+## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
+const SCOPE_TIP := {
+	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜100。",
+	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −100〜100。",
+}
+
 func _rebuild_params() -> void:
 	if _param_box == null:
 		return
 	_clear(_param_box)
-	if editable:
-		UIKit.wrapped(_param_box, "村人が自分と他人について語れる言葉。", 11, UIKit.TEXT_DIM)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
-		# 束（カテゴリ）より一段上の区分。素のラベルだと注記に見えるので、
-		# 上に間を空けて罫を添え、見出しとして読ませる。
-		UIKit.spacer(_param_box, UIKit.GAP_S)
-		var sh := HBoxContainer.new()
-		sh.add_theme_constant_override("separation", UIKit.GAP_S)
-		_param_box.add_child(sh)
-		sh.add_child(UIKit.label(String(Schema.SCOPE_LABEL[sc]), 15, UIKit.HEAD))
-		var rule := HSeparator.new()
-		rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		sh.add_child(rule)
-		UIKit.spacer(_param_box, 2)
+		# 束（カテゴリ）より一段上の区分。説明は見出しの横の「?」へ。
+		UIKit.heading(_param_box, String(Schema.SCOPE_LABEL[sc]), SCOPE_TIP[sc])
 
 		for cat in Schema.categories_in(sc):
 			_build_category(sc, String(cat))
 
 		if editable:
 			UIKit.add_button(_param_box, "＋ 束を増やす", _add_category.bind(sc))
-		UIKit.spacer(_param_box, 10)
+		UIKit.spacer(_param_box, UIKit.PAD)
 
 
 func _build_category(scope: String, cat: String) -> void:
@@ -267,9 +227,10 @@ func _build_category(scope: String, cat: String) -> void:
 	if editable:
 		head.add_child(_flat_edit(cat, col, scope))
 	else:
-		head.add_child(UIKit.label(cat, 13, col.darkened(0.28)))
+		head.add_child(UIKit.read_only(cat, UIKit.FS_SUB, col.darkened(0.28)))
 	if _can_delete():
-		UIKit.icon_button(head, "✕", "%s を消す" % cat, _del_category.bind(scope, cat), 26, UIKit.ROW_H, 13)
+		UIKit.icon_button(head, "✕", "%s を消す" % cat,
+			_del_category.bind(scope, cat), 26, UIKit.ROW_H, UIKit.FS_SUB)
 
 	var first := true
 	for d in Schema.params_in(scope):
@@ -281,7 +242,7 @@ func _build_category(scope: String, cat: String) -> void:
 		_build_param(inner, d)
 
 	if editable:
-		UIKit.spacer(inner, 2)
+		UIKit.spacer(inner, UIKit.HAIR)
 		UIKit.add_button(inner, "＋ ことばを増やす", _add_param.bind(scope, cat))
 
 
@@ -289,18 +250,18 @@ func _build_category(scope: String, cat: String) -> void:
 func _flat_edit(cat: String, col: Color, scope: String) -> LineEdit:
 	var le := LineEdit.new()
 	le.text = cat
-	le.add_theme_font_size_override("font_size", 13)
+	le.add_theme_font_size_override("font_size", UIKit.FS_SUB)
 	le.add_theme_color_override("font_color", col.darkened(0.28))
 	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(80, UIKit.ROW_H + 2)
+	le.custom_minimum_size = Vector2(80, UIKit.ROW_H)
 	var flat := StyleBoxFlat.new()
 	flat.bg_color = Color(0, 0, 0, 0)
-	flat.content_margin_left = 2
+	flat.content_margin_left = UIKit.FIELD_INSET
 	le.add_theme_stylebox_override("normal", flat)
 	var focused := StyleBoxFlat.new()
 	focused.bg_color = Color(1, 1, 1, 0.06)
 	focused.set_corner_radius_all(3)
-	focused.content_margin_left = 2
+	focused.content_margin_left = UIKit.FIELD_INSET
 	le.add_theme_stylebox_override("focus", focused)
 	le.text_submitted.connect(_rename_category.bind(scope, cat))
 	le.focus_exited.connect(func() -> void: _rename_category(le.text, scope, cat))
@@ -311,20 +272,16 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	var pid := String(def["id"])
 	var col := Schema.param_color(pid)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", UIKit.GAP_S)
-	UIKit.row_pad(box).add_child(row)
-	row.add_child(UIKit.label("●", 12, col.darkened(0.25)))
+	var row := UIKit.list_row(box, UIKit.dot(col.darkened(0.25)))
 
 	if not editable:
-		row.add_child(UIKit.label(String(def["label"]), 12, UIKit.TEXT))
+		row.add_child(UIKit.read_only(String(def["label"])))
 		return
 
 	# 罫線を行いっぱいに伸ばすと、書かれているのに「未記入の書類」に見える。
 	# とりうる幅の列が消えたぶんだけ広げて、右の空きと釣り合わせる。
 	var le := LineEdit.new()
 	le.text = String(def["label"])
-	le.add_theme_font_size_override("font_size", 11)
 	le.custom_minimum_size = Vector2(240, UIKit.ROW_H)
 	row.add_child(le)
 	le.text_changed.connect(_set_label.bind(def))
@@ -335,7 +292,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 
 	if _can_delete():
 		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
-			_del_param.bind(pid), 26, UIKit.ROW_H, 13)
+			_del_param.bind(pid), 26, UIKit.ROW_H, UIKit.FS_SUB)
 
 
 func _add_category(scope: String) -> void:
@@ -371,15 +328,13 @@ func _rebuild_world() -> void:
 	if _world_box == null:
 		return
 	_clear(_world_box)
-	if editable:
-		UIKit.wrapped(_world_box, "世界そのものの流れかた。", 11, UIKit.TEXT_DIM)
 
 	# 他のタブと同じく1枚の紙にまとめる。ここだけ素の行が並ぶと設定画面に戻ってしまう。
 	var card := UIKit.card()
 	_world_box.add_child(card)
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 0)
-	card.add_child(rows)
+	UIKit.body_of(card).add_child(rows)
 
 	var first := true
 	for k in SimConfig.PARAM_DEF:
@@ -388,24 +343,21 @@ func _rebuild_world() -> void:
 		if not first:
 			UIKit.hairline(rows)
 		first = false
-		var pad := MarginContainer.new()
-		pad.add_theme_constant_override("margin_top", 3)
-		pad.add_theme_constant_override("margin_bottom", 3)
-		rows.add_child(pad)
-
+		# ここには先頭に置くものが無いが、欄は空けておく。
+		# タブを替えたときに字の左端が動くと、別の紙に見える。
+		var row := UIKit.list_row(rows)
 		if editable:
-			UIKit.slider_row(pad, String(d[3]), SimConfig.p(key),
-				float(d[1]), float(d[2]), _step_for(float(d[1]), float(d[2])),
+			UIKit.slider_row(row, String(d[3]), SimConfig.p(key),
+				float(d[1]), float(d[2]), SimConfig.step_of(key),
 				_set_world.bind(key), UIKit.WOOD, 150, _world_text.bind(key))
 		else:
-			var row := HBoxContainer.new()
-			pad.add_child(row)
-			var nm := UIKit.label(String(d[3]), 11, UIKit.TEXT)
+			var nm := UIKit.read_only(String(d[3]))
 			nm.custom_minimum_size = Vector2(150, 0)
 			row.add_child(nm)
-			row.add_child(UIKit.label(_world_text(SimConfig.p(key), key), 11, UIKit.TEXT_DIM))
+			row.add_child(UIKit.label(_world_text(SimConfig.p(key), key),
+				UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
-	UIKit.spacer(_world_box, 10)
+	UIKit.spacer(_world_box, UIKit.PAD)
 
 
 ## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
@@ -428,15 +380,6 @@ func _set_world(x: float, key: String) -> void:
 	SimConfig.set_param(key, x)
 
 
-func _step_for(vmin: float, vmax: float) -> float:
-	var span := vmax - vmin
-	if span <= 2.0:
-		return 0.01
-	if span <= 20.0:
-		return 0.1
-	return 1.0
-
-
 # ---------------------------------------------------------------------------
 # ひと
 # ---------------------------------------------------------------------------
@@ -449,16 +392,13 @@ func _rebuild_people() -> void:
 		_people_list()
 		return
 
-	UIKit.wrapped(_people_box,
-		"この世界に置く村人。名前も性格も、その人がどう振る舞うかの素になる。", 11, UIKit.TEXT_DIM)
-
 	for h in Schema.villagers:
 		_build_person(h)
 
 	if Schema.villagers.size() < Schema.MAX_VILLAGERS:
-		UIKit.spacer(_people_box, 4)
+		UIKit.spacer(_people_box, UIKit.GAP_S)
 		UIKit.add_button(_people_box, "＋ 村人を増やす", _add_villager)
-	UIKit.spacer(_people_box, 10)
+	UIKit.spacer(_people_box, UIKit.PAD)
 
 
 func _build_person(h: Dictionary) -> void:
@@ -467,7 +407,7 @@ func _build_person(h: Dictionary) -> void:
 	_people_box.add_child(card)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
-	card.add_child(box)
+	UIKit.body_of(card).add_child(box)
 
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -476,24 +416,23 @@ func _build_person(h: Dictionary) -> void:
 
 	var name_edit := LineEdit.new()
 	name_edit.text = String(h["name"])
-	name_edit.add_theme_font_size_override("font_size", 13)
+	name_edit.add_theme_font_size_override("font_size", UIKit.FS_SUB)
 	name_edit.add_theme_color_override("font_color", Color(h["color"]).darkened(0.42))
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_edit.custom_minimum_size = Vector2(90, UIKit.ROW_H + 2)
+	name_edit.custom_minimum_size = Vector2(90, UIKit.ROW_H)
 	head.add_child(name_edit)
 	name_edit.text_changed.connect(func(t: String) -> void: h["name"] = t)
 
 	var quirk := LineEdit.new()
 	quirk.text = String(h["quirk"])
 	quirk.placeholder_text = "一言でいうと"
-	quirk.add_theme_font_size_override("font_size", 11)
 	quirk.custom_minimum_size = Vector2(150, UIKit.ROW_H)
 	head.add_child(quirk)
 	quirk.text_changed.connect(func(t: String) -> void: h["quirk"] = t)
 
 	if _can_delete() and Schema.villagers.size() > 1:
 		UIKit.icon_button(head, "✕", "%s を消す" % String(h["name"]),
-			_del_villager.bind(hid), 26, UIKit.ROW_H, 13)
+			_del_villager.bind(hid), 26, UIKit.ROW_H, UIKit.FS_SUB)
 
 	box.add_child(HSeparator.new())
 
@@ -503,15 +442,6 @@ func _build_person(h: Dictionary) -> void:
 		UIKit.pole_slider(box, String(a[2]), String(a[3]),
 			float(h["axes"].get(key, 0.5)),
 			func(x: float) -> void: h["axes"][key] = x)
-
-	# 持ち物。始まりに何を握らせておくか
-	var have := HBoxContainer.new()
-	have.add_theme_constant_override("separation", UIKit.GAP)
-	box.add_child(have)
-	have.add_child(UIKit.label("持ち物", 10, UIKit.TEXT_DIM))
-	for item in Schema.all_items():
-		_item_counter(have, h, String(item))
-
 
 ## 色は世界の上での見分けになる。押すと、まだ誰も使っていない色へ移る。
 func _color_swatch(h: Dictionary) -> Button:
@@ -534,74 +464,27 @@ func _color_swatch(h: Dictionary) -> Button:
 	return b
 
 
-func _item_counter(parent: Node, h: Dictionary, iid: String) -> void:
-	var cell := HBoxContainer.new()
-	cell.add_theme_constant_override("separation", 3)
-	cell.tooltip_text = Schema.item_label(iid)
-	parent.add_child(cell)
-	cell.add_child(ItemIcon.of_item(iid, 18))
-
-	var n := int(h["items"].get(iid, 0))
-	# 増減は −／数／＋ の並び。場所ごとに形が変わると読み方が変わる
-	var minus := UIKit._round_button("−")
-	cell.add_child(minus)
-
-	var val := UIKit.label(str(n), 11, UIKit.TEXT if n > 0 else UIKit.TEXT_DIM)
-	val.custom_minimum_size = Vector2(16, 0)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cell.add_child(val)
-
-	var plus := UIKit._round_button("＋")
-	cell.add_child(plus)
-
-	var count := [n]
-	var apply := func(d: int) -> void:
-		count[0] = clampi(count[0] + d, 0, 9)
-		val.text = str(count[0])
-		val.add_theme_color_override("font_color",
-			UIKit.TEXT if count[0] > 0 else UIKit.TEXT_DIM)
-		if count[0] <= 0:
-			h["items"].erase(iid)
-		else:
-			h["items"][iid] = count[0]
-	minus.pressed.connect(func() -> void: apply.call(-1))
-	plus.pressed.connect(func() -> void: apply.call(1))
-
-
 ## 始まったあとは、誰がいたかを1枚の紙で見るだけ
 func _people_list() -> void:
 	var card := UIKit.card()
 	_people_box.add_child(card)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 0)
-	card.add_child(box)
+	UIKit.body_of(card).add_child(box)
 
 	var first := true
 	for h in Schema.villagers:
 		if not first:
 			UIKit.hairline(box)
 		first = false
-		var pad := MarginContainer.new()
-		pad.add_theme_constant_override("margin_top", 3)
-		pad.add_theme_constant_override("margin_bottom", 3)
-		box.add_child(pad)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", UIKit.GAP_S)
-		pad.add_child(row)
-
-		var dot := ColorRect.new()
-		dot.color = Color(h["color"])
-		dot.custom_minimum_size = Vector2(10, 10)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(dot)
-
-		var nm := UIKit.label(String(h["name"]), 12, UIKit.TEXT)
-		nm.custom_minimum_size = Vector2(62, 0)
+		var row := UIKit.list_row(box, UIKit.dot(Color(h["color"])))
+		var nm := UIKit.read_only(String(h["name"]))
+		nm.custom_minimum_size = Vector2(UIKit.NAME_W, 0)
 		row.add_child(nm)
-		var q := UIKit.label(String(h["quirk"]), 11, UIKit.TEXT_DIM)
+		var q := UIKit.label(String(h["quirk"]), UIKit.FS_NOTE, UIKit.TEXT_DIM)
 		q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(q)
-	UIKit.spacer(_people_box, 10)
+	UIKit.spacer(_people_box, UIKit.PAD)
 
 
 func _add_villager() -> void:
@@ -623,41 +506,34 @@ func _rebuild_recipes() -> void:
 	if _recipe_box == null:
 		return
 	_clear(_recipe_box)
-	if editable:
-		UIKit.wrapped(_recipe_box,
-			"この世界で作れるものと、建てられるもの。\n"
-			+ "何をどれだけ使うかは、作る人が持ち物を見て決める。", 11, UIKit.TEXT_DIM)
 
 	_things_section("持てるもの", Schema.recipes, Schema.CRAFT_ARTS,
-		"＋ つくりかたを増やす", _add_recipe, _del_recipe, _rename_recipe)
+		"＋ つくりかたを増やす", _add_recipe, _del_recipe, _rename_recipe,
+		"名前と姿だけを決める。材料の欄はない。\n"
+		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。")
 	_things_section("建てるもの", Schema.buildings, Schema.BUILDING_ARTS,
-		"＋ 建てるものを増やす", _add_building, _del_building, _rename_building)
-	UIKit.spacer(_recipe_box, 10)
+		"＋ 建てるものを増やす", _add_building, _del_building, _rename_building,
+		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
+		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
+		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。")
+	UIKit.spacer(_recipe_box, UIKit.PAD)
 
 
 ## 作れるもの／建てるもの、どちらも「名前と姿」だけなので同じ形で並べる
-func _things_section(title: String, defs: Array, arts: Array, add_text: String,
-		on_add: Callable, on_del: Callable, on_rename: Callable) -> void:
+func _things_section(head_text: String, defs: Array, arts: Array, add_text: String,
+		on_add: Callable, on_del: Callable, on_rename: Callable,
+		tip: String = "") -> void:
 	if defs.is_empty() and not editable:
 		return
 
 	# ことばタブと同じ、束より一段上の区分
-	UIKit.spacer(_recipe_box, UIKit.GAP_S)
-	var sh := HBoxContainer.new()
-	sh.add_theme_constant_override("separation", UIKit.GAP_S)
-	_recipe_box.add_child(sh)
-	sh.add_child(UIKit.label(title, 15, UIKit.HEAD))
-	var rule := HSeparator.new()
-	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sh.add_child(rule)
-	UIKit.spacer(_recipe_box, 2)
+	UIKit.heading(_recipe_box, head_text, tip)
 
 	var card := UIKit.card()
 	_recipe_box.add_child(card)
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 0)
-	card.add_child(rows)
+	UIKit.body_of(card).add_child(rows)
 
 	var first := true
 	for d in defs:
@@ -667,34 +543,26 @@ func _things_section(title: String, defs: Array, arts: Array, add_text: String,
 			UIKit.hairline(rows)
 		first = false
 
-		var pad := MarginContainer.new()
-		pad.add_theme_constant_override("margin_top", 3)
-		pad.add_theme_constant_override("margin_bottom", 3)
-		rows.add_child(pad)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", UIKit.GAP_S)
-		pad.add_child(row)
-
-		row.add_child(_art_picker(def, arts))
+		# 姿は先頭の欄へ。ことばタブの点と同じ欄なので、名前の左端が揃う
+		var row := UIKit.list_row(rows, _art_picker(def, arts))
 		if editable:
 			var le := LineEdit.new()
 			le.text = String(def["label"])
-			le.add_theme_font_size_override("font_size", 12)
 			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			le.custom_minimum_size = Vector2(100, UIKit.ROW_H)
 			row.add_child(le)
 			le.text_changed.connect(func(t: String) -> void: on_rename.call(t, did))
 		else:
 			# 姿は絵が語っているので、名前の横に姿の名を添えない
-			var nm := UIKit.label(String(def["label"]), 12, UIKit.TEXT)
+			var nm := UIKit.read_only(String(def["label"]))
 			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(nm)
 		if _can_delete():
 			UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
-				func() -> void: on_del.call(did), 26, UIKit.ROW_H, 13)
+				func() -> void: on_del.call(did), 26, UIKit.ROW_H, UIKit.FS_SUB)
 
 	if editable:
-		UIKit.spacer(rows, 2)
+		UIKit.spacer(rows, UIKit.HAIR)
 		UIKit.add_button(rows, add_text, on_add)
 
 
@@ -704,15 +572,15 @@ func _art_picker(def: Dictionary, arts: Array) -> Control:
 	var tint: Color = (Schema.building_color(String(def["id"]))
 		if Schema.is_building(String(def["id"])) else ItemIcon.NO_TINT)
 	if not editable:
-		var seen := ItemIcon.of_art(art, 22)
+		var seen := ItemIcon.of_art(art, 20)
 		seen.accent = tint
 		seen.tooltip_text = String(Schema.ART_LABEL.get(art, ""))
 		return seen
 
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(UIKit.ROW_H + 4, UIKit.ROW_H + 4)
+	b.custom_minimum_size = Vector2(UIKit.LEAD_W, UIKit.LEAD_W)
 	b.tooltip_text = "姿を変える（いまは %s）" % String(Schema.ART_LABEL.get(art, ""))
-	var ic := ItemIcon.of_art(art, 22)
+	var ic := ItemIcon.of_art(art, 20)
 	ic.accent = tint
 	ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	b.add_child(ic)

@@ -3,6 +3,9 @@ extends CanvasLayer
 
 signal jump_requested(at: Vector2, who: int)
 
+## この世界を終えて、言葉のところへ戻る。
+signal end_requested
+
 ## 神が紙を放った。画面上のどこから飛び出すかを添える。
 signal god_posted(from_screen: Vector2, text: String)
 
@@ -19,6 +22,14 @@ var _pause_btn: Button
 var _speed_btns: Array = []
 var _win_btns := {}
 
+## 上部バーは読む紙ではなく、**常に画面の端にいる操作の帯**。
+## 紙の段（`PAD` / `ROW_H`）を上げても、ここの高さは上げない——
+## 帯が太くなったぶん、そのまま世界が削れる。
+## 帯の中は帯の都合で決める（DESIGN.md §9「紙が違えば揃えなくてよい」）。
+## 帯は**横に引き出した紙**（ちぎれ目は左右）なので、丈はちぎれに食われない。
+const BAR_PAD := 14
+const BAR_ROW_H := 27
+
 ## 速さは3段。「1x 2x 4x 8x 16x 32x」の6連は再生プレイヤーの記号で、
 ## 画面の上端に常駐すると、そこだけ動画編集ソフトになる。
 const SPEEDS := [1.0, 4.0, 16.0]
@@ -31,6 +42,7 @@ var roster_panel = null
 var matrix_panel = null
 var rules_panel = null
 var debug_panel = null
+var option_panel = null
 
 
 func setup(p_world) -> void:
@@ -84,10 +96,13 @@ func set_play_ui_visible(on: bool) -> void:
 		roster_panel.visible = false
 	if debug_panel != null and not on:
 		debug_panel.visible = false
+	if option_panel != null and not on:
+		option_panel.visible = false
 
 
 func _build_top_bar() -> void:
-	var panel := UIKit.panel()
+	# 横長の帯なので、ちぎれ目は短い辺——左右に来る（`across`）
+	var panel := UIKit.panel(UIKit.BG, 10, BAR_PAD, true)
 	_top_bar = panel
 	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	panel.position = Vector2(12, 12)
@@ -95,35 +110,42 @@ func _build_top_bar() -> void:
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UIKit.GAP)
-	panel.add_child(row)
+	UIKit.body_of(panel).add_child(row)
 
-	_clock_label = UIKit.label("1日目", 14)
-	_clock_label.custom_minimum_size = Vector2(142, 0)
+	_clock_label = UIKit.label("1日目", UIKit.FS_HEAD)
+	_clock_label.custom_minimum_size = Vector2(180, 0)
 	row.add_child(_clock_label)
 
-	_pop_label = UIKit.label("村人 0", 12, UIKit.TEXT_DIM)
-	_pop_label.custom_minimum_size = Vector2(66, 0)
+	_pop_label = UIKit.label("村人 0", UIKit.FS_NOTE, UIKit.TEXT_DIM)
+	_pop_label.custom_minimum_size = Vector2(78, 0)
 	row.add_child(_pop_label)
 
 	row.add_child(VSeparator.new())
 
-	_pause_btn = UIKit.toggle_button(row, "❚❚", "一時停止", _toggle_pause, 34, 12)
+	_pause_btn = UIKit.toggle_button(row, "❚❚", "一時停止", _toggle_pause, 40)
 	for i in range(SPEEDS.size()):
 		var sp: float = SPEEDS[i]
 		_speed_btns.append(UIKit.toggle_button(row, SPEED_GLYPH[i], SPEED_TIP[i],
-			_set_speed.bind(sp), 24 + i * 12, 11))
+			_set_speed.bind(sp), 30 + i * 15))
 
 	row.add_child(VSeparator.new())
 	# 窓は名前で呼ぶ。記号のグリフだと、何が開くのか押すまで分からない。
 	_win_btns = {
-		"roster": UIKit.toggle_button(row, "村人", "誰がいま何をしているか", _toggle_roster, 52),
-		"board": UIKit.toggle_button(row, "掲示板", "貼り紙を落とす", _toggle_board, 60),
-		"matrix": UIKit.toggle_button(row, "間柄", "誰が誰をどう見ているか", _toggle_matrix, 52),
-		"rules": UIKit.toggle_button(row, "言葉", "この世界の言葉", _toggle_rules, 52),
-		"debug": UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）", _toggle_debug, 64, 10),
+		"roster": UIKit.toggle_button(row, "村人", "誰がいま何をしているか", _toggle_roster, 62),
+		"board": UIKit.toggle_button(row, "掲示板", "貼り紙を落とす", _toggle_board, 74),
+		"matrix": UIKit.toggle_button(row, "間柄", "誰が誰をどう見ているか", _toggle_matrix, 62),
+		"rules": UIKit.toggle_button(row, "言葉", "この世界の言葉", _toggle_rules, 62),
+		"debug": UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）", _toggle_debug, 88),
+		# 世界の中の話ではないので、見る窓のあとに置く
+		"option": UIKit.toggle_button(row, "オプション", "この世界を終える", _toggle_option, 102),
 	}
 	# 神の窓と同格に見せない。これは世界の外側の道具。
 	(_win_btns["debug"] as Button).modulate = Color(1, 1, 1, 0.55)
+
+	# 札はどれも帯の高さに揃える（`toggle_button` は紙の段 ROW_H で作る）
+	for b in [_pause_btn] + _speed_btns + _win_btns.values():
+		(b as Button).custom_minimum_size.y = BAR_ROW_H
+
 	_refresh_state()
 
 
@@ -150,7 +172,7 @@ func _refresh_state() -> void:
 			not SimClock.paused and is_equal_approx(SimClock.speed, float(SPEEDS[i])))
 	var panels := {
 		"roster": roster_panel, "board": _board_panel, "matrix": matrix_panel,
-		"rules": rules_panel, "debug": debug_panel,
+		"rules": rules_panel, "debug": debug_panel, "option": option_panel,
 	}
 	for key in _win_btns:
 		var p = panels.get(key, null)
@@ -160,7 +182,8 @@ func _refresh_state() -> void:
 ## 大きい窓は一度に1枚だけ。世界が見えなくなるのを防ぐ。
 func _show_only(target) -> void:
 	var want: bool = target != null and not target.visible
-	for p in [roster_panel, _board_panel, matrix_panel, rules_panel, debug_panel]:
+	for p in [roster_panel, _board_panel, matrix_panel, rules_panel, debug_panel,
+			option_panel]:
 		if p != null:
 			p.visible = (p == target) and want
 	_refresh_state()
@@ -199,25 +222,29 @@ func _toggle_debug() -> void:
 	_show_only(debug_panel)
 
 
+func _toggle_option() -> void:
+	_show_only(option_panel)
+
+
 func _build_log() -> void:
 	var panel := UIKit.panel()
 	_log_panel = panel
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	panel.offset_left = 12
-	panel.offset_right = 420
-	panel.offset_top = -164
+	panel.offset_right = 480
+	panel.offset_top = -190
 	panel.offset_bottom = -12
 	add_child(panel)
 
 	var box := VBoxContainer.new()
-	panel.add_child(box)
-	box.add_child(UIKit.label("村の記録", 11, Color(0.34, 0.28, 0.20)))
+	UIKit.body_of(panel).add_child(box)
+	box.add_child(UIKit.label("村の記録", UIKit.FS_NOTE, Color(0.34, 0.28, 0.20)))
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true
 	_log.scroll_following = true
 	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_log.add_theme_font_size_override("normal_font_size", 11)
+	_log.add_theme_font_size_override("normal_font_size", UIKit.FS_BODY)
 	# 下線は「ここには行き先がある」の印。全行に付けないので飾りにならない。
 	_log.meta_underlined = true
 	box.add_child(_log)
@@ -266,30 +293,33 @@ func _build_board_panel() -> void:
 	_board_panel = UIKit.panel()
 	_board_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_board_panel.offset_left = 12
-	_board_panel.offset_right = 472
-	_board_panel.offset_top = 78
-	_board_panel.offset_bottom = 414
+	_board_panel.offset_right = 544
+	_board_panel.offset_top = 88
+	_board_panel.offset_bottom = 470
 	add_child(_board_panel)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
-	_board_panel.add_child(box)
-	UIKit.window_header(box, "掲示板", _toggle_board, Color(0.62, 0.42, 0.14))
+	UIKit.body_of(_board_panel).add_child(box)
+	# 題は他の窓と同じ墨色。1枚だけ色が違うと、そこだけ別の種類の窓に見える
+	UIKit.window_header(box, "掲示板", _toggle_board, UIKit.HEAD,
+		"村で唯一の、書いて残す場所。\n神が貼った紙は差出人不明として扱われる。")
 
 	# --- 神が村に言葉を落とす場所。この窓の主役なので先頭に置く ---
 	# 書く場所も紙。入力欄の顔をしていると、下に貼られた紙と文法が割れる。
 	var sheet := PanelContainer.new()
 	sheet.add_theme_stylebox_override("panel", _paper_style(true))
 	box.add_child(sheet)
+	UIKit.paper_grain(sheet)
 	var form_box := VBoxContainer.new()
 	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
 	sheet.add_child(form_box)
-	form_box.add_child(UIKit.label("神のお告げ", 11, UIKit.ACCENT))
+	# アクセント色はこの窓では「貼る」1か所に取っておく（DESIGN.md §9）
+	form_box.add_child(UIKit.label("神のお告げ", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
 	_post_text = LineEdit.new()
-	_post_text.placeholder_text = "ここに書いたものが、差出人不明の貼り紙になる"
-	_post_text.add_theme_font_size_override("font_size", 13)
-	_post_text.custom_minimum_size = Vector2(0, UIKit.ROW_H + 6)
+	_post_text.add_theme_font_size_override("font_size", UIKit.FS_SUB)
+	_post_text.custom_minimum_size = Vector2(0, UIKit.ROW_H + UIKit.GAP_S)
 	# 紙の上に直接書くので、欄そのものは地のまま
 	_post_text.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	_post_text.add_theme_stylebox_override("focus", UIKit.ruled_style(0.0, 1))
@@ -306,7 +336,9 @@ func _build_board_panel() -> void:
 	submit.custom_minimum_size = Vector2(96, UIKit.ROW_H)
 
 	# --- いま貼られているもの ---
-	UIKit.section(box, "貼られているもの")
+	# 見出しは置かない。板の上に紙が並んでいるのだから、「貼られているもの」と
+	# 書き添える必要がない（書く場所と貼られた紙は形で分かれている）。
+	UIKit.spacer(box, UIKit.GAP)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -331,8 +363,9 @@ func _paper_style(by_god: bool) -> StyleBoxFlat:
 		sb.border_width_left = 3
 	sb.content_margin_left = UIKit.PAD_S
 	sb.content_margin_right = UIKit.PAD_S
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 7
+	# 上下は左右（PAD_S）より詰める。横長の紙に見せる
+	sb.content_margin_top = UIKit.GAP_S
+	sb.content_margin_bottom = UIKit.GAP_S
 	sb.shadow_color = Color(0, 0, 0, 0.10)
 	sb.shadow_size = 2
 	sb.shadow_offset = Vector2(1, 2)
@@ -362,7 +395,7 @@ func _refresh_board() -> void:
 	if world == null or world.board == null:
 		return
 	if world.board.posts.is_empty():
-		_board_list.add_child(UIKit.label("（まだ何も貼られていない）", 11, UIKit.TEXT_DIM))
+		_board_list.add_child(UIKit.label("（まだ何も貼られていない）", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
 	var posts: Array = world.board.posts
 	for i in range(posts.size() - 1, -1, -1):
@@ -376,11 +409,12 @@ func _slip(e: Dictionary) -> void:
 	var paper := PanelContainer.new()
 	paper.add_theme_stylebox_override("panel", _paper_style(by_god))
 	_board_list.add_child(paper)
+	UIKit.paper_grain(paper)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 3)
+	box.add_theme_constant_override("separation", UIKit.HAIR)
 	paper.add_child(box)
-	UIKit.wrapped(box, String(e["text"]), 12, UIKit.TEXT)
+	UIKit.wrapped(box, String(e["text"]))
 
 	# 差出人と日付は紙の隅に小さく
 	var foot := HBoxContainer.new()
@@ -389,5 +423,15 @@ func _slip(e: Dictionary) -> void:
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	foot.add_child(gap)
 	var who := "差出人不明" if by_god else String(e["author_name"])
-	foot.add_child(UIKit.label("%d日目　%s" % [int(e["day"]), who], 10,
+	foot.add_child(UIKit.label("%s　%s" % [_days_ago(int(e["day"])), who], UIKit.FS_NOTE,
 		Color(0.46, 0.41, 0.34, 0.85)))
+
+
+## 貼られてからの古さ。「3日目」だと、いまが何日目かを覚えていないと古さが読めない。
+func _days_ago(day: int) -> String:
+	var d: int = SimClock.day - day
+	if d <= 0:
+		return "今日"
+	if d == 1:
+		return "昨日"
+	return "%d日前" % d

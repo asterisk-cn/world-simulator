@@ -91,10 +91,27 @@ func _start_world() -> void:
 	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 
 
+## 取り返しがつかないので、終える前に一度だけ訊く。
+## 訊いているあいだは時間を止める。答える前に村が変わってしまうのはおかしい。
+func _ask_end() -> void:
+	if not started or _ending:
+		return
+	var was_paused := SimClock.paused
+	SimClock.paused = true
+	var ask = preload("res://scripts/ui/confirm_popup.gd").new()
+	ask.setup("本当に終了しますか？",
+		"この村はここで終わり、言葉のところへ戻る。記録も間柄も残らない。", "終了する")
+	# 実行中に足す面なので、テーマは自分で持たせる（CanvasLayer は伝えてくれない）
+	ask.theme = SimConfig.ui_theme
+	hud.add_child(ask)
+	ask.confirmed.connect(_end_ritual)
+	ask.canceled.connect(func() -> void: SimClock.paused = was_paused)
+
+
 ## 「この世界を終える」を押してから、言葉のところへ戻るまでの一拍。
 ##
 ## 始める一拍の逆をたどる。時間が止まり、目を覚ましていた世界が青へ沈み、
-## 決めた言葉の紙が戻ってくる。ここでも確認のダイアログは挟まない（紙の側で一拍置いている）。
+## 決めた言葉の紙が戻ってくる。
 func _end_ritual() -> void:
 	if not started or _ending:
 		return
@@ -134,16 +151,16 @@ func _show_setup(on: bool) -> void:
 	rules_panel.visible = on
 	if on:
 		rules_panel.set_anchors_preset(Control.PRESET_CENTER)
-		rules_panel.offset_left = -310
-		rules_panel.offset_right = 310
-		rules_panel.offset_top = -360
-		rules_panel.offset_bottom = 360
+		rules_panel.offset_left = -360
+		rules_panel.offset_right = 360
+		rules_panel.offset_top = -400
+		rules_panel.offset_bottom = 400
 	else:
 		rules_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		rules_panel.offset_left = 12
-		rules_panel.offset_right = 500
-		rules_panel.offset_top = 78
-		rules_panel.offset_bottom = 714
+		rules_panel.offset_right = 576
+		rules_panel.offset_top = 88
+		rules_panel.offset_bottom = 800
 	hud.set_play_ui_visible(not on)
 
 
@@ -201,7 +218,7 @@ func _setup_ui() -> void:
 	inspector = preload("res://scripts/ui/inspector.gd").new()
 	inspector.world = world
 	inspector.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	inspector.offset_left = -346
+	inspector.offset_left = -396
 	inspector.offset_right = -12
 	inspector.offset_top = 12
 	inspector.offset_bottom = -12
@@ -212,9 +229,10 @@ func _setup_ui() -> void:
 	roster.world = world
 	roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	roster.offset_left = 12
-	roster.offset_right = 452
-	roster.offset_top = 78
-	roster.offset_bottom = 474
+	# 持ち物の列に名前が入るので、品目が増えても「いま何をしているか」が潰れない幅
+	roster.offset_right = 620
+	roster.offset_top = 88
+	roster.offset_bottom = 540
 	roster.visible = false
 	hud.add_child(roster)
 	hud.roster_panel = roster
@@ -225,10 +243,17 @@ func _setup_ui() -> void:
 	matrix.world = world
 	matrix.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	matrix.offset_left = 12
-	matrix.offset_right = 620
-	matrix.offset_top = 78
-	matrix.offset_bottom = 72
+	matrix.offset_right = 716
+	matrix.offset_top = 88
+	matrix.offset_bottom = 82
 	matrix.closed.connect(hud.close_panels)
+	# 表のマスは個人UIへの入口。値はあちらで読ませる（表は眺めるための面）
+	matrix.pair_requested.connect(func(from_id: int, to_id: int) -> void:
+		var v = world.villager_by_id(from_id)
+		if v == null:
+			return
+		_select(v, true)
+		inspector.focus_pair(to_id))
 	matrix.visible = false
 	hud.add_child(matrix)
 	hud.matrix_panel = matrix
@@ -237,26 +262,37 @@ func _setup_ui() -> void:
 	rules.world = world
 	rules.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	rules.offset_left = 12
-	rules.offset_right = 484
-	rules.offset_top = -330
-	rules.offset_bottom = 330
+	rules.offset_right = 560
+	rules.offset_top = -380
+	rules.offset_bottom = 380
 	var dbg = preload("res://scripts/ui/debug_panel.gd").new()
 	dbg.world = world
 	dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	dbg.offset_left = 12
-	dbg.offset_right = 392
-	dbg.offset_top = 78
-	dbg.offset_bottom = 394
+	dbg.offset_right = 452
+	dbg.offset_top = 88
+	dbg.offset_bottom = 440
 	dbg.closed.connect(hud.close_panels)
 	dbg.visible = false
 	hud.add_child(dbg)
 	hud.debug_panel = dbg
 
+	var opt = preload("res://scripts/ui/option_panel.gd").new()
+	opt.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	opt.offset_left = 12
+	opt.offset_right = 440
+	opt.offset_top = 88
+	opt.offset_bottom = 214
+	opt.closed.connect(hud.close_panels)
+	opt.end_requested.connect(_ask_end)
+	opt.visible = false
+	hud.add_child(opt)
+	hud.option_panel = opt
+
 	hud.add_child(rules)
 	hud.rules_panel = rules
 	rules_panel = rules
 	rules.started.connect(_begin_ritual)
-	rules.ended.connect(_end_ritual)
 	rules.closed.connect(hud.close_panels)
 
 	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。

@@ -57,8 +57,7 @@ const TARGETS := {
 	"move": {
 		"anywhere": {"label": "適当な場所", "duration": 0.8, "reach": -1.0},
 		"toward": {"label": "誰かのそば", "duration": 0.4, "reach": -1.0},
-		"away": {"label": "誰かから離れて", "duration": 0.4, "reach": -1.0},
-		"home": {"label": "自分の家", "duration": 0.4, "reach": -1.0},
+		"mine": {"label": "自分のところ", "duration": 0.4, "reach": -1.0},
 		"board": {"label": "掲示板", "duration": 0.4, "reach": -1.0},
 	},
 	"talk": {
@@ -135,14 +134,13 @@ const ART_LABEL := {
 	"well": "井戸", "tower": "塔",
 }
 
-## 建物の色。建てるものを作った順に上から割り当てる（家は建てた人の色になる）。
+## 建物の色。建てるものを作った順に上から割り当てる。
+## 世界の上に建ったものは**持ち主の色**になるので、ここが使われるのは
+## まだ誰も建てていないとき（つくりかたタブの絵）と、持ち主のないもの（神が建てたもの）。
 const BUILDING_COLORS := [
 	Color(0.78, 0.36, 0.32), Color(0.55, 0.62, 0.82), Color(0.72, 0.66, 0.44),
 	Color(0.48, 0.68, 0.58), Color(0.74, 0.55, 0.70), Color(0.62, 0.60, 0.58),
 ]
-
-## 家だけは建てた人のもので、一人に一軒。それ以外の建物は村のもので、村に一つ。
-const HOUSE := "house"
 
 var parameters: Array = []
 var recipes: Array = []
@@ -170,9 +168,10 @@ func _default_recipes() -> void:
 	]
 
 
+## 家も、ただの「建てるもの」の1つ。建てた人のものになるが、何軒建つかは決まっていない。
 func _default_buildings() -> void:
 	buildings = [
-		{"id": HOUSE, "label": "家", "art": "house"},
+		{"id": "b1", "label": "家", "art": "house"},
 	]
 
 
@@ -230,7 +229,6 @@ func building_art(id: String) -> String:
 	return "house" if b == null else String(b["art"])
 
 
-## 建物の色。家は建てた人の色になるので、ここは使われない。
 func building_color(id: String) -> Color:
 	for i in range(buildings.size()):
 		if String(buildings[i]["id"]) == id:
@@ -335,7 +333,9 @@ func _make_villager(i: int) -> Dictionary:
 		"color": PALETTE[i % PALETTE.size()],
 		"quirk": p.quirk,
 		"axes": {"ei": p.ei, "sn": p.sn, "tf": p.tf, "jp": p.jp},
-		"items": {"food": randi_range(0, 2)},
+		# 手ぶらで始まる。神が握らせておく欄は作らない——
+		# 何を持つかはその人が世界から取ってくることで決まる。
+		"items": {},
 	}
 
 
@@ -582,7 +582,8 @@ func remove_param(id: String) -> void:
 ##   使う … 世界にある物と持ち物（同じもの）＋ 建物
 ##          そこに在るのを使うのか手の中のを使うのかは、候補を作るときに分かれる
 ##   作る … つくりかたにあるもの（持てるもの / 建てるもの）
-##   動く … 村にある建物のぶんだけ行き先が増える（自分の家は元からある）
+##   動く … 建てられるものぶんだけ行き先が増える（同じものが何軒あっても、いちばん近いところへ）。
+##          「自分のところ」は元からある行き先で、自分が建てたもののうち近いところ
 func targets_of(kind: String) -> Dictionary:
 	var out := {}
 	match kind:
@@ -599,8 +600,6 @@ func targets_of(kind: String) -> Dictionary:
 		"move":
 			out = TARGETS["move"].duplicate(true)
 			for b in buildings:
-				if String(b["id"]) == HOUSE:
-					continue  # 自分の家 は元からある
 				out["go:%s" % String(b["id"])] = _target(String(b["label"]), 0.4, -1.0)
 		_:
 			return TARGETS.get(kind, {})

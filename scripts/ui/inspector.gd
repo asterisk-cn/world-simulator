@@ -116,31 +116,22 @@ func _build_header() -> void:
 	_have.add_theme_constant_override("v_separation", UIKit.GAP_S)
 	_body.add_child(_have)
 
-	# この村人について分単位で変わるのはここだけ。パネルで一番強くする。
-	UIKit.spacer(_body, UIKit.HAIR)
-	var now := UIKit.card(Color(0.87, 0.81, 0.68), UIKit.PAD_S)
-	_body.add_child(now)
-	var now_box := VBoxContainer.new()
-	now_box.add_theme_constant_override("separation", UIKit.HAIR)
-	UIKit.body_of(now).add_child(now_box)
-	now_box.add_child(UIKit.label("いま", UIKit.FS_NOTE, UIKit.TEXT_DIM))
-	_now = UIKit.wrapped(now_box, "", UIKit.FS_HEAD, UIKit.TEXT)
+	# この村人について分単位で変わるのはここだけ。**強さは字の段が担う。**
+	# 面で囲って地の色を変えていたが、囲いは「別の物体が乗っている」ことを言う形で、
+	# ここで言いたいのは「いちばん読んでほしい一言」だった。
+	UIKit.spacer(_body, UIKit.GAP)
+	_body.add_child(UIKit.label("いま", UIKit.FS_NOTE, UIKit.TEXT_DIM))
+	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
 
 
 ## 性格は始まりに決まったまま動かないので、組み立てるだけで差し替えは要らない。
 ##
-## **同じ紙の中は揃える。** 素の行を地の上に並べていたので、
-## 下の胸のうち（束の紙の中に、罫で区切った行）と地も行の間隔も名前の欄も違っていて、
-## 章が変わるたびに読み方を切り替えることになっていた。
-## 紙が違えば（決める面と見る面）揃えなくてよいが、1枚の中は同じ文法で並べる。
+## **同じ紙の中は同じ文法で並べる。** 章（見出し）→ 罫で区切った行、で全部揃える。
+## 面で囲うのは「紙の上に別の物体が乗っている」ときだけ。
 func _build_personality() -> void:
 	UIKit.heading(_body, "性格",
 		"MBTIの4軸。ここから振る舞いは導かれない。\nこの人はこういう人だ、と渡すための素。")
-	var card := UIKit.card()
-	_body.add_child(card)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 0)
-	UIKit.body_of(card).add_child(rows)
+	var rows := UIKit.rows(_body)
 
 	var first := true
 	for a in Personality.AXES:
@@ -156,32 +147,20 @@ func _build_personality() -> void:
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
 	UIKit.heading(_body, "胸のうち",
-		"一人につき1つ持つ言葉。0〜100。\n束と並びは「この世界の言葉」で決めたまま。")
+		"一人につき1つ持つ言葉。0〜100。\n並びは「この世界の言葉」で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
-	for cat in Schema.categories_in(Schema.SCOPE_SELF):
-		var col := Schema.category_color(String(cat))
-		var parts := UIKit.category_card(_body, col)
-		(parts[0] as HBoxContainer).add_child(
-			UIKit.read_only(String(cat), UIKit.FS_SUB, col.darkened(0.28)))
-		var rows: VBoxContainer = parts[1]
-
-		var first := true
-		for d in Schema.self_params():
-			if String(d["category"]) != String(cat):
-				continue
-			if not first:
-				UIKit.hairline(rows)
-			first = false
-			var pid := String(d["id"])
-			# ここに先頭の欄（`list_row` のガター）は置かない。
-			# 揃えたいのは「この世界の言葉」の中——同じ一覧が並ぶ紙の中だけで、
-			# **見る面は見る面の都合で決める。** 印は積み木の色が担っているので
-			# 先頭に置くものが無く、空の欄は狭い紙の幅を 33px 削るだけになる。
-			_self_bars[pid] = UIKit.bar_row(UIKit.row_pad(rows), String(d["label"]),
-				subject.params.get_v(pid),
-				float(d["min"]), float(d["max"]), Schema.param_color(pid))
+	var rows := UIKit.rows(_body)
+	var first := true
+	for d in Schema.self_params():
+		if not first:
+			UIKit.hairline(rows)
+		first = false
+		var pid := String(d["id"])
+		_self_bars[pid] = UIKit.bar_row(UIKit.row_pad(rows), String(d["label"]),
+			subject.params.get_v(pid),
+			float(d["min"]), float(d["max"]), Schema.param_color(pid))
 
 
 func _build_pairs() -> void:
@@ -192,31 +171,32 @@ func _build_pairs() -> void:
 		_body.add_child(UIKit.label("まだ誰とも会っていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
 
+	var first := true
 	for oid in subject.pairs.keys():
 		var target_id := int(oid)
 		var other = world.villager_by_id(target_id)
 		if other == null:
 			continue
 
-		var card := UIKit.card()
-		_body.add_child(card)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", UIKit.GAP_S)
-		UIKit.body_of(card).add_child(box)
+		# 相手ごとに囲わない。**折りたたみの見出し行そのものが区切り**になる。
+		if not first:
+			UIKit.hairline(_body)
+		first = false
 
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", UIKit.GAP_S)
-		box.add_child(head)
+		_body.add_child(head)
 
 		# 人数ぶん並ぶと長いので、相手ごとに畳んでおく
 		var body := VBoxContainer.new()
-		body.add_theme_constant_override("separation", UIKit.HAIR)
+		body.add_theme_constant_override("separation", 0)
 		body.visible = _opened.get(target_id, false)
 
 		var fold := Button.new()
 		fold.text = ("▼ " if body.visible else "▶ ") + String(other.vname)
 		fold.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		fold.flat = true
+		fold.add_theme_font_size_override("font_size", UIKit.FS_SUB)
 		fold.add_theme_color_override("font_color", other.color.darkened(0.38))
 		fold.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fold.custom_minimum_size = Vector2(0, UIKit.ROW_H)
@@ -228,14 +208,18 @@ func _build_pairs() -> void:
 		head.add_child(jump)
 		jump.pressed.connect(_jump_to.bind(target_id))
 		_pair_cards[target_id] = {
-			"card": card, "body": body, "fold": fold, "name": String(other.vname),
+			"card": head, "body": body, "fold": fold, "name": String(other.vname),
 		}
 
-		box.add_child(body)
+		_body.add_child(body)
 		var bars := {}
+		var frow := true
 		for d in Schema.pair_params():
+			if not frow:
+				UIKit.hairline(body)
+			frow = false
 			var pid := String(d["id"])
-			bars[pid] = UIKit.bar_row(body, String(d["label"]),
+			bars[pid] = UIKit.bar_row(UIKit.row_pad(body), String(d["label"]),
 				subject.pair_to(target_id).get_v(pid),
 				float(d["min"]), float(d["max"]), Schema.param_color(pid))
 		_pair_bars[target_id] = bars

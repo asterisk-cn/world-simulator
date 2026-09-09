@@ -372,31 +372,17 @@ static func card(bg: Color = BG_SOFT, pad: int = PAD_S) -> PanelContainer:
 	return p
 
 
-## 束（カテゴリ）の紙。■と名前の見出しを持ち、中の行を髪の毛ほどの罫で区切る。
-## 言葉を決める場（この世界の言葉）と、値を見る場（胸のうち）で同じ形にする。
-## 束の名前が場によって違うもの（開始前は書き換えられる欄）になるので、
-## 見出しの行と、行を並べる箱の2つを返して中身は呼ぶ側に任せる。
-static func category_card(parent: Node, col: Color) -> Array:
-	var holder := card()
-	parent.add_child(holder)
+## 罫で区切った行を並べる箱。**角丸の面（箱）は持たない。**
+##
+## 束・村人・つくりかたの一覧・性格・間柄の相手ごとを、どれも角丸の面で囲っていた。
+## 紙の上に紙、その中に紙……と重なって、区分けのはずの面が物体として並んでいた。
+## **箱は「紙の上に別の物体が乗っている」ときだけ**（貼り紙・入力の一枚・確認の一枚）。
+## 同じ紙の上の区分けは、見出し（`heading`）と罫（`hairline`）と余白でやる。
+static func rows(parent: Node) -> VBoxContainer:
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", GAP_S)
-	body_of(holder).add_child(box)
-
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", GAP_S)
-	box.add_child(head)
-	# ■ の字ではなく描いた四角。glyph は字の基線に引かれて、隣の名前と中心が合わない
-	var mark := dot(col.darkened(0.28), true)
-	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(mark)
-
-	box.add_child(HSeparator.new())
-
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 0)
-	box.add_child(rows)
-	return [head, rows]
+	box.add_theme_constant_override("separation", 0)
+	parent.add_child(box)
+	return box
 
 
 ## 罫で区切られた一覧の1行ぶんの器。行と罫が触れていると帳簿の罫線に見える。
@@ -723,9 +709,10 @@ static func pole_row(parent: Node, left: String, right: String, value: float) ->
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(row)
 
+	# 名前は左寄せ。すぐ下に左寄せの一覧（胸のうち）が続くので、
+	# ここだけ右寄せにすると、同じ紙の中で2つの字下げができる
 	var l := label(left, FS_NOTE, TEXT if value < 0.45 else TEXT_DIM)
 	l.custom_minimum_size = Vector2(NAME_W, 0)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(l)
 
 	var pips := PipBar.new()
@@ -748,9 +735,9 @@ static func pole_slider(parent: Node, left: String, right: String, value: float,
 	row.add_theme_constant_override("separation", GAP)
 	parent.add_child(row)
 
+	# 決める側と見る側で同じ形にする（`pole_row` と揃える）
 	var l := label(left, FS_NOTE, TEXT_DIM)
 	l.custom_minimum_size = Vector2(NAME_W, 0)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(l)
 
 	var s := BlockSlider.new()
@@ -777,7 +764,8 @@ static func pole_slider(parent: Node, left: String, right: String, value: float,
 
 ## 読み取り専用の値表示。積み木を並べて見せる。
 static func bar_row(parent: Node, name_text: String, value: float,
-		vmin: float, vmax: float, col: Color, idle: bool = false) -> PipBar:
+		vmin: float, vmax: float, col: Color, idle: bool = false,
+		neg: Color = Schema.PAIR_NEG) -> PipBar:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -792,6 +780,7 @@ static func bar_row(parent: Node, name_text: String, value: float,
 	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(pips)
+	pips.neg = neg
 	pips.setup(value, vmin, vmax, col)
 	# 値だけを入れ替えたい呼び側（インスペクタ）が積み木を持てるように返す。
 	# 面ごと作り直すと、押せるものがカーソルの下で消えて点滅する。

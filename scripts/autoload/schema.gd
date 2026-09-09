@@ -379,17 +379,21 @@ func next_color(from: Color) -> Color:
 # パラメータ
 # ---------------------------------------------------------------------------
 
-## カテゴリの色。カテゴリを作った順に上から割り当てる。
-const CATEGORY_COLORS := [
-	Color(0.92, 0.42, 0.34),
-	Color(0.38, 0.72, 0.96),
-	Color(0.52, 0.84, 0.46),
-	Color(0.55, 0.85, 0.95),
-	Color(1.00, 0.78, 0.40),
-	Color(0.78, 0.62, 0.95),
-	Color(0.95, 0.62, 0.45),
-	Color(0.75, 0.78, 0.82),
-]
+## 言葉の色。**語ごとに色を持たせるのはやめた。**
+##
+## 束（カテゴリ）を消したので、色を割り当てる順番そのものが無くなった。
+## 順番で色相を回しても、胸のうちの9語を暖色に閉じれば色相差が小さすぎて見分けられず、
+## 閉じなければ間柄の色と混ざる。そして**色は人のもの**——
+## 村人の色が世界でもUIでも識別子なので、語からも色を出すと競う。
+##
+## 語が何であるかは常に隣に字で書いてある。色は「どちらの話か」だけを言う。
+const SCOPE_COLORS := {
+	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## 胸のうち。土の色。「どれだけ」の話
+	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## 間柄の正の側。「どちらへ」の話
+}
+
+## 間柄の負の側。好感の裏の嫌悪、敬意の裏の侮り
+const PAIR_NEG := Color(0.74, 0.26, 0.22)
 
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
@@ -404,30 +408,30 @@ const SCOPE_RANGE := {
 }
 
 
-func make_param(id: String, label: String, scope: String, category: String) -> Dictionary:
+func make_param(id: String, label: String, scope: String) -> Dictionary:
 	var r: Array = SCOPE_RANGE.get(scope, [0.0, 100.0])
 	return {
-		"id": id, "label": label, "scope": scope, "category": category,
+		"id": id, "label": label, "scope": scope,
 		"min": float(r[0]), "max": float(r[1]),
 	}
 
 
 func _default_parameters() -> void:
 	parameters = [
-		make_param("hunger", "空腹", SCOPE_SELF, "生存"),
-		make_param("sleep", "睡眠", SCOPE_SELF, "生存"),
-		make_param("safety", "不安", SCOPE_SELF, "生存"),
-		make_param("home", "居住", SCOPE_SELF, "生存"),
-		make_param("boredom", "退屈", SCOPE_SELF, "好奇心"),
-		make_param("stagnation", "停滞", SCOPE_SELF, "好奇心"),
-		make_param("loneliness", "孤独", SCOPE_SELF, "共同体"),
-		make_param("crowding", "過密", SCOPE_SELF, "共同体"),
-		make_param("unfairness", "不公平", SCOPE_SELF, "共同体"),
+		make_param("hunger", "空腹", SCOPE_SELF),
+		make_param("sleep", "睡眠", SCOPE_SELF),
+		make_param("safety", "不安", SCOPE_SELF),
+		make_param("home", "居住", SCOPE_SELF),
+		make_param("boredom", "退屈", SCOPE_SELF),
+		make_param("stagnation", "停滞", SCOPE_SELF),
+		make_param("loneliness", "孤独", SCOPE_SELF),
+		make_param("crowding", "過密", SCOPE_SELF),
+		make_param("unfairness", "不公平", SCOPE_SELF),
 
-		make_param("affinity", "好感", SCOPE_PAIR, "親しみ"),
-		make_param("trust", "信頼", SCOPE_PAIR, "親しみ"),
-		make_param("respect", "敬意", SCOPE_PAIR, "評価"),
-		make_param("debt", "負い目", SCOPE_PAIR, "評価"),
+		make_param("affinity", "好感", SCOPE_PAIR),
+		make_param("trust", "信頼", SCOPE_PAIR),
+		make_param("respect", "敬意", SCOPE_PAIR),
+		make_param("debt", "負い目", SCOPE_PAIR),
 	]
 
 
@@ -470,37 +474,16 @@ func param_label(id: String) -> String:
 	return id if d == null else String(d["label"])
 
 
-## 色はカテゴリで決まる。同じカテゴリの中では少しずつ明るさをずらして見分ける。
-func category_color(cat: String) -> Color:
-	var all := all_categories()
-	var i := all.find(cat)
-	if i < 0:
-		return Color(0.75, 0.78, 0.82)
-	return CATEGORY_COLORS[i % CATEGORY_COLORS.size()]
-
-
-func all_categories() -> Array:
-	var out: Array = []
-	for d in parameters:
-		var c := String(d["category"])
-		if not out.has(c):
-			out.append(c)
-	return out
-
-
+## 色はスコープで決まる。語ごとの色は持たない。
 func param_color(id: String) -> Color:
 	var d = param_def(id)
 	if d == null:
-		return Color.WHITE
-	var cat := String(d["category"])
-	var base := category_color(cat)
-	var n := 0
-	for other in parameters:
-		if String(other["id"]) == id:
-			break
-		if String(other["category"]) == cat:
-			n += 1
-	return base.lightened(minf(float(n) * 0.14, 0.42))
+		return SCOPE_COLORS[SCOPE_SELF]
+	return SCOPE_COLORS.get(String(d["scope"]), SCOPE_COLORS[SCOPE_SELF])
+
+
+func scope_color(scope: String) -> Color:
+	return SCOPE_COLORS.get(scope, SCOPE_COLORS[SCOPE_SELF])
 
 
 func param_min(id: String) -> float:
@@ -513,54 +496,15 @@ func param_max(id: String) -> float:
 	return 100.0 if d == null else float(d["max"])
 
 
-func categories_in(scope: String) -> Array:
-	var out: Array = []
-	for d in params_in(scope):
-		var c := String(d["category"])
-		if not out.has(c):
-			out.append(c)
-	return out
-
-
-## パラメータはカテゴリの中に足す。個々にカテゴリを選ばせない。
-func add_param(scope: String, category: String, label: String = "新パラメータ") -> Dictionary:
+## 言葉を1つ足す。属するのはスコープだけ（胸のうちか、間柄か）。
+func add_param(scope: String, label: String = "新しいことば") -> Dictionary:
 	var taken: Array = []
 	for d in parameters:
 		taken.append(String(d["id"]))
-	var p := make_param(_unique_id("p", taken), label, scope, category)
+	var p := make_param(_unique_id("p", taken), label, scope)
 	parameters.append(p)
 	parameters_changed.emit()
 	return p
-
-
-## 空のカテゴリは持てないので、カテゴリを作るときは中身を1つ添える
-func add_category(scope: String) -> String:
-	var taken := categories_in(scope)
-	var i := 1
-	while taken.has("新カテゴリ%d" % i):
-		i += 1
-	var cat := "新カテゴリ%d" % i
-	add_param(scope, cat)
-	return cat
-
-
-func remove_category(scope: String, cat: String) -> void:
-	var kept: Array = []
-	for d in parameters:
-		if String(d["scope"]) == scope and String(d["category"]) == cat:
-			continue
-		kept.append(d)
-	parameters = kept
-	parameters_changed.emit()
-
-
-func rename_category(scope: String, old_name: String, new_name: String) -> void:
-	if new_name.strip_edges() == "":
-		return
-	for d in parameters:
-		if String(d["scope"]) == scope and String(d["category"]) == old_name:
-			d["category"] = new_name
-	parameters_changed.emit()
 
 
 func remove_param(id: String) -> void:

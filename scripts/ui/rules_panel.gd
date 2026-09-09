@@ -197,7 +197,7 @@ func _clear(box: VBoxContainer) -> void:
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
 	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜100。",
-	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −100〜100。",
+	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −100〜100。\n真ん中が何とも思っていないところ。",
 }
 
 func _rebuild_params() -> void:
@@ -207,65 +207,22 @@ func _rebuild_params() -> void:
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
-		# 束（カテゴリ）より一段上の区分。説明は見出しの横の「?」へ。
+		# 束（カテゴリ）はやめた。区分はスコープの2つだけで、
+		# その中は罫で区切った一続きの一覧。
 		UIKit.heading(_param_box, String(Schema.SCOPE_LABEL[sc]), SCOPE_TIP[sc])
+		var rows := UIKit.rows(_param_box)
 
-		for cat in Schema.categories_in(sc):
-			_build_category(sc, String(cat))
+		var first := true
+		for d in Schema.params_in(sc):
+			if not first:
+				UIKit.hairline(rows)
+			first = false
+			_build_param(rows, d)
 
 		if editable:
-			UIKit.add_button(_param_box, "＋ 束を増やす", _add_category.bind(sc))
-		UIKit.spacer(_param_box, UIKit.PAD)
-
-
-func _build_category(scope: String, cat: String) -> void:
-	var col := Schema.category_color(cat)
-	var parts := UIKit.category_card(_param_box, col)
-	var head: HBoxContainer = parts[0]
-	var inner: VBoxContainer = parts[1]
-
-	if editable:
-		head.add_child(_flat_edit(cat, col, scope))
-	else:
-		head.add_child(UIKit.read_only(cat, UIKit.FS_SUB, col.darkened(0.28)))
-	if _can_delete():
-		UIKit.icon_button(head, "✕", "%s を消す" % cat,
-			_del_category.bind(scope, cat), 26, UIKit.ROW_H, UIKit.FS_SUB)
-
-	var first := true
-	for d in Schema.params_in(scope):
-		if String(d["category"]) != cat:
-			continue
-		if not first:
-			UIKit.hairline(inner)
-		first = false
-		_build_param(inner, d)
-
-	if editable:
-		UIKit.spacer(inner, UIKit.HAIR)
-		UIKit.add_button(inner, "＋ ことばを増やす", _add_param.bind(scope, cat))
-
-
-## 見出し用の、枠を消した入力欄
-func _flat_edit(cat: String, col: Color, scope: String) -> LineEdit:
-	var le := LineEdit.new()
-	le.text = cat
-	le.add_theme_font_size_override("font_size", UIKit.FS_SUB)
-	le.add_theme_color_override("font_color", col.darkened(0.28))
-	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(80, UIKit.ROW_H)
-	var flat := StyleBoxFlat.new()
-	flat.bg_color = Color(0, 0, 0, 0)
-	flat.content_margin_left = UIKit.FIELD_INSET
-	le.add_theme_stylebox_override("normal", flat)
-	var focused := StyleBoxFlat.new()
-	focused.bg_color = Color(1, 1, 1, 0.06)
-	focused.set_corner_radius_all(3)
-	focused.content_margin_left = UIKit.FIELD_INSET
-	le.add_theme_stylebox_override("focus", focused)
-	le.text_submitted.connect(_rename_category.bind(scope, cat))
-	le.focus_exited.connect(func() -> void: _rename_category(le.text, scope, cat))
-	return le
+			UIKit.spacer(rows, UIKit.HAIR)
+			UIKit.add_button(rows, "＋ ことばを増やす", _add_param.bind(sc))
+		UIKit.spacer(_param_box, UIKit.PAD_L)
 
 
 func _build_param(box: Node, def: Dictionary) -> void:
@@ -292,24 +249,11 @@ func _build_param(box: Node, def: Dictionary) -> void:
 
 	if _can_delete():
 		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
-			_del_param.bind(pid), 26, UIKit.ROW_H, UIKit.FS_SUB)
+			_del_param.bind(pid), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
 
-func _add_category(scope: String) -> void:
-	Schema.add_category(scope)
-
-
-func _del_category(scope: String, cat: String) -> void:
-	Schema.remove_category(scope, cat)
-
-
-func _rename_category(new_name: String, scope: String, old_name: String) -> void:
-	if new_name != old_name:
-		Schema.rename_category(scope, old_name, new_name)
-
-
-func _add_param(scope: String, cat: String) -> void:
-	Schema.add_param(scope, cat)
+func _add_param(scope: String) -> void:
+	Schema.add_param(scope)
 
 
 func _del_param(pid: String) -> void:
@@ -329,12 +273,9 @@ func _rebuild_world() -> void:
 		return
 	_clear(_world_box)
 
-	# 他のタブと同じく1枚の紙にまとめる。ここだけ素の行が並ぶと設定画面に戻ってしまう。
-	var card := UIKit.card()
-	_world_box.add_child(card)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 0)
-	UIKit.body_of(card).add_child(rows)
+	# 他のタブと同じ形——罫で区切った一続きの一覧
+	UIKit.heading(_world_box, "流れかた", "世界そのものの目盛り。\nつまみは10段で、積み木の切れ目がそのまま値になる。")
+	var rows := UIKit.rows(_world_box)
 
 	var first := true
 	for k in SimConfig.PARAM_DEF:
@@ -357,7 +298,7 @@ func _rebuild_world() -> void:
 			row.add_child(UIKit.label(_world_text(SimConfig.p(key), key),
 				UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
-	UIKit.spacer(_world_box, UIKit.PAD)
+	UIKit.spacer(_world_box, UIKit.PAD_L)
 
 
 ## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
@@ -392,22 +333,30 @@ func _rebuild_people() -> void:
 		_people_list()
 		return
 
+	var first := true
 	for h in Schema.villagers:
+		# 人と人のあいだは、罫1本と大きめの余白。囲うより軽い区切りで足りる
+		if not first:
+			UIKit.spacer(_people_box, UIKit.GAP)
+			UIKit.hairline(_people_box)
+			UIKit.spacer(_people_box, UIKit.GAP)
+		first = false
 		_build_person(h)
 
 	if Schema.villagers.size() < Schema.MAX_VILLAGERS:
-		UIKit.spacer(_people_box, UIKit.GAP_S)
+		UIKit.spacer(_people_box, UIKit.PAD_L)
 		UIKit.add_button(_people_box, "＋ 村人を増やす", _add_villager)
-	UIKit.spacer(_people_box, UIKit.PAD)
+	UIKit.spacer(_people_box, UIKit.PAD_L)
 
 
+## 一人ぶん。**角丸の面で囲わない。**
+## 名前がその人の色を持っているので、囲わなくても人と人の境目は読める。
+## 区切りは罫1本と、次の人までの大きめの余白。
 func _build_person(h: Dictionary) -> void:
 	var hid := String(h["id"])
-	var card := UIKit.card()
-	_people_box.add_child(card)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.GAP_S)
-	UIKit.body_of(card).add_child(box)
+	_people_box.add_child(box)
 
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -426,22 +375,26 @@ func _build_person(h: Dictionary) -> void:
 	var quirk := LineEdit.new()
 	quirk.text = String(h["quirk"])
 	quirk.placeholder_text = "一言でいうと"
-	quirk.custom_minimum_size = Vector2(150, UIKit.ROW_H)
+	quirk.custom_minimum_size = Vector2(180, UIKit.ROW_H)
 	head.add_child(quirk)
 	quirk.text_changed.connect(func(t: String) -> void: h["quirk"] = t)
 
 	if _can_delete() and Schema.villagers.size() > 1:
 		UIKit.icon_button(head, "✕", "%s を消す" % String(h["name"]),
-			_del_villager.bind(hid), 26, UIKit.ROW_H, UIKit.FS_SUB)
-
-	box.add_child(HSeparator.new())
+			_del_villager.bind(hid), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
 	# 性格。見る側（インスペクタ）と同じ積み木・同じ両端の言葉
+	var rows := UIKit.rows(box)
+	var first := true
 	for a in Personality.AXES:
+		if not first:
+			UIKit.hairline(rows)
+		first = false
 		var key := String(a[0])
-		UIKit.pole_slider(box, String(a[2]), String(a[3]),
+		UIKit.pole_slider(UIKit.row_pad(rows), String(a[2]), String(a[3]),
 			float(h["axes"].get(key, 0.5)),
 			func(x: float) -> void: h["axes"][key] = x)
+
 
 ## 色は世界の上での見分けになる。押すと、まだ誰も使っていない色へ移る。
 func _color_swatch(h: Dictionary) -> Button:
@@ -464,14 +417,9 @@ func _color_swatch(h: Dictionary) -> Button:
 	return b
 
 
-## 始まったあとは、誰がいたかを1枚の紙で見るだけ
+## 始まったあとは、誰がいたかを見るだけ
 func _people_list() -> void:
-	var card := UIKit.card()
-	_people_box.add_child(card)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 0)
-	UIKit.body_of(card).add_child(box)
-
+	var box := UIKit.rows(_people_box)
 	var first := true
 	for h in Schema.villagers:
 		if not first:
@@ -484,7 +432,7 @@ func _people_list() -> void:
 		var q := UIKit.label(String(h["quirk"]), UIKit.FS_NOTE, UIKit.TEXT_DIM)
 		q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(q)
-	UIKit.spacer(_people_box, UIKit.PAD)
+	UIKit.spacer(_people_box, UIKit.PAD_L)
 
 
 func _add_villager() -> void:
@@ -516,7 +464,7 @@ func _rebuild_recipes() -> void:
 		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
 		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
 		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。")
-	UIKit.spacer(_recipe_box, UIKit.PAD)
+	UIKit.spacer(_recipe_box, UIKit.PAD_L)
 
 
 ## 作れるもの／建てるもの、どちらも「名前と姿」だけなので同じ形で並べる
@@ -529,11 +477,7 @@ func _things_section(head_text: String, defs: Array, arts: Array, add_text: Stri
 	# ことばタブと同じ、束より一段上の区分
 	UIKit.heading(_recipe_box, head_text, tip)
 
-	var card := UIKit.card()
-	_recipe_box.add_child(card)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 0)
-	UIKit.body_of(card).add_child(rows)
+	var rows := UIKit.rows(_recipe_box)
 
 	var first := true
 	for d in defs:
@@ -559,7 +503,7 @@ func _things_section(head_text: String, defs: Array, arts: Array, add_text: Stri
 			row.add_child(nm)
 		if _can_delete():
 			UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
-				func() -> void: on_del.call(did), 26, UIKit.ROW_H, UIKit.FS_SUB)
+				func() -> void: on_del.call(did), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
 	if editable:
 		UIKit.spacer(rows, UIKit.HAIR)

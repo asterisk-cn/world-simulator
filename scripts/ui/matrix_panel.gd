@@ -1,5 +1,8 @@
 extends PanelContainer
-## 相手ごとのパラメータのマトリクス。行 = 見ている側、列 = 見られている側。
+## 村ぜんたいの関係。行 = 見ている側、列 = 見られている側。
+##
+## 名前は「関係」。章の「あいて」（相手ごとに1つ持つ言葉、`Schema.SCOPE_LABEL`）とは
+## 別のものを指す——あちらは**誰の言葉か**で、ここは**村ぜんたいを眺める表**。
 ##
 ## **内訳はここに出さない。** 同じ数を2か所で見せると、どちらが本体か分からなくなる。
 ## マスは「その人の、その相手についてのところ」への入口で、押すと個人UIへ送る。
@@ -32,7 +35,7 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", UIKit.GAP)
 	UIKit.paper_sheet(self).add_child(root)
 
-	var head := UIKit.window_header(root, "間柄", _close, UIKit.HEAD,
+	var head := UIKit.window_header(root, "関係", _close, UIKit.HEAD,
 		"行が見ている側、列が見られている側。\nA→B と B→A は別の値で、揃わない。\nマスを押すと下に内訳が出る。")
 	_param_opt = UIKit.dropdown([], [], "")
 	_param_opt.custom_minimum_size = Vector2(130, UIKit.ROW_H)
@@ -141,7 +144,7 @@ func rebuild() -> void:
 		rh.custom_minimum_size = Vector2(HEAD_W, CELL_H)
 		_grid.add_child(rh)
 		for b in vs:
-			# 対角は自分自身。**間柄が無いのではなく、そういう値が存在しない。**
+			# 対角は自分自身。**関係が無いのではなく、そういう値が存在しない。**
 			# 他のマスと同じ色を敷いていたので「値0」や「まだ会っていない」に見えていた。
 			# 表に穴を空けて、読むところではないことを地の色で言う。
 			if a.id == b.id:

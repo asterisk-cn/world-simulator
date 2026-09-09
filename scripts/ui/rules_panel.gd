@@ -11,13 +11,13 @@ extends PanelContainer
 ## 手前に来ている紙が名前の並びから抜けるので、読む順も変わってしまった。
 ##
 ## ロール紙なのだから、切り替える装置は要らない。
-## 章を平らに6つ並べ（胸のうち / 間柄 / もちもの / たてもの / 村人 / 詳細設定）、
+## 章を平らに6つ並べ（じぶん / あいて / もちもの / たてもの / 村人 / 詳細）、
 ## 紙の頭の**目次**を押すとその章まで送る。区分けの文法は
 ## すでにある「章の見出し → 罫で区切った行」だけで足りる。
 ##
 ## 「つくりかた」という中間の段も作らない——神が与えるのは名詞だけなので（DESIGN.md §1）、
-## 胸のうち・間柄・もちもの・たてもの はどれも同じ高さの章。
-## 名詞の章は**単語を2列**に割る。1列に積むと9語の胸のうちだけで1画面が終わり、
+## じぶん・あいて・もちもの・たてもの はどれも同じ高さの章。
+## 名詞の章は**単語を2列**に割る。1列に積むと9語のじぶんだけで1画面が終わり、
 ## この世界にどんな言葉があるかを一目で見られない。
 ##
 ## 編集できるのは開始前だけ。始まったあとは前の4章だけが閲覧用に残り、
@@ -57,7 +57,7 @@ var _close_btn: Button
 var _mode_label: Label
 var _delete_mode := false
 
-## 詳細設定を開いているか。組み直しても畳み方は覚えておく
+## 詳細を開いているか。組み直しても畳み方は覚えておく
 var _detail_open := false
 
 ## 章の見出し行。目次の行き先と、いまどの章を見ているかの判定に使う
@@ -75,7 +75,7 @@ func _ready() -> void:
 	# 題の出しかたは、開始前と進行中で変わる（`set_editable`）。
 	#
 	# 開始前は**この紙が主役**なので、題を中央に大きく置く。
-	# 進行中は世界を見るための窓の1枚なので、村人・掲示板・間柄と同じ顔にする。
+	# 進行中は世界を見るための窓の1枚なので、村人・掲示板・関係と同じ顔にする。
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(title_row)
@@ -200,9 +200,9 @@ func _rebuild() -> void:
 	_chapters.clear()
 
 	# 名詞の章は、単語を**2列**に割る（`UIKit.two_columns`）
-	_chapter("胸のうち", SCOPE_TIP[Schema.SCOPE_SELF])
+	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]), SCOPE_TIP[Schema.SCOPE_SELF])
 	_params_of(Schema.SCOPE_SELF)
-	_chapter("間柄", SCOPE_TIP[Schema.SCOPE_PAIR])
+	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]), SCOPE_TIP[Schema.SCOPE_PAIR])
 	_params_of(Schema.SCOPE_PAIR)
 
 	_chapter("もちもの",
@@ -221,7 +221,7 @@ func _rebuild() -> void:
 		_chapter("村人",
 			"この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。")
 		_people()
-		# 目盛りは普段いじらないので、畳んでおく（`詳細設定`）
+		# 目盛りは普段いじらないので、畳んでおく（`詳細`）
 		_detail()
 
 	UIKit.spacer(_body, UIKit.PAD_L)
@@ -557,19 +557,21 @@ func _del_villager(hid: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# 詳細設定（世界の目盛り）
+# 詳細（世界の目盛り）
 #
 # 「流れかた」と呼んでいたが、何の話なのか読めなかった。
 # 1日の長さや歩く速さは、この世界の**言葉ではなく目盛り**なので、
-# 名前も設定の言い方でいい。**普段はいじらないので、畳んでおく。**
+# 名前も素っ気なくていい。ただし「設定」は付けない——
+# **設定ダイアログの言葉を使わない**のがこの作品の決めごと（DESIGN.md §9）。
+# **普段はいじらないので、畳んでおく。**
 # ---------------------------------------------------------------------------
 
 func _detail() -> void:
-	var body := UIKit.fold_heading(_body, "詳細設定",
+	var body := UIKit.fold_heading(_body, "詳細",
 		"世界そのものの目盛り。\nつまみは10段で、積み木の切れ目がそのまま値になる。\n"
 		+ "始まったあとはオプションから触る。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
-	_chapters.append({"name": "詳細設定", "row": body.get_meta("head_row")})
+	_chapters.append({"name": "詳細", "row": body.get_meta("head_row")})
 	_world(body)
 	UIKit.spacer(_body, UIKit.PAD_L)
 

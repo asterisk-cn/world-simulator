@@ -100,7 +100,7 @@ func _ask_end() -> void:
 	SimClock.paused = true
 	var ask = preload("res://scripts/ui/confirm_popup.gd").new()
 	ask.setup("本当に終了しますか？",
-		"この村はここで終わり、言葉のところへ戻る。記録も間柄も残らない。", "終了する")
+		"この村はここで終わり、設計図のところへ戻る。記録も関係も残らない。", "終了する")
 	# 実行中に足す面なので、テーマは自分で持たせる（CanvasLayer は伝えてくれない）
 	ask.theme = SimConfig.ui_theme
 	hud.add_child(ask)
@@ -381,7 +381,7 @@ func _try_select(world_pos: Vector2) -> void:
 	_select(best)
 
 
-## 一覧や間柄から選んだときは、世界の側でもその村人へ寄る。
+## 一覧や関係の表から選んだときは、世界の側でもその村人へ寄る。
 ## パネルの数字と世界の姿が繋がらないと、観察する遊びの回路が切れる。
 func _select(v, focus: bool = false) -> void:
 	if selected != null and is_instance_valid(selected):

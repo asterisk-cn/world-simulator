@@ -146,8 +146,8 @@ func _build_personality() -> void:
 ## 束は、開始前に言葉を決めた紙と同じ形で見せる。
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
-	UIKit.heading(_body, "胸のうち",
-		"一人につき1つ持つ言葉。0〜100。\n並びは「この世界の言葉」で決めたまま。")
+	UIKit.heading(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
+		"一人につき1つ持つ言葉。0〜100。\n並びは設計図で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
@@ -164,7 +164,7 @@ func _build_self_params() -> void:
 
 
 func _build_pairs() -> void:
-	UIKit.heading(_body, "間柄",
+	UIKit.heading(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
 		"相手ひとりごとに持つ値。−100〜100。\n会ったことのある相手だけが並ぶ。")
 
 	if subject.pairs.is_empty():
@@ -350,7 +350,7 @@ func _jump_to(target_id: int) -> void:
 		select_requested.emit(v)
 
 
-## 間柄の表から送られてきたとき。その相手の紙を開いて、そこまで送る。
+## 関係の表から送られてきたとき。その相手のところを開いて、そこまで送る。
 ## 表は眺めるための面なので、値はこちらで読ませる。
 func focus_pair(other_id: int) -> void:
 	_opened[other_id] = true

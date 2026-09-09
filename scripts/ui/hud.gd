@@ -133,7 +133,7 @@ func _build_top_bar() -> void:
 	_win_btns = {
 		"roster": UIKit.toggle_button(row, "村人", "誰がいま何をしているか", _toggle_roster, 62),
 		"board": UIKit.toggle_button(row, "掲示板", "貼り紙を落とす", _toggle_board, 74),
-		"matrix": UIKit.toggle_button(row, "間柄", "誰が誰をどう見ているか", _toggle_matrix, 62),
+		"matrix": UIKit.toggle_button(row, "関係", "誰が誰をどう見ているか", _toggle_matrix, 62),
 		"rules": UIKit.toggle_button(row, "言葉", "この世界の言葉", _toggle_rules, 62),
 		"debug": UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）", _toggle_debug, 88),
 		# 世界の中の話ではないので、見る窓のあとに置く

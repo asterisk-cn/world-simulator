@@ -1,7 +1,14 @@
 extends PanelContainer
-## 設定。この世界に何が存在し、どんな物理で動くかを神が決める。
+## 設計図。この世界に何が存在し、誰がいて、どんな物理で動くかを神が決める。
 ##
-## 編集できるのは開始前だけ。始まったあとは同じ画面が閲覧専用になる。
+## 「この世界の言葉」と呼んでいたが、**言葉だけではない**——
+## 誰を置くかも、世界の目盛りも、ここで決める。図面としてまとめて持つ。
+##
+## タブは **ことば / 村人 / 世界** の3枚。
+## 「つくりかた」は別のタブではなく、**ことばの中の区分**にした（§後述）。
+##
+## 編集できるのは開始前だけ。始まったあとは「ことば」の1枚だけが閲覧用に残り、
+## 村人は村人の窓、世界の目盛りはオプションが持つ（同じものを2か所に置かない）。
 
 signal started
 signal closed
@@ -12,8 +19,7 @@ var editable := true
 var _tabs: TabContainer
 var _people_box: VBoxContainer
 var _head_row: HBoxContainer
-var _param_box: VBoxContainer
-var _recipe_box: VBoxContainer
+var _word_box: VBoxContainer
 var _world_box: VBoxContainer
 var _title: Label
 var _title_lead: Control
@@ -43,7 +49,7 @@ func _ready() -> void:
 	_title_lead = Control.new()
 	_title_lead.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(_title_lead)
-	_title = UIKit.label("この世界の言葉", UIKit.FS_TITLE, UIKit.HEAD)
+	_title = UIKit.label("設計図", UIKit.FS_TITLE, UIKit.HEAD)
 	title_row.add_child(_title)
 	# 何をする場かは題の横の「?」で言う。紙に副題として書き足すと、
 	# 決めるための面の一番上が読み物になる。
@@ -77,29 +83,36 @@ func _ready() -> void:
 	root.add_child(_tabs)
 	_tabs.tab_changed.connect(_on_tab_changed)
 
-	# 決める順に並べる。誰がいるかを決めてから、その世界の流れかたを決める。
-	# 「世界」は数字の面なので、いちばん後ろでいい。
-	_param_box = _make_tab("ことば", "村人が自分と他人について語れる言葉。\nAIに渡す語彙そのものになる。")
-	_recipe_box = _make_tab("つくりかた", "この世界で作れるものと、建てられるもの。")
-	_people_box = _make_tab("村人", "この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。")
-	_world_box = _make_tab("世界", "世界そのものの流れかた。")
+	# 決める順に並べる。何があるかを決め、誰を置くかを決め、最後に流れかたを決める。
+	#
+	# 「つくりかた」を別のタブにしていたが、**あれもことば**だった——
+	# 神が与えるのは名詞だけで（DESIGN.md §1）、
+	# 胸のうち・間柄・もちもの・たてもの はどれも「この世界にある言葉」。
+	# 1枚に4つの区分として並べる。
+	_word_box = _make_tab("ことば",
+		"この世界にある言葉。村人が自分と他人について語れることばと、\n"
+		+ "世界に在れるものの名前。どれもAIに渡す語彙そのものになる。")
+	_people_box = _make_tab("村人",
+		"この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。")
+	_world_box = _make_tab("世界",
+		"世界そのものの流れかた。\n始まったあとはオプションから触る。")
 
 	_start_btn = UIKit.accent_button(root, "この世界を始める", _on_start, UIKit.FS_HEAD)
 	_start_btn.custom_minimum_size = Vector2(0, 46)
 
-	Schema.parameters_changed.connect(_rebuild_params)
-	Schema.recipes_changed.connect(_rebuild_recipes)
-	Schema.buildings_changed.connect(_rebuild_recipes)
+	Schema.parameters_changed.connect(_rebuild_words)
+	Schema.recipes_changed.connect(_rebuild_words)
+	Schema.buildings_changed.connect(_rebuild_words)
 	Schema.villagers_changed.connect(_rebuild_people)
-	_rebuild_params()
-	_rebuild_recipes()
+	_rebuild_words()
 	_rebuild_world()
 	_rebuild_people()
 
 
 func set_editable(on: bool) -> void:
 	editable = on
-	UIKit.set_help(_help_btn, "村人が使える言葉と、この世界にある物と、そこに置く人を決める。\n"
+	_title.text = "設計図" if on else "ことば"
+	UIKit.set_help(_help_btn, "この世界にある言葉と、置く人と、世界の流れかたを決める。\n"
 		+ "始めたあとは、もう変えられない。" if on
 		else "始まった世界の言葉は、もう変えられない。\n見るだけの窓。")
 	_start_btn.visible = on
@@ -110,13 +123,21 @@ func set_editable(on: bool) -> void:
 	_title_lead.visible = on
 	_title.add_theme_font_size_override("font_size",
 		UIKit.FS_TITLE if on else UIKit.FS_HEAD)
+
+	# 進行中は「ことば」の1枚だけ。村人は村人の窓が、世界の目盛りはオプションが持つ。
+	# 同じものを2か所に置くと、どちらが本体か分からなくなる。
+	_tabs.tabs_visible = on
+	for i in [1, 2]:
+		_tabs.set_tab_hidden(i, not on)
+	if not on:
+		_tabs.current_tab = 0
+
 	if not on:
 		_delete_mode = false
 		_delete_btn.set_pressed_no_signal(false)
 		_mode_label.text = ""
 	_update_delete_btn()
-	_rebuild_params()
-	_rebuild_recipes()
+	_rebuild_words()
 	_rebuild_world()
 	_rebuild_people()
 
@@ -134,8 +155,7 @@ func _on_delete_toggled(on: bool) -> void:
 	# 押されていることはボタンの下地（テーマの pressed）が言う。
 	# 色を被せると、押した瞬間だけ別の部品に化ける。
 	_mode_label.text = "消すものを選んでいる" if on else ""
-	_rebuild_params()
-	_rebuild_recipes()
+	_rebuild_words()
 	_rebuild_people()
 
 
@@ -143,7 +163,7 @@ func _on_tab_changed(_i: int) -> void:
 	_update_delete_btn()
 
 
-## 世界タブ（4枚目）には消せるものが無い。隠すと右上のボタンの位置が動いてしまうので、
+## 世界タブ（3枚目）には消せるものが無い。隠すと右上のボタンの位置が動いてしまうので、
 ## 置いたまま効かなくする。
 func _update_delete_btn() -> void:
 	if _delete_btn == null or _tabs == null:
@@ -164,18 +184,19 @@ func _can_delete() -> bool:
 
 
 ## タブの説明はその札のツールチップに持たせる。紙の一番上に1行書くと、
-## 毎回読み飛ばす注記が4枚とも同じ場所に居座る。
+## 毎回読み飛ばす注記が3枚とも同じ場所に居座る。
+##
+## **中身に角丸の面を敷かない。** 選ばれている札の中身は、この紙そのもの。
+## 紙の上にもう1枚紙を置いていたので、ロール紙の中に角丸の箱が残っていた
+## （§9「箱は別の物体が乗っているときだけ」）。
+## 奥の札だけが沈んだ色になり、選ばれた札は紙と地続きになる。
 func _make_tab(tab_name: String, tip: String) -> VBoxContainer:
 	var holder := MarginContainer.new()
 	holder.name = tab_name
-	# 紙を見出しの下へ少し差し込む。ここが空くと札が浮いて、紙の束に見えない
-	# （奥の札は選ばれた札ほど下へ伸びないので、その差を紙側で吸う）
-	holder.add_theme_constant_override("margin_top", -UIKit.HAIR)
+	holder.add_theme_constant_override("margin_top", UIKit.GAP)
 	_tabs.add_child(holder)
 	_tabs.set_tab_tooltip(_tabs.get_tab_count() - 1, tip)
-	var page := PanelContainer.new()
-	holder.add_child(page)
-	return UIKit.scroll_body(UIKit.sheet(page, UIKit.page_style(0), UIKit.PAD_S))
+	return UIKit.scroll_body(holder, UIKit.BG)
 
 
 func _reset_all() -> void:
@@ -194,23 +215,30 @@ func _clear(box: VBoxContainer) -> void:
 # パラメータ
 # ---------------------------------------------------------------------------
 
+## 名前を書く欄の幅。ことば・もちもの・たてもの で同じにする。
+## 区分ごとに幅が違うと、同じ紙に並んでいるのに別の種類のものに見える。
+const WORD_W := 240
+
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
 	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜100。",
 	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −100〜100。\n真ん中が何とも思っていないところ。",
 }
 
-func _rebuild_params() -> void:
-	if _param_box == null:
+## ことばタブ。**胸のうち / 間柄 / もちもの / たてもの** の4区分を1枚に並べる。
+## 神が与えるのは名詞だけなので（DESIGN.md §1）、
+## 「村人が語れることば」と「世界に在れるものの名前」は同じ種類のもの。
+func _rebuild_words() -> void:
+	if _word_box == null:
 		return
-	_clear(_param_box)
+	_clear(_word_box)
 
 	for scope in [Schema.SCOPE_SELF, Schema.SCOPE_PAIR]:
 		var sc := String(scope)
 		# 束（カテゴリ）はやめた。区分はスコープの2つだけで、
 		# その中は罫で区切った一続きの一覧。
-		UIKit.heading(_param_box, String(Schema.SCOPE_LABEL[sc]), SCOPE_TIP[sc])
-		var rows := UIKit.rows(_param_box)
+		UIKit.heading(_word_box, String(Schema.SCOPE_LABEL[sc]), SCOPE_TIP[sc])
+		var rows := UIKit.rows(_word_box)
 
 		var first := true
 		for d in Schema.params_in(sc):
@@ -222,7 +250,18 @@ func _rebuild_params() -> void:
 		if editable:
 			UIKit.spacer(rows, UIKit.HAIR)
 			UIKit.add_button(rows, "＋ ことばを増やす", _add_param.bind(sc))
-		UIKit.spacer(_param_box, UIKit.PAD_L)
+		UIKit.spacer(_word_box, UIKit.PAD_L)
+
+	_things_section("もちもの", Schema.recipes, Schema.CRAFT_ARTS,
+		"＋ もちものを増やす", _add_recipe, _del_recipe, _rename_recipe,
+		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
+		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。")
+	_things_section("たてもの", Schema.buildings, Schema.BUILDING_ARTS,
+		"＋ たてものを増やす", _add_building, _del_building, _rename_building,
+		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
+		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
+		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。")
+	UIKit.spacer(_word_box, UIKit.PAD_L)
 
 
 func _build_param(box: Node, def: Dictionary) -> void:
@@ -236,10 +275,11 @@ func _build_param(box: Node, def: Dictionary) -> void:
 		return
 
 	# 罫線を行いっぱいに伸ばすと、書かれているのに「未記入の書類」に見える。
-	# とりうる幅の列が消えたぶんだけ広げて、右の空きと釣り合わせる。
+	# 幅は `WORD_W` で1か所に決める——同じ紙に4つの一覧が並ぶので、
+	# 欄の幅が区分ごとに違うと、同じ種類のものに見えない。
 	var le := LineEdit.new()
 	le.text = String(def["label"])
-	le.custom_minimum_size = Vector2(240, UIKit.ROW_H)
+	le.custom_minimum_size = Vector2(WORD_W, UIKit.ROW_H)
 	row.add_child(le)
 	le.text_changed.connect(_set_label.bind(def))
 
@@ -290,31 +330,15 @@ func _rebuild_world() -> void:
 		if editable:
 			UIKit.slider_row(row, String(d[3]), SimConfig.p(key),
 				float(d[1]), float(d[2]), SimConfig.step_of(key),
-				_set_world.bind(key), UIKit.WOOD, 150, _world_text.bind(key))
+				_set_world.bind(key), UIKit.WOOD, 150, SimConfig.text_of.bind(key))
 		else:
 			var nm := UIKit.read_only(String(d[3]))
 			nm.custom_minimum_size = Vector2(150, 0)
 			row.add_child(nm)
-			row.add_child(UIKit.label(_world_text(SimConfig.p(key), key),
+			row.add_child(UIKit.label(SimConfig.text_of(SimConfig.p(key), key),
 				UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
 	UIKit.spacer(_world_box, UIKit.PAD_L)
-
-
-## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
-func _world_text(v: float, key: String) -> String:
-	match key:
-		"day_length_sec":
-			return "%d秒" % int(v)
-		"night_starts_at":
-			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
-		"decision_interval":
-			return "%.1f秒" % v
-		"move_speed":
-			return "%.1f歩/秒" % v
-		"summaries_kept":
-			return "%d日" % int(v)
-	return UIKit._fmt(v, 1.0)
 
 
 func _set_world(x: float, key: String) -> void:
@@ -450,23 +474,6 @@ func _del_villager(hid: String) -> void:
 # 何をどれだけ使うかは、作る人が自分の持ち物を見て決める（DESIGN.md §1）。
 # ---------------------------------------------------------------------------
 
-func _rebuild_recipes() -> void:
-	if _recipe_box == null:
-		return
-	_clear(_recipe_box)
-
-	_things_section("持てるもの", Schema.recipes, Schema.CRAFT_ARTS,
-		"＋ つくりかたを増やす", _add_recipe, _del_recipe, _rename_recipe,
-		"名前と姿だけを決める。材料の欄はない。\n"
-		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。")
-	_things_section("建てるもの", Schema.buildings, Schema.BUILDING_ARTS,
-		"＋ 建てるものを増やす", _add_building, _del_building, _rename_building,
-		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
-		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
-		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。")
-	UIKit.spacer(_recipe_box, UIKit.PAD_L)
-
-
 ## 作れるもの／建てるもの、どちらも「名前と姿」だけなので同じ形で並べる
 func _things_section(head_text: String, defs: Array, arts: Array, add_text: String,
 		on_add: Callable, on_del: Callable, on_rename: Callable,
@@ -475,9 +482,9 @@ func _things_section(head_text: String, defs: Array, arts: Array, add_text: Stri
 		return
 
 	# ことばタブと同じ、束より一段上の区分
-	UIKit.heading(_recipe_box, head_text, tip)
+	UIKit.heading(_word_box, head_text, tip)
 
-	var rows := UIKit.rows(_recipe_box)
+	var rows := UIKit.rows(_word_box)
 
 	var first := true
 	for d in defs:
@@ -492,10 +499,12 @@ func _things_section(head_text: String, defs: Array, arts: Array, add_text: Stri
 		if editable:
 			var le := LineEdit.new()
 			le.text = String(def["label"])
-			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			le.custom_minimum_size = Vector2(100, UIKit.ROW_H)
+			le.custom_minimum_size = Vector2(WORD_W, UIKit.ROW_H)
 			row.add_child(le)
 			le.text_changed.connect(func(t: String) -> void: on_rename.call(t, did))
+			var mid := Control.new()
+			mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(mid)
 		else:
 			# 姿は絵が語っているので、名前の横に姿の名を添えない
 			var nm := UIKit.read_only(String(def["label"]))

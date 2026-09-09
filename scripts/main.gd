@@ -271,7 +271,8 @@ func _setup_ui() -> void:
 	dbg.offset_left = 12
 	dbg.offset_right = 452
 	dbg.offset_top = 88
-	dbg.offset_bottom = 440
+	# 丈は中身が決める。枠を先に決めると、下に用のない余白が残る
+	dbg.offset_bottom = 88
 	dbg.closed.connect(hud.close_panels)
 	dbg.visible = false
 	hud.add_child(dbg)
@@ -280,9 +281,9 @@ func _setup_ui() -> void:
 	var opt = preload("res://scripts/ui/option_panel.gd").new()
 	opt.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	opt.offset_left = 12
-	opt.offset_right = 440
+	opt.offset_right = 540
 	opt.offset_top = 88
-	opt.offset_bottom = 214
+	opt.offset_bottom = 88
 	opt.closed.connect(hud.close_panels)
 	opt.end_requested.connect(_ask_end)
 	opt.visible = false

@@ -28,6 +28,23 @@ func step_of(key: String) -> float:
 		return 1.0
 	return float(PARAM_DEF[key][4])
 
+
+## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
+## 開始前（設計図の「世界」）と進行中（オプション）で同じ言い方にする。
+func text_of(v: float, key: String) -> String:
+	match key:
+		"day_length_sec":
+			return "%d秒" % int(v)
+		"night_starts_at":
+			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
+		"decision_interval":
+			return "%.1f秒" % v
+		"move_speed":
+			return "%.1f歩/秒" % v
+		"summaries_kept":
+			return "%d日" % int(v)
+	return "%d" % int(round(v))
+
 var params := {}
 
 ## 日本語表示用フォント（main が起動時にセットする）

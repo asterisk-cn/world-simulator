@@ -157,35 +157,26 @@ static func build_theme(font: Font) -> Theme:
 	th.set_font_size("font_size", "TooltipLabel", FS_NOTE)
 
 	th.set_stylebox("panel", "TabContainer", StyleBoxEmpty.new())
-	# タブは紙の束の見出し。選ばれている紙だけが手前に来て、下の面と地続きになる。
-	# 独立した札にすると、中身とタブが別の部品に見えてしまう。
+	# タブは紙の束の見出し。**選ばれている札は紙と同じ色**で、中身もこの紙そのもの。
+	# 中身に別の面を敷くと、紙の上にもう1枚紙が乗る（§9「箱は物体のときだけ」）。
+	# 奥の札だけを沈めて、後ろに重なっている紙として見せる。
 	var tab_on := StyleBoxFlat.new()
-	tab_on.bg_color = PAGE
+	tab_on.bg_color = BG
 	tab_on.corner_radius_top_left = 8
 	tab_on.corner_radius_top_right = 8
 	tab_on.corner_radius_bottom_left = 0
 	tab_on.corner_radius_bottom_right = 0
-	tab_on.border_color = Color(0.46, 0.33, 0.21, 0.30)
-	tab_on.border_width_left = 1
-	tab_on.border_width_top = 1
-	tab_on.border_width_right = 1
 	tab_on.content_margin_left = 18
 	tab_on.content_margin_right = 18
 	tab_on.content_margin_top = 10
 	tab_on.content_margin_bottom = 7
-	# 下の面の縁を覆って、タブと紙をひと続きに見せる
-	tab_on.expand_margin_bottom = 3
 	th.set_stylebox("tab_selected", "TabContainer", tab_on)
 
 	# 奥の紙は色で沈める。高さを変えて逃がすと、紙どうしのあいだに隙間が空く
 	var tab_off := StyleBoxFlat.new()
-	tab_off.bg_color = Color(0.90, 0.85, 0.76)
+	tab_off.bg_color = Color(0.87, 0.82, 0.72)
 	tab_off.corner_radius_top_left = 8
 	tab_off.corner_radius_top_right = 8
-	tab_off.border_color = Color(0.46, 0.33, 0.21, 0.18)
-	tab_off.border_width_left = 1
-	tab_off.border_width_top = 1
-	tab_off.border_width_right = 1
 	tab_off.content_margin_left = 18
 	tab_off.content_margin_right = 18
 	tab_off.content_margin_top = 10
@@ -193,7 +184,7 @@ static func build_theme(font: Font) -> Theme:
 	th.set_stylebox("tab_unselected", "TabContainer", tab_off)
 
 	var tab_hover := tab_off.duplicate() as StyleBoxFlat
-	tab_hover.bg_color = Color(0.94, 0.90, 0.82)
+	tab_hover.bg_color = Color(0.91, 0.87, 0.77)
 	th.set_stylebox("tab_hovered", "TabContainer", tab_hover)
 	th.set_color("font_selected_color", "TabContainer", HEAD)
 	th.set_color("font_unselected_color", "TabContainer", TEXT_DIM)

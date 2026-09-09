@@ -200,7 +200,8 @@ func _value_color(val: float, lo: float, hi: float) -> Color:
 	if lo < 0.0:
 		if val >= 0.0:
 			return base.lerp(col.darkened(0.10), clampf(val / maxf(hi, 1.0), 0.0, 1.0))
-		return base.lerp(Color(0.74, 0.26, 0.22), clampf(-val / maxf(-lo, 1.0), 0.0, 1.0))
+		# 赤は1か所で決める（`Schema.PAIR_NEG`）。積み木の負の側と同じ色
+		return base.lerp(Schema.PAIR_NEG, clampf(-val / maxf(-lo, 1.0), 0.0, 1.0))
 	return base.lerp(col.darkened(0.10), clampf((val - lo) / maxf(hi - lo, 1.0), 0.0, 1.0))
 
 

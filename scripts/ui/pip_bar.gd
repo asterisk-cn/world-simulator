@@ -17,11 +17,6 @@ var vmin := 0.0
 var vmax := 100.0
 var tint := Color(0.6, 0.6, 0.6)
 
-## 真ん中より下（負の側）を塗る色。間柄は「どちらへ」の話なので、
-## 好感の裏の嫌悪、敬意の裏の侮りが同じ色だと、向きが読めない。
-## 下限が負でないパラメータでは使われない。
-var neg := Color(0.74, 0.26, 0.22)
-
 
 ## 大きさは作る側（`UIKit.bar_row` / `pole_row`）が決める。
 ## ここから UIKit を参照すると UIKit → PipBar → UIKit の輪ができて、
@@ -50,8 +45,9 @@ func _draw() -> void:
 	# 数だけだと、たとえば緑の「孤独」がたくさん並んでいても健やかに見えてしまう。
 	var reach: float = maxf(maxf(origin, 1.0 - origin), 0.001)
 	var amount: float = clampf(absf(t - origin) / reach, 0.0, 1.0)
-	var base := neg if (vmin < 0.0 and t < origin) else tint
-	var fill := base.lightened(0.34 * (1.0 - amount)).darkened(0.22 * amount)
+	# 向きは**どちら側が塗られているか**が言う。負の側に別の色を当てない。
+	# 真ん中から左右へ伸びる形そのものが、もう向きを持っている。
+	var fill := tint.lightened(0.34 * (1.0 - amount)).darkened(0.22 * amount)
 
 	var w := (size.x - GAP * float(PIPS - 1)) / float(PIPS)
 	for i in range(PIPS):

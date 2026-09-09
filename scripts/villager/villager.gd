@@ -40,6 +40,15 @@ var _brain = null
 var _bob := 0.0
 var selected := false
 
+## カーソルが乗っているか。**名前は常に出さない。**
+## 8人ぶんの名札が always 出ていると、世界の上が字で埋まって
+## 積み木の村が見えなくなる。かざしたときと、選んでいるときだけ出す。
+var hovered := false:
+	set(on):
+		if hovered != on:
+			hovered = on
+			queue_redraw()
+
 
 func setup(p_world, p_id: int, p_name: String, p_color: Color, p_cell: Vector2) -> void:
 	world = p_world
@@ -305,7 +314,8 @@ func _do_make(target: String) -> bool:
 		return false  # 持ち物が何も動かないなら、その人は建てなかった
 	var s: Structure = world.add_structure(target, c, id, color)
 	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
-	EventLog.notable("%s が%sを建てた" % [vname, s.label()], s.position, id)
+	EventLog.notable("%s が%sを建てた" % [vname, s.label()],
+		{vname: "v:%d" % id, s.label(): "s:%d" % s.id})
 	return true
 
 
@@ -417,15 +427,16 @@ func _draw() -> void:
 	Iso.draw_block(self, 7.0, 3.5, 11.0, head, up + Vector2(0, -17.0), 3.5)
 
 	# 集まったときが一番見たい瞬間なのに、そこで名前が重なって読めなくなる。
-	# 近くに誰かいるときは段をずらし、選んでいない村人は薄くして譲る。
+	# 近くに誰かいるときは段をずらす。
 	var crowd: int = world.neighbors_within(cell, 2.2, id).size()
 	var tier := float(id % 3) * 9.0 if crowd > 0 else 0.0
-	var alpha := 0.95 if selected else (0.52 if crowd > 0 else 0.78)
 
 	for i in range(_bubbles.size()):
 		_bubbles[i].draw_on(self, Vector2(0, -48 - lift - tier - float(i) * 18.0))
 
-	_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, alpha))
+	# 名前はかざしたときと選んでいるときだけ
+	if selected or hovered:
+		_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, 0.95))
 
 
 ## 世界の上に置く文字。縁取りがないと昼は白飛び、夜は沈んで読めない。

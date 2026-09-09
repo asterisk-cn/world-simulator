@@ -6,9 +6,6 @@ signal entry_added(entry: Dictionary)
 
 const MAX_ENTRIES := 300
 
-## 場所を持たない出来事（夜になった、など）
-const NOWHERE := Vector2(INF, INF)
-
 var _next_id := 1
 
 var entries: Array = []
@@ -21,13 +18,17 @@ func _ready() -> void:
 	echo = OS.get_cmdline_user_args().has("--echo-log")
 
 
-## at / who は「その出来事が世界のどこで、誰に起きたか」。
-## これが無いと、記録を読んでから世界を探すことになり、観察する遊びとして順序が逆になる。
+## **行き先は文の中の名前が持つ。** 以前は「どこで・誰に」を添えて行をまるごと
+## 押せるようにしていたが、行に下線が付くと下線が飾りになった。
+##
+## `marks` は「文の中のこの言葉は、これを指す」。`{"ハル": "v:3", "家": "s:7"}` の形。
+## **書いた側が指し先を言う。** 読む側が名前から探すと、
+## 同じ名前の家が6軒あるとき、どれでもない家に飛ぶ。
 func add(text: String, color: Color = Color(0.28, 0.24, 0.19),
-		at: Vector2 = NOWHERE, who: int = -1) -> void:
+		marks: Dictionary = {}) -> void:
 	var e := {
 		"id": _next_id, "day": SimClock.day, "time": SimClock.clock_text(),
-		"text": text, "color": color, "at": at, "who": who,
+		"text": text, "color": color, "marks": marks,
 	}
 	_next_id += 1
 	if echo:
@@ -46,23 +47,10 @@ func clear() -> void:
 
 
 ## 村の姿が変わった出来事（家が建った、など）
-func notable(text: String, at: Vector2 = NOWHERE, who: int = -1) -> void:
-	add(text, Color(0.72, 0.44, 0.10), at, who)
+func notable(text: String, marks: Dictionary = {}) -> void:
+	add(text, Color(0.72, 0.44, 0.10), marks)
 
 
 ## 村人どうしのあいだで起きた出来事
-func social(text: String, at: Vector2 = NOWHERE, who: int = -1) -> void:
-	add(text, Color(0.18, 0.44, 0.58), at, who)
-
-
-## その出来事に行き先があるか
-static func has_place(e: Dictionary) -> bool:
-	return int(e.get("who", -1)) >= 0 or Vector2(e.get("at", NOWHERE)).x != INF
-
-
-## 記録は古いものから捨てるので、並び位置ではなく id で引く
-func by_id(id: int) -> Dictionary:
-	for e in entries:
-		if int(e["id"]) == id:
-			return e
-	return {}
+func social(text: String, marks: Dictionary = {}) -> void:
+	add(text, Color(0.18, 0.44, 0.58), marks)

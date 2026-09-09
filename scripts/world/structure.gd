@@ -31,6 +31,20 @@ var owner_id: int = -1
 var tint: Color = Color(0.7, 0.7, 0.7)
 var id: int = 0
 
+## カーソルが乗っているか / 選ばれているか。**札は常に出さない。**
+## 建物が並ぶと札が字の壁になって、姿が見えなくなる。
+var hovered := false:
+	set(on):
+		if hovered != on:
+			hovered = on
+			queue_redraw()
+
+var selected := false:
+	set(on):
+		if selected != on:
+			selected = on
+			queue_redraw()
+
 static var _next_id: int = 1
 
 
@@ -119,10 +133,18 @@ func _draw() -> void:
 			Iso.draw_block(self, 40.0, 20.0, 22.0, WALL, center, 6.0)
 			Iso.draw_block(self, 46.0, 23.0, 12.0, tint, center + Vector2(0, -22.0), 6.0)
 
-	# 名前はどれにも立てる。姿だけでは「教会」と「広間」が読み分けられないし、
-	# 同じ姿に神が別の名前をつけられるので、姿からは名前が読めない。
-	# （誰のものかは屋根の色が言うので、札は名前だけを持つ）
-	_name_plate(center)
+	# 選んでいるときは、村人と同じ形の輪を敷地に敷く
+	if selected:
+		for c in footprint():
+			var off := Iso.cell_to_world(Vector2(c)) - position
+			var ring := Iso._shift(Iso.rounded(Iso.diamond(0.98), 6.0), off)
+			draw_polyline(ring + PackedVector2Array([ring[0]]),
+				Color(1, 0.95, 0.5, 0.85), 2.5)
+
+	# 名前はかざしたときと選んでいるときだけ。姿だけでは「教会」と「広間」が
+	# 読み分けられないが、札を常に出すと建物の数だけ字の壁ができる。
+	if hovered or selected:
+		_name_plate(center)
 
 
 ## 姿ごとの背丈。名札を頭の上に出すために使う。

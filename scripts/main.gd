@@ -8,6 +8,9 @@ var hud = null
 var inspector = null
 var selected = null
 
+## いま見ている建物。村人と同時には選べない（見ているものは1つ）
+var selected_building: Structure = null
+
 var rules_panel = null
 var started := false
 
@@ -348,8 +351,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				if event.pressed:
 					_try_select(get_global_mouse_position())
 
-	elif event is InputEventMouseMotion and _panning:
-		camera.position -= event.relative / camera.zoom.x
+	elif event is InputEventMouseMotion:
+		if _panning:
+			camera.position -= event.relative / camera.zoom.x
+		else:
+			_hover_at(get_global_mouse_position())
 
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
@@ -369,6 +375,20 @@ func _try_select(world_pos: Vector2) -> void:
 			hud.open_board()
 			return
 
+	var v = _villager_at(world_pos)
+	if v != null:
+		_select(v)
+		return
+	# 村人が居なければ建物。**建物にも寄れる**（記録の行から飛ぶ先になる）
+	_select_building(world.building_at(_cell_at(world_pos)))
+
+
+func _cell_at(world_pos: Vector2) -> Vector2i:
+	var c := Iso.world_to_cell(world_pos)
+	return Vector2i(roundi(c.x), roundi(c.y))
+
+
+func _villager_at(world_pos: Vector2):
 	var best = null
 	var best_d := 40.0
 	for v in world.villagers:
@@ -378,7 +398,19 @@ func _try_select(world_pos: Vector2) -> void:
 		if d < best_d:
 			best_d = d
 			best = v
-	_select(best)
+	return best
+
+
+## カーソルの下のものに名前を出させる。**名前は常には出ていない。**
+func _hover_at(world_pos: Vector2) -> void:
+	var v = _villager_at(world_pos)
+	var s: Structure = null
+	if v == null:
+		s = world.building_at(_cell_at(world_pos))
+	for other in world.villagers:
+		other.hovered = other == v
+	for st in world.structures:
+		st.hovered = st == s
 
 
 ## 一覧や関係の表から選んだときは、世界の側でもその村人へ寄る。
@@ -391,19 +423,46 @@ func _select(v, focus: bool = false) -> void:
 		selected.selected = true
 		if focus:
 			_focus_on(selected)
+	if v != null:
+		_select_building(null)
 	inspector.set_subject(selected)
 
 
-## 記録の行から、その出来事が起きた場所へ。
-## 相手が分かっていればその村人を選び、場所しか無ければそこへ寄る。
-func _on_jump(at: Vector2, who: int) -> void:
-	if who >= 0:
-		var v = world.villager_by_id(who)
+## 建物を選ぶ。**出るのは名前だけ**——建物は中に値を持たないので、
+## インスペクタに出すものが無い。輪と札で「これを見ている」だけを言う。
+func _select_building(s: Structure, focus: bool = false) -> void:
+	if selected_building != null and is_instance_valid(selected_building):
+		selected_building.selected = false
+	selected_building = s
+	if s != null:
+		s.selected = true
+		if focus:
+			_focus_at(s.position)
+		# 村人と建物は同時に選べない。見ているものは1つ
+		_select(null)
+
+
+## 記録の中の名前から、その名前のものへ。
+## 村人なら選んで寄り、建物なら選んで寄り、掲示板なら板を開く。
+func _on_jump(target: String) -> void:
+	if target == "board":
+		if world.board != null:
+			_focus_at(world.board.position)
+		hud.open_board()
+		return
+	var parts := target.split(":")
+	if parts.size() != 2:
+		return
+	var tid := int(parts[1])
+	if parts[0] == "v":
+		var v = world.villager_by_id(tid)
 		if v != null:
 			_select(v, true)
-			return
-	if at.x != INF:
-		_focus_at(at)
+	elif parts[0] == "s":
+		for s in world.structures:
+			if s.id == tid:
+				_select_building(s, true)
+				return
 
 
 ## 神が放った紙を世界へ飛ばす。板に着いたところで初めて貼られる。

@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## 上部バー（時計・速度）、イベントログ、掲示板パネル。
 
-signal jump_requested(at: Vector2, who: int)
+## 記録の中の名前が押された。「v:村人のid」「s:建物のid」「board」のいずれか。
+signal jump_requested(target: String)
 
 ## この世界を終えて、言葉のところへ戻る。
 signal end_requested
@@ -264,21 +265,45 @@ func _on_log_entry(e: Dictionary) -> void:
 		_log.append_text("[color=#%s]──　%d日目　──[/color]\n"
 			% [Color(0.46, 0.41, 0.34, 0.75).to_html(true), day])
 	var col: Color = e["color"]
-	var body := String(e["text"])
-	# 行き先を持つ出来事は、そこへ飛べる。下線がその印。
-	if EventLog.has_place(e):
-		body = "[url=%d]%s[/url]" % [int(e["id"]), body]
 	_log.append_text("[color=#%s]%s[/color]  [color=#%s]%s[/color]\n"
 		% [Color(0.46, 0.41, 0.34, 0.70).to_html(true), String(e["time"]),
-			col.to_html(false), body])
+			col.to_html(false), _link_names(String(e["text"]), e.get("marks", {}))])
 
 
-## 記録の行を押したら、その出来事が起きた場所（と相手）へ
+## **行き先になるのは名前と建物だけ。** 行をまるごとリンクにしていたので、
+## 「誰が何をした」の全部に下線が付き、下線が飾りになっていた。
+## 名前を押せば、その名前のものへ行く——文の中のどこを押せるかが、そのまま行き先を言う。
+##
+## どの言葉が何を指すかは、**記録を書いた側が言う**（`marks`）。
+## 読む側が名前から探すと、同じ名前の家が6軒あるとき、どれでもない家に飛ぶ。
+func _link_names(body: String, marks: Dictionary) -> String:
+	if marks.is_empty():
+		return body
+	# 長い名前から先に当てる。短い名前が長い名前の中を切らないように
+	var words: Array = marks.keys()
+	words.sort_custom(func(a, b) -> bool: return String(a).length() > String(b).length())
+
+	var out := ""
+	var i := 0
+	while i < body.length():
+		var hit := false
+		for w in words:
+			var word := String(w)
+			if word == "" or body.substr(i, word.length()) != word:
+				continue
+			out += "[url=%s]%s[/url]" % [String(marks[word]), word]
+			i += word.length()
+			hit = true
+			break
+		if not hit:
+			out += body[i]
+			i += 1
+	return out
+
+
+## 記録の中の名前を押したら、その名前のものへ
 func _on_log_meta(meta: Variant) -> void:
-	var e := EventLog.by_id(int(String(meta)))
-	if e.is_empty():
-		return
-	jump_requested.emit(Vector2(e["at"]), int(e["who"]))
+	jump_requested.emit(String(meta))
 
 
 func _on_meta_hover(_meta: Variant) -> void:

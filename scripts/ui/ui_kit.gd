@@ -363,6 +363,27 @@ static func card(bg: Color = BG_SOFT, pad: int = PAD_S) -> PanelContainer:
 	return p
 
 
+## 一覧を2列に割る。返るのは左右2つの「行を並べる箱」。
+##
+## 1列に積むと、9語の胸のうちだけで紙の1画面が終わり、
+## **この世界にどんな言葉があるかを一目で見られない**。
+## 送りは新聞と同じ——左の列を上から下まで埋めてから、右の列へ。
+## 行頭はどちらの列でも同じ欄（`list_row`）で揃うので、読み方は変わらない。
+static func two_columns(parent: Node) -> Array:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", PAD_L)
+	parent.add_child(row)
+	var out: Array = []
+	for _i in range(2):
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 0)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.size_flags_vertical = Control.SIZE_FILL
+		row.add_child(col)
+		out.append(col)
+	return out
+
+
 ## 罫で区切った行を並べる箱。**角丸の面（箱）は持たない。**
 ##
 ## 束・村人・つくりかたの一覧・性格・間柄の相手ごとを、どれも角丸の面で囲っていた。
@@ -637,6 +658,52 @@ static func heading(parent: Node, text: String, tip: String = "",
 	row.add_child(rule)
 	spacer(parent, HAIR)
 	return row
+
+
+## 畳める章。**普段は要らないものだけ**をこれにする。
+##
+## 見出しの形は `heading` と同じ（同じ紙の中で章の見え方を変えない）。
+## 違うのは名前の前に ▶ / ▼ が付いて、押すと開くこと。
+## 返るのは中身を入れる箱で、畳んでいるあいだは隠れている。
+static func fold_heading(parent: Node, text: String, tip: String = "",
+		open: bool = false, on_toggle: Callable = Callable()) -> VBoxContainer:
+	spacer(parent, PAD)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", GAP_S)
+	parent.add_child(row)
+
+	var head := Button.new()
+	head.text = ("▼ " if open else "▶ ") + text
+	head.add_theme_font_size_override("font_size", FS_HEAD)
+	head.add_theme_color_override("font_color", HEAD)
+	head.add_theme_color_override("font_hover_color", TEXT)
+	head.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	# 章の見出しは字。押せる箱にすると、そこだけ操作の並びに見える
+	for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+		head.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	row.add_child(head)
+
+	if tip != "":
+		help(row, tip)
+	var rule := HSeparator.new()
+	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(rule)
+	spacer(parent, HAIR)
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 0)
+	body.visible = open
+	parent.add_child(body)
+
+	head.pressed.connect(func() -> void:
+		body.visible = not body.visible
+		head.text = ("▼ " if body.visible else "▶ ") + text
+		if on_toggle.is_valid():
+			on_toggle.call(body.visible))
+	# 目次の行き先に使えるよう、見出しの行を添えておく
+	body.set_meta("head_row", row)
+	return body
 
 
 ## 折り返す本文。

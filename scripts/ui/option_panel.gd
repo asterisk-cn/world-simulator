@@ -19,7 +19,8 @@ func _ready() -> void:
 
 	UIKit.window_header(root, "オプション", _close)
 
-	UIKit.heading(root, "流れかた",
+	# ここでは畳まない。オプションを開いたのは、たいていこの目盛りのため
+	UIKit.heading(root, "詳細設定",
 		"世界そのものの目盛り。語彙ではないので、始まったあとも触れる。\n"
 		+ "つまみは10段で、積み木の切れ目がそのまま値になる。")
 	var rows := UIKit.rows(root)

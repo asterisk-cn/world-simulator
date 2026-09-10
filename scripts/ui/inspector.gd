@@ -18,6 +18,9 @@ var world = null
 var subject = null
 
 var _body: VBoxContainer
+var _head: VBoxContainer
+## 章の目次。設計図と同じ部品（`chapter_index.gd`）
+var _index: ChapterIndex
 var _opened := {}  ## other_id -> 畳んでいないか
 var _refresh_accum := 0.0
 
@@ -38,7 +41,22 @@ var _pending_pair := -1
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(384, 0)
-	_body = UIKit.scroll_body(UIKit.paper_sheet(self), UIKit.BG)
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", UIKit.GAP)
+	UIKit.paper_sheet(self).add_child(root)
+
+	# 名前はこの紙の題。**送っても動かない**——誰の紙を読んでいるかは、
+	# どこまで送っても見えていないといけない
+	_head = VBoxContainer.new()
+	_head.add_theme_constant_override("separation", 0)
+	root.add_child(_head)
+
+	_index = ChapterIndex.new()
+	root.add_child(_index)
+
+	# 一枚の巻物。章はこの中に平らに並ぶ（設計図と同じ形）
+	_body = UIKit.scroll_body(root, UIKit.BG)
+	_index.follow(_body)
 
 	Schema.parameters_changed.connect(rebuild)
 	rebuild()
@@ -76,6 +94,10 @@ func rebuild() -> void:
 	for c in _body.get_children():
 		_body.remove_child(c)
 		c.queue_free()
+	for c in _head.get_children():
+		_head.remove_child(c)
+		c.queue_free()
+	_index.clear()
 	_self_bars.clear()
 	_pair_bars.clear()
 	_pair_cards.clear()
@@ -95,10 +117,12 @@ func rebuild() -> void:
 
 	_known_pairs = subject.pairs.size()
 	_build_header()
+	_build_now()
 	_build_personality()
 	_build_self_params()
 	_build_pairs()
 	_build_memory()
+	_index.rebuild()
 	_refresh()
 	if _pending_pair >= 0:
 		_open_pair.call_deferred(_pending_pair)
@@ -106,22 +130,28 @@ func rebuild() -> void:
 
 
 func _build_header() -> void:
-	UIKit.title(_body, subject.vname, subject.color.darkened(0.35))
-	_body.add_child(UIKit.label(subject.personality.quirk, UIKit.FS_NOTE, UIKit.TEXT_DIM))
-	UIKit.spacer(_body, UIKit.HAIR)
+	UIKit.title(_head, subject.vname, subject.color.darkened(0.35))
+	_head.add_child(UIKit.label(subject.personality.quirk, UIKit.FS_NOTE, UIKit.TEXT_DIM))
+
+
+## この村人について分単位で変わるのはこの章だけなので、いちばん上に置く。
+func _build_now() -> void:
+	_index.chapter(_body, "いま",
+		"この人がしている事と、手に持っているもの。
+ここだけが分単位で変わる。")
+
+	# **強さは字の段が担う。** 面で囲って地の色を変えていたが、
+	# 囲いは「紙の上に別の物体が乗っている」ことを言う形で、
+	# ここで言いたいのは「いちばん読んでほしい一言」だった。
+	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
 
 	# 持ち物は絵と名前を対で出す。絵だけだと、神がつけた名前の物が何なのか読めない。
+	UIKit.spacer(_body, UIKit.GAP)
+	_body.add_child(UIKit.label("もちもの", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 	_have = HFlowContainer.new()
 	_have.add_theme_constant_override("h_separation", UIKit.GAP)
 	_have.add_theme_constant_override("v_separation", UIKit.GAP_S)
 	_body.add_child(_have)
-
-	# この村人について分単位で変わるのはここだけ。**強さは字の段が担う。**
-	# 面で囲って地の色を変えていたが、囲いは「別の物体が乗っている」ことを言う形で、
-	# ここで言いたいのは「いちばん読んでほしい一言」だった。
-	UIKit.spacer(_body, UIKit.GAP)
-	_body.add_child(UIKit.label("いま", UIKit.FS_NOTE, UIKit.TEXT_DIM))
-	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
 
 
 ## 性格は始まりに決まったまま動かないので、組み立てるだけで差し替えは要らない。
@@ -129,7 +159,7 @@ func _build_header() -> void:
 ## **同じ紙の中は同じ文法で並べる。** 章（見出し）→ 罫で区切った行、で全部揃える。
 ## 面で囲うのは「紙の上に別の物体が乗っている」ときだけ。
 func _build_personality() -> void:
-	UIKit.heading(_body, "性格",
+	_index.chapter(_body, "性格",
 		"MBTIの4軸。ここから振る舞いは導かれない。\nこの人はこういう人だ、と渡すための素。")
 	var rows := UIKit.rows(_body)
 
@@ -146,7 +176,7 @@ func _build_personality() -> void:
 ## 束は、開始前に言葉を決めた紙と同じ形で見せる。
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
-	UIKit.heading(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
+	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
 		"一人につき1つ持つ言葉。0〜100。\n並びは設計図で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
@@ -164,8 +194,9 @@ func _build_self_params() -> void:
 
 
 func _build_pairs() -> void:
-	UIKit.heading(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
-		"相手ひとりごとに持つ値。−100〜100。\n会ったことのある相手だけが並ぶ。")
+	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
+		"相手ひとりごとに持つ値。−100〜100。\n会ったことのある相手だけが並ぶ。",
+		subject.pairs.is_empty())
 
 	if subject.pairs.is_empty():
 		_body.add_child(UIKit.label("まだ誰とも会っていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
@@ -226,7 +257,7 @@ func _build_pairs() -> void:
 
 
 func _build_memory() -> void:
-	UIKit.heading(_body, "記憶",
+	_index.chapter(_body, "記憶",
 		"夜になると、その日の出来事が1行に畳まれる。\n覚えていられる日数は「この世界の言葉」の世界で決める。")
 	_summary = UIKit.note(_body, "")
 

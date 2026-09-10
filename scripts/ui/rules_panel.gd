@@ -26,10 +26,6 @@ extends PanelContainer
 signal started
 signal closed
 
-## 送るときの一拍。即座に飛ぶと、結局「札の切り替え」に見える。
-## 封蝋や紙が飛ぶのと同じ族の、動いた方向が目に残る速さ。
-const GLIDE := 0.25
-
 ## 名前を書く欄の幅。ことば・もちもの・たてもの で同じにする。
 ## 区分ごとに幅が違うと、同じ紙に並んでいるのに別の種類のものに見える。
 const WORD_W := 200
@@ -45,7 +41,6 @@ var editable := true
 
 var _body: VBoxContainer
 var _scroll: ScrollContainer
-var _index_row: HBoxContainer
 var _head_row: HBoxContainer
 var _title: Label
 var _title_lead: Control
@@ -60,11 +55,8 @@ var _delete_mode := false
 ## 詳細を開いているか。組み直しても畳み方は覚えておく
 var _detail_open := false
 
-## 章の見出し行。目次の行き先と、いまどの章を見ているかの判定に使う
-var _chapters: Array = []      ## [{name, row}]
-var _index_btns: Array = []
-var _here := 0
-var _glide: Tween = null
+## 章の目次。村人の紙と同じ部品（`chapter_index.gd`）
+var _index: ChapterIndex
 
 
 func _ready() -> void:
@@ -96,23 +88,21 @@ func _ready() -> void:
 	_close_btn = UIKit.icon_button(title_row, "✕", "閉じる", _close, 30, UIKit.ROW_H, UIKit.FS_SUB)
 	_close_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-	# 目次。**箱でも札でもなく、1行の文**にする。
-	# 章名を淡い「・」で繋ぐだけで、下線も枠も影も持たない。
-	# いま見ている章だけ見出しと同じ色になるので、目次と本文が繋がる。
-	_index_row = HBoxContainer.new()
-	_index_row.add_theme_constant_override("separation", UIKit.GAP_S)
-	root.add_child(_index_row)
-
+	# 目次は**手の行**に置く。題は中央、目次は左、操作は右——と3つ揃えが違うと、
+	# 目次だけが揃いの外れた副題に見える。押すものと同じ行に居れば、
+	# 下線を足さなくても「この行は押す行」と場所が言ってくれる
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(head)
 	_head_row = head
+
+	_index = ChapterIndex.new()
+	_index.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_index.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(_index)
+
 	_mode_label = UIKit.label("", UIKit.FS_NOTE, Color(0.72, 0.30, 0.20))
 	head.add_child(_mode_label)
-
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(gap)
 
 	_reset_btn = UIKit.button(head, "はじめに戻す", _reset_all)
 	_reset_btn.custom_minimum_size = Vector2(112, UIKit.ROW_H - UIKit.HAIR)
@@ -123,7 +113,7 @@ func _ready() -> void:
 	# 一枚の巻物。章はこの中に平らに並ぶ
 	_body = UIKit.scroll_body(root, UIKit.BG)
 	_scroll = _body.get_meta("scroll")
-	_scroll.get_v_scroll_bar().value_changed.connect(func(_v: float) -> void: _mark_here())
+	_index.follow(_body)
 
 	_start_btn = UIKit.accent_button(root, "この世界を始める", _on_start, UIKit.FS_HEAD)
 	_start_btn.custom_minimum_size = Vector2(0, 46)
@@ -197,110 +187,46 @@ func _rebuild() -> void:
 	for c in _body.get_children():
 		_body.remove_child(c)
 		c.queue_free()
-	_chapters.clear()
+	_index.clear()
 
 	# 名詞の章は、単語を**2列**に割る（`UIKit.two_columns`）
-	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]), SCOPE_TIP[Schema.SCOPE_SELF])
+	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]), SCOPE_TIP[Schema.SCOPE_SELF],
+		Schema.params_in(Schema.SCOPE_SELF).is_empty())
 	_params_of(Schema.SCOPE_SELF)
-	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]), SCOPE_TIP[Schema.SCOPE_PAIR])
+	_chapter(String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]), SCOPE_TIP[Schema.SCOPE_PAIR],
+		Schema.params_in(Schema.SCOPE_PAIR).is_empty())
 	_params_of(Schema.SCOPE_PAIR)
 
 	_chapter("もちもの",
 		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
-		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。")
+		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。",
+		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
 	_chapter("たてもの",
 		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
 		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
-		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。")
+		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。",
+		Schema.buildings.is_empty())
 	_things(Schema.buildings, Schema.BUILDING_ARTS, "＋ たてものを増やす",
 		_add_building, _del_building, _rename_building)
 
 	if editable:
 		_chapter("村人",
-			"この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。")
+			"この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。",
+			Schema.villagers.is_empty())
 		_people()
 		# 目盛りは普段いじらないので、畳んでおく（`詳細`）
 		_detail()
 
 	UIKit.spacer(_body, UIKit.PAD_L)
-	_rebuild_index()
+	_index.rebuild()
 
 
 ## 章の見出し。目次の行き先としても覚えておく。
-func _chapter(name_text: String, tip: String) -> void:
-	var row := UIKit.heading(_body, name_text, tip)
-	_chapters.append({"name": name_text, "row": row})
-
-
-## 目次。章名を淡い「・」で繋いだ1行。
-func _rebuild_index() -> void:
-	for c in _index_row.get_children():
-		_index_row.remove_child(c)
-		c.queue_free()
-	_index_btns.clear()
-	if _chapters.size() <= 1:
-		_index_row.visible = false
-		return
-	_index_row.visible = true
-	for i in range(_chapters.size()):
-		if i > 0:
-			var dot := UIKit.label("・", UIKit.FS_BODY, Color(0.46, 0.41, 0.34, 0.55))
-			_index_row.add_child(dot)
-		var b := Button.new()
-		b.text = String(_chapters[i]["name"])
-		b.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-		# 押せる箱ではなく、字そのもの。下地も枠も持たない
-		for st in ["normal", "hover", "pressed", "focus", "disabled"]:
-			b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
-		b.add_theme_color_override("font_hover_color", UIKit.TEXT)
-		_index_row.add_child(b)
-		b.pressed.connect(_glide_to.bind(i))
-		_index_btns.append(b)
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_index_row.add_child(gap)
-	_mark_here.call_deferred()
-
-
-## その章まで送る。**するすると動かす**——即座に飛ぶと、
-## 紙を送ったのではなく面が入れ替わったように見える。
-func _glide_to(i: int) -> void:
-	if i < 0 or i >= _chapters.size() or _scroll == null:
-		return
-	var row: Control = _chapters[i]["row"]
-	if not is_instance_valid(row):
-		return
-	# 章の上の余白（`PAD`）は残して止める
-	var to: float = maxf(row.position.y - float(UIKit.PAD), 0.0)
-	if _glide != null and _glide.is_valid():
-		_glide.kill()
-	_glide = create_tween()
-	_glide.tween_property(_scroll, "scroll_vertical", int(to), GLIDE) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-
-
-## いま読んでいる章。見出しが紙の上端を越えた最後のものがそれ。
-func _mark_here() -> void:
-	if _scroll == null or _index_btns.is_empty():
-		return
-	var at := float(_scroll.scroll_vertical) + float(UIKit.PAD) + 1.0
-	var found := 0
-	for i in range(_chapters.size()):
-		var row: Control = _chapters[i]["row"]
-		if is_instance_valid(row) and row.position.y <= at:
-			found = i
-	# 最後の章は、その下に送るぶんの紙が無いので上端を越えられない。
-	# 終わりまで送ったら最後の章に居る、と決める。
-	var bar := _scroll.get_v_scroll_bar()
-	if bar.max_value - bar.page - bar.value <= 1.0:
-		found = _chapters.size() - 1
-	_here = found
-	for i in range(_index_btns.size()):
-		var b: Button = _index_btns[i]
-		b.add_theme_color_override("font_color",
-			UIKit.HEAD if i == _here else UIKit.TEXT_DIM)
+## `empty` はまだ何も書かれていない章で、目次に淡く出る
+func _chapter(name_text: String, tip: String, empty: bool = false) -> void:
+	_index.chapter(_body, name_text, tip, empty)
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +509,7 @@ func _detail() -> void:
 		"世界そのものの目盛り。\nつまみは10段で、積み木の切れ目がそのまま値になる。\n"
 		+ "始まったあとはオプションから触る。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
-	_chapters.append({"name": "詳細", "row": body.get_meta("head_row")})
+	_index.remember("詳細", body.get_meta("head_row"))
 	_world(body)
 	UIKit.spacer(_body, UIKit.PAD_L)
 

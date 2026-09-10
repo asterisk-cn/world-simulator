@@ -8,7 +8,8 @@ signal jump_requested(target: String)
 signal end_requested
 
 ## 神が紙を放った。画面上のどこから飛び出すかを添える。
-signal god_posted(from_screen: Vector2, text: String)
+## `sheet` は**書いていた紙そのもの**。飛ばす側が子に付けて運ぶ（`paper_fly.gd`）
+signal god_posted(from_screen: Vector2, text: String, sheet: Control)
 
 var world = null
 
@@ -16,8 +17,11 @@ var _clock_label: Label
 var _pop_label: Label
 var _log: RichTextLabel
 var _board_list: VBoxContainer
-var _post_text: LineEdit
 var _board_panel: PanelContainer
+var _write_btn: Button
+
+## 紙が飛び出す元。「神のお告げ」を押した場所を覚えておく
+var _write_from := Vector2.ZERO
 var _top_bar: PanelContainer
 var _pause_btn: Button
 var _speed_btns: Array = []
@@ -199,8 +203,7 @@ func open_board() -> void:
 	if _board_panel != null and not _board_panel.visible:
 		_show_only(_board_panel)
 	_refresh_state()
-	if _post_text != null:
-		_post_text.grab_focus()
+
 
 
 func _toggle_roster() -> void:
@@ -330,39 +333,19 @@ func _build_board_panel() -> void:
 	UIKit.window_header(box, "掲示板", _toggle_board, UIKit.HEAD,
 		"村で唯一の、書いて残す場所。\n神が貼った紙は差出人不明として扱われる。")
 
-	# --- 神が村に言葉を落とす場所。この窓の主役なので先頭に置く ---
-	# 書く場所も紙。入力欄の顔をしていると、下に貼られた紙と文法が割れる。
-	var sheet := PanelContainer.new()
-	sheet.add_theme_stylebox_override("panel", _paper_style(true))
-	box.add_child(sheet)
-	UIKit.paper_grain(sheet)
-	var form_box := VBoxContainer.new()
-	form_box.add_theme_constant_override("separation", UIKit.GAP_S)
-	sheet.add_child(form_box)
-	# アクセント色はこの窓では「貼る」1か所に取っておく（DESIGN.md §9）
-	form_box.add_child(UIKit.label("神のお告げ", UIKit.FS_NOTE, UIKit.TEXT_DIM))
-
-	_post_text = LineEdit.new()
-	_post_text.add_theme_font_size_override("font_size", UIKit.FS_SUB)
-	_post_text.custom_minimum_size = Vector2(0, UIKit.ROW_H + UIKit.GAP_S)
-	# 紙の上に直接書くので、欄そのものは地のまま
-	_post_text.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-	_post_text.add_theme_stylebox_override("focus", UIKit.ruled_style(0.0, 1))
-	form_box.add_child(_post_text)
-	_post_text.text_submitted.connect(func(_t: String) -> void: _submit_post())
-
-	var form := HBoxContainer.new()
-	form.add_theme_constant_override("separation", UIKit.GAP_S)
-	form_box.add_child(form)
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	form.add_child(gap)
-	var submit := UIKit.accent_button(form, "貼る", _submit_post)
-	submit.custom_minimum_size = Vector2(96, UIKit.ROW_H)
+	# --- 神が村に言葉を落とす ---
+	# 書く欄をこの窓に置いていたが、**板の上に空の紙が1枚常に貼ってある**ように見えた。
+	# 貼るものが無いときも場所を取り、下に並ぶ紙と文法も割れていた。
+	# 書くのは押したときだけ、幕を張った紙の上で（`write_popup.gd`）。
+	#
+	# 橙はこの窓で神の手が届く1か所（DESIGN.md §9）。**幅いっぱいに広げる。**
+	# 村への唯一の干渉手段なので、この窓でいちばん強い要素でいい。
+	_write_btn = UIKit.accent_button(box, "神のお告げ", _open_write)
+	_write_btn.custom_minimum_size = Vector2(0, UIKit.ROW_H + UIKit.GAP_S)
 
 	# --- いま貼られているもの ---
 	# 見出しは置かない。板の上に紙が並んでいるのだから、「貼られているもの」と
-	# 書き添える必要がない（書く場所と貼られた紙は形で分かれている）。
+	# 書き添える必要がない。
 	UIKit.spacer(box, UIKit.GAP)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -397,25 +380,47 @@ func _paper_style(by_god: bool) -> StyleBoxFlat:
 	return sb
 
 
-## 押した瞬間に貼られると、神が紙を落とした感じにならない。
-## 紙を世界へ放って、板に着いたところで貼られる（main が受ける）。
-func _submit_post() -> void:
+## 書く紙を1枚出す。幕を張るので、窓ではなくこの層の上に置く。
+func _open_write() -> void:
 	if world == null or world.board == null:
 		return
-	var text := _post_text.text.strip_edges()
+	# 紙が飛び出す元は、**書いた紙のあった場所**——画面の真ん中。
+	# 行き先と重なることがあるが、軌跡の側で読ませる（`paper_fly.gd`）。
+	_write_from = get_viewport().get_visible_rect().size * 0.5
+	var pop = preload("res://scripts/ui/write_popup.gd").new()
+	# 差出人不明になることは窓の「?」が言っている。欄に書き添えると2回言うことになる
+	pop.setup("神のお告げ", [{"label": "", "text": ""}], "貼る", true)
+	add_child(pop)
+	pop.submitted.connect(_submit_post)
+
+
+## 押した瞬間に貼られると、神が紙を落とした感じにならない。
+## 紙を世界へ放って、板に着いたところで貼られる（main が受ける）。
+func _submit_post(values: PackedStringArray) -> void:
+	if world == null or world.board == null or values.is_empty():
+		return
+	var text := String(values[0]).strip_edges()
 	if text == "":
 		return
-	var from: Vector2 = _post_text.get_global_rect().get_center()
-	_post_text.text = ""
+	# **書いていた紙を取り上げてから窓を閉じる。** 別の紙を描いて飛ばすと、
+	# 決めた瞬間にフォームが消えて別の形の紙が現れる（`write_popup.take_sheet`）
+	var sheet: Control = null
+	for c in get_children():
+		if c is WritePopup:
+			sheet = (c as WritePopup).take_sheet()
+			break
 	# 窓を閉じて、紙が板に着くところを世界の上で見せる
 	_show_only(null)
-	god_posted.emit(from, text)
+	god_posted.emit(_write_from, text, sheet)
 
 
 func _refresh_board() -> void:
 	if _board_list == null:
 		return
+	# `queue_free` は次のフレームまで効かない。外さずに足すと、
+	# 同じフレームで2度並べ直したときに紙が重なる（重なると地合いも二重に乗る）
 	for c in _board_list.get_children():
+		_board_list.remove_child(c)
 		c.queue_free()
 	if world == null or world.board == null:
 		return
@@ -434,7 +439,9 @@ func _slip(e: Dictionary) -> void:
 	var paper := PanelContainer.new()
 	paper.add_theme_stylebox_override("panel", _paper_style(by_god))
 	_board_list.add_child(paper)
-	UIKit.paper_grain(paper)
+	# 地合いの層は敷かない。**この紙はもう地合いのある紙の上に乗っている**ので、
+	# 自分の粒は見えないのに、余白の帯だけ粒が乗らず縁が浮いて見える
+	# （四角い層は器の内側の矩形にしか敷けない）
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", UIKit.HAIR)

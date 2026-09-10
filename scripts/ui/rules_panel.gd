@@ -329,27 +329,25 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	var pid := String(def["id"])
 	var col := Schema.param_color(pid)
 
+	# **行は読むための形。書くのは紙の上でやる。**
+	# 罫線の欄を並べていたが、書き込める場所だと伝わらなかった（`PencilIcon`）。
+	# 開始前と進行中で行の形が変わらないので、始まった瞬間に字が動かない。
+	var label_text := String(def["label"])
 	var row := UIKit.list_row(box, UIKit.dot(col.darkened(0.25)))
+	row.add_child(UIKit.read_only(label_text))
 
-	if not editable:
-		row.add_child(UIKit.read_only(String(def["label"])))
-		return
-
-	# 罫線を行いっぱいに伸ばすと、書かれているのに「未記入の書類」に見える。
-	# 幅は `WORD_W` で1か所に決める——同じ紙に4つの一覧が並ぶので、
-	# 欄の幅が章ごとに違うと、同じ種類のものに見えない。
-	var le := LineEdit.new()
-	le.text = String(def["label"])
-	le.custom_minimum_size = Vector2(WORD_W, UIKit.ROW_H)
-	row.add_child(le)
-	le.text_changed.connect(_set_label.bind(def))
+	# 消すものを選んでいるあいだは鉛筆を隠す。押せる印が2つ並ぶと、
+	# どちらを押すのか迷う
+	if editable and not _can_delete():
+		UIKit.pencil_button(row, "%s を書き直す" % label_text,
+			_write_param.bind(def))
 
 	var mid := Control.new()
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(mid)
 
 	if _can_delete():
-		UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
+		UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 			_del_param.bind(pid), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
 
@@ -361,8 +359,19 @@ func _del_param(pid: String) -> void:
 	Schema.remove_param(pid)
 
 
-func _set_label(text: String, def: Dictionary) -> void:
-	def["label"] = text
+func _write_param(def: Dictionary) -> void:
+	_write("ことばを書く", [{"label": "", "text": String(def["label"])}],
+		func(v: PackedStringArray) -> void:
+			def["label"] = v[0]
+			_rebuild())
+
+
+## 書く紙を1枚出す。世界の上に幕を張るので、`hud` ではなくこの紙の親に置く。
+func _write(title: String, fields: Array, on_done: Callable) -> void:
+	var pop = preload("res://scripts/ui/write_popup.gd").new()
+	pop.setup(title, fields)
+	get_parent().add_child(pop)
+	pop.submitted.connect(on_done)
 
 
 # ---------------------------------------------------------------------------
@@ -386,23 +395,20 @@ func _things(defs: Array, arts: Array, add_text: String,
 			UIKit.hairline(rows)
 
 		# 姿は先頭の欄へ。ことばの点と同じ欄なので、名前の左端が揃う
+		var label_text := String(def["label"])
 		var row := UIKit.list_row(rows, _art_picker(def, arts))
-		if editable:
-			var le := LineEdit.new()
-			le.text = String(def["label"])
-			le.custom_minimum_size = Vector2(WORD_W, UIKit.ROW_H)
-			row.add_child(le)
-			le.text_changed.connect(func(t: String) -> void: on_rename.call(t, did))
-			var mid := Control.new()
-			mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(mid)
-		else:
-			# 姿は絵が語っているので、名前の横に姿の名を添えない
-			var nm := UIKit.read_only(String(def["label"]))
-			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(nm)
+		# 姿は絵が語っているので、名前の横に姿の名を添えない
+		row.add_child(UIKit.read_only(label_text))
+		if editable and not _can_delete():
+			UIKit.pencil_button(row, "%s を書き直す" % label_text,
+				func() -> void: _write("名前を書く",
+					[{"label": "", "text": label_text}],
+					func(v: PackedStringArray) -> void: on_rename.call(v[0], did)))
+		var mid := Control.new()
+		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(mid)
 		if _can_delete():
-			UIKit.icon_button(row, "✕", "%s を消す" % String(def["label"]),
+			UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 				func() -> void: on_del.call(did), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
 	if editable:
@@ -494,25 +500,31 @@ func _build_person(h: Dictionary) -> void:
 	box.add_child(head)
 	head.add_child(_color_swatch(h))
 
-	var name_edit := LineEdit.new()
-	name_edit.text = String(h["name"])
-	name_edit.add_theme_font_size_override("font_size", UIKit.FS_SUB)
-	name_edit.add_theme_color_override("font_color", Color(h["color"]).darkened(0.42))
-	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_edit.custom_minimum_size = Vector2(90, UIKit.ROW_H)
-	head.add_child(name_edit)
-	name_edit.text_changed.connect(func(t: String) -> void: h["name"] = t)
+	# 名前と一言は**1枚の紙で一緒に書く**。同じ人のことなので、鉛筆も1人に1つ。
+	var nm := String(h["name"])
+	head.add_child(UIKit.read_only(nm, UIKit.FS_SUB, Color(h["color"]).darkened(0.42)))
+	head.add_child(UIKit.read_only(String(h["quirk"]), UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
-	var quirk := LineEdit.new()
-	quirk.text = String(h["quirk"])
-	quirk.placeholder_text = "一言でいうと"
-	quirk.custom_minimum_size = Vector2(180, UIKit.ROW_H)
-	head.add_child(quirk)
-	quirk.text_changed.connect(func(t: String) -> void: h["quirk"] = t)
-
-	if _can_delete() and Schema.villagers.size() > 1:
-		UIKit.icon_button(head, "✕", "%s を消す" % String(h["name"]),
-			_del_villager.bind(hid), 30, UIKit.ROW_H, UIKit.FS_SUB)
+	if _can_delete():
+		var mid := Control.new()
+		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(mid)
+		if Schema.villagers.size() > 1:
+			UIKit.icon_button(head, "✕", "%s を消す" % nm,
+				_del_villager.bind(hid), 30, UIKit.ROW_H, UIKit.FS_SUB)
+	else:
+		UIKit.pencil_button(head, "%s のことを書き直す" % nm,
+			func() -> void: _write("この人のこと", [
+				{"label": "名前", "text": nm},
+				{"label": "一言でいうと", "text": String(h["quirk"]),
+					"placeholder": "臆病、働き者、口が軽い…"},
+			], func(v: PackedStringArray) -> void:
+				h["name"] = v[0]
+				h["quirk"] = v[1]
+				_rebuild()))
+		var mid := Control.new()
+		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(mid)
 
 	# 性格。見る側（インスペクタ）と同じ積み木・同じ両端の言葉
 	var rows := UIKit.rows(box)

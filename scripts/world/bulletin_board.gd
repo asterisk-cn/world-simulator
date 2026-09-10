@@ -68,6 +68,19 @@ const PANEL_H := 27.0     ## 板の高さ
 const THICK := 0.07       ## 厚み（マス）。板なので薄く
 const BASE_Y := -17.0     ## 板の下端
 
+# 貼り紙の枡割り（面を (u, h) で見た比）。3列 × 2段で手前の面に並べる。
+# **飛ばす先もここから出す**（`next_slip_point`）。板に着いた場所と
+# 紙が現れる場所がずれていると、着いた瞬間に紙が湧き直したように見える
+const SLIP_U0 := 0.09     ## 左端の枡の左
+const SLIP_DU := 0.29     ## 列の間隔
+const SLIP_H0 := 0.17     ## 下段の枡の下
+const SLIP_DH := 0.40     ## 段の間隔
+const SLIP_W := 0.23      ## 紙の幅
+const SLIP_HT := 0.33     ## 紙の丈
+
+## 神の紙の地色。飛んでいく紙（`paper_fly.gd`）が同じ色を引く
+const GOD_SLIP := Color(0.99, 0.86, 0.55)
+
 
 ## 板の面に沿った方向（マス目の X 軸）
 func _along() -> Vector2:
@@ -128,12 +141,19 @@ func _draw() -> void:
 	for i in range(n):
 		var col := i % 3
 		var row := i / 3
-		var u := 0.09 + float(col) * 0.29
-		var h := 0.17 + float(row) * 0.40
+		var u := SLIP_U0 + float(col) * SLIP_DU
+		var h := SLIP_H0 + float(row) * SLIP_DH
 		var paper := Color(0.94, 0.92, 0.84)
 		if posts[posts.size() - 1 - i]["author_id"] == -1:
-			paper = Color(0.99, 0.86, 0.55)
-		_draw_paper(u, h, 0.23, 0.33, paper)
+			paper = GOD_SLIP
+		_draw_paper(u, h, SLIP_W, SLIP_HT, paper)
+
+
+## 次に貼られる紙の中心。いちばん新しい紙は常に左下の枡に出る。
+## 神の紙はここへ飛ばす（`main.gd`）。板の中心へ飛ばしていたころは、
+## 着いた場所から 15px 離れたところに紙が現れていた
+func next_slip_point() -> Vector2:
+	return _face_point(SLIP_U0 + SLIP_W * 0.5, SLIP_H0 + SLIP_HT * 0.5)
 
 
 ## 手前の面を (u, v) で見た位置。u は板に沿う向き、v は高さ。

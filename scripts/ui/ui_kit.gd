@@ -893,39 +893,44 @@ static func hairline(parent: Node) -> void:
 	parent.add_child(l)
 
 
+## 霞みの丈。中身に重なる帯
+const HEM_H := 44
+
+
 ## 縦スクロールする中身を包み、スクロールバーとの余白を作る。
-## 下端は紙の色へ溶かす。文字が水平に切られていると、続きの合図ではなく壊れて見える。
+## 下端は紙へ溶かす。文字が水平に切られていると、続きの合図ではなく壊れて見える。
+##
+## **霞みは中身に重ねる。** 巻物の「下の行」として並べていたので、
+## 字が薄れるのではなく、下に 64px の帯が1本足されるだけだった。
+## しかもべた塗りで粒が無いので、霞みではなく**仕切り**に見えていた
+## （`hem_fade.gd`）。重ねるための器を1枚挟んで、内側の下端に張る。
 static func scroll_body(parent: Node, fade: Color = PAGE) -> VBoxContainer:
+	var holder := Control.new()
+	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(holder)
+
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(scroll)
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(scroll)
 
-	var grad := Gradient.new()
-	grad.offsets = PackedFloat32Array([0.0, 0.88, 1.0])
-	grad.colors = PackedColorArray([
-		Color(fade.r, fade.g, fade.b, 0.0),
-		Color(fade.r, fade.g, fade.b, 0.0),
-		fade,
-	])
-	var tex := GradientTexture2D.new()
-	tex.gradient = grad
-	tex.fill_from = Vector2(0, 0)
-	tex.fill_to = Vector2(0, 1)
-	tex.width = 8
-	tex.height = 64
-	var veil := TextureRect.new()
-	veil.texture = tex
-	veil.stretch_mode = TextureRect.STRETCH_SCALE
-	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(veil)
+	var hem := HemFade.new()
+	hem.setup(fade, grain_texture())
+	hem.anchor_left = 0.0
+	hem.anchor_right = 1.0
+	hem.anchor_top = 1.0
+	hem.anchor_bottom = 1.0
+	hem.offset_top = -float(HEM_H)
+	hem.offset_bottom = 0.0
+	holder.add_child(hem)
 
 	# 溶かすのは「まだ下に続いている」あいだだけ。
 	# 終わりまで送ったのに霞んだままだと、読み終えたのに読めていないように見える。
 	var bar := scroll.get_v_scroll_bar()
 	var follow := func() -> void:
 		var left: float = bar.max_value - bar.page - bar.value
-		veil.modulate.a = clampf(left / 20.0, 0.0, 1.0)
+		hem.modulate.a = clampf(left / 20.0, 0.0, 1.0)
 	bar.value_changed.connect(func(_v: float) -> void: follow.call())
 	bar.changed.connect(follow)
 	follow.call()
@@ -1022,6 +1027,39 @@ static func accent_button(parent: Node, text: String, on_press: Callable,
 	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
 	b.add_theme_color_override("font_pressed_color", Color(0.99, 0.96, 0.90))
 	parent.add_child(b)
+	b.pressed.connect(on_press)
+	return b
+
+
+## 「ここは書き直せる」の印。**名前の字の直後**に置く。
+##
+## 右端に揃えると鉛筆が一列の柱になり、そこだけ表計算の顔になる。
+## 字の末尾に付ければ、名前の長さでばらけて柱にならず、余白の書き込み印に見える。
+##
+## 常に出す。かざしたときだけ現れる形にすると、
+## 「書き直せる」を伝えるという目的そのものに反する。
+static func pencil_button(parent: Node, tip: String, on_press: Callable) -> Button:
+	var b := Button.new()
+	b.tooltip_text = tip
+	b.custom_minimum_size = Vector2(30, ROW_H)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for st in ["normal", "pressed", "focus", "disabled"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("hover", flat_ink(INK_HOVER))
+	parent.add_child(b)
+
+	var icon := PencilIcon.new()
+	icon.tint = TEXT_DIM
+	b.add_child(icon)
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# かざすと濃くなる。押せるものだと分かる合図
+	b.mouse_entered.connect(func() -> void:
+		icon.tint = TEXT
+		icon.queue_redraw())
+	b.mouse_exited.connect(func() -> void:
+		icon.tint = TEXT_DIM
+		icon.queue_redraw())
+
 	b.pressed.connect(on_press)
 	return b
 

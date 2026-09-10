@@ -15,6 +15,9 @@ var selected = null
 var selected_building: Structure = null
 
 var rules_panel = null
+
+## 紙を入れる焼ける器。位置ぎめはこちらに向ける
+var burn_paper: BurnPaper = null
 var started := false
 
 var _panning := false
@@ -25,6 +28,9 @@ var wake := 0.0
 var _starting := false
 var _ending := false
 var _next_id := 1
+
+## 言葉が決まった後の土地を作ったか。作り直しは一度だけ
+var _land_made := false
 
 
 func _ready() -> void:
@@ -69,29 +75,64 @@ func _begin_ritual() -> void:
 		return
 	_starting = true
 
-	var seal = preload("res://scripts/ui/seal.gd").new()
-	seal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hud.add_child(seal)
-
 	var tw := create_tween()
-	tw.tween_property(seal, "pop", 1.0, 0.40).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(0.30)
-	tw.tween_property(rules_panel, "modulate:a", 0.0, 0.40)
-	tw.parallel().tween_property(seal, "modulate:a", 0.0, 0.55)
+	# **神が書いた言葉が、上から焼けていく。** 封蝋を押していたのをやめた——
+	# 押した印より、書いたものが消えていく絵のほうが強い
+	# **点火の一拍を分ける。** ただ加速させると最初の半秒がほとんど動かず、
+	# 「火が付いた」が伝わらない。まず下端に燃えぎわだけ現れて、それから走る
+	tw.tween_property(burn_paper, "burn", 0.03, 0.35).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(burn_paper, "burn", 1.0, 1.40) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# **焼けと重ねて、下見の島がポツポツと落ちはじめる。**
+	# 焼け落ちてから崩すと、紙と世界が別の出来事に見える。
+	# 落ちはじめが疎らなのは `World.CRUMBLE_BIAS` が受け持つ——
+	# 一様だと始まった途端に3割が動き出して「一斉」になる
+	# **1.00s からポツポツ落ちはじめ、焼け切り（1.75s）に見た目で2割欠け、
+	# 落ち切るのはその1秒後（2.75s）。**
+	# 焼け切りは崩れの窓の 43% 地点なので、1枚の落下が窓の半分を占めると
+	# その時点で「落ち切った」タイルは出ない。欠け具合は `World.CRUMBLE_SPAN` と
+	# `CRUMBLE_BIAS` で合わせてある
+	tw.parallel().tween_property(world, "crumble", 1.0, 1.75) \
+		.set_delay(0.65).set_trans(Tween.TRANS_SINE)
+	# 何も無くなってから作り直し、**組み上がるところを見せる**
+	tw.tween_callback(_make_land)
+	tw.tween_property(world, "birth", 1.0, 0.95).set_trans(Tween.TRANS_SINE)
+	# 土地ができてから人が来る
 	tw.tween_callback(_start_world)
 	# 世界が目を覚ます。青く沈めていた色をここで解く
 	tw.tween_property(self, "wake", 1.0, 1.1).set_trans(Tween.TRANS_SINE)
-	tw.tween_callback(seal.queue_free)
 
 
-## 定義が確定したら村人を置いて世界を動かす。以降、定義は閲覧のみ。
+## 言葉が決まってから土地を作る。
+##
+## **始めるより前の島は下見。** 起動時に一度作ってあるが、それは言葉を書くあいだ
+## 後ろに見えているだけのもので、書いた言葉で世界が変わるのだから、
+## 押した後の土地でなければ意味がない。
+func _make_land() -> void:
+	if _land_made:
+		return
+	_land_made = true
+	# 下見のあいだに触れていたものは、作り直しで消える節点を指している
+	selected = null
+	selected_building = null
+	world.regenerate()
+	world.birth = 0.0     # ここから組み上がる（`world.gd` の注）
+	world.crumble = 0.0   # 崩れは前の島の話
+	hud.on_world_reset()
+
+
+## 土地ができたら村人を置いて世界を動かす。以降、定義は閲覧のみ。
 func _start_world() -> void:
 	if started:
 		return
 	started = true
 	_show_setup(false)
-	rules_panel.modulate.a = 1.0  # 儀式で薄くした紙は、閲覧用の窓として戻ってくる
+	burn_paper.burn = 0.0  # 焼いた紙は、閲覧用の窓として戻ってくる
+	rules_panel.modulate.a = 1.0
 	rules_panel.set_editable(false)
+	# 儀式を通らずに来ることもある（`--autostart`）。そのときは一息に建てる
+	_make_land()
+	world.birth = 1.0
 	_spawn_villagers()
 	SimClock.paused = false
 	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
@@ -132,7 +173,7 @@ func _end_ritual() -> void:
 	tw.tween_property(rules_panel, "modulate:a", 1.0, 0.45)
 
 
-## 村を畳んで、言葉のところへ戻す。島も資源も新しくなる。
+## 村を畳んで、言葉のところへ戻す。
 ## 神が決めた言葉と顔ぶれ（Schema）はそのまま残るので、書き足してまた始められる。
 func _reset_world() -> void:
 	started = false
@@ -140,8 +181,13 @@ func _reset_world() -> void:
 	_ending = false
 	_next_id = 1
 
-	world.regenerate()
-	hud.on_world_reset()
+	# **盤面は片づけない。** 始めるときに作り直すので（`_make_land`）、
+	# ここで作り直すのは二度手間。畳んだ村はそのまま後ろに残って、
+	# 次の言葉を書くあいだの下見になり、次に始めたときに崩れて消える
+	_land_made = false
+	world.birth = 1.0
+	world.crumble = 0.0
+	burn_paper.burn = 0.0   # 焼いた紙は、書くための紙として戻ってくる
 	EventLog.clear()
 	SimClock.reset()
 	camera.position = Iso.cell_to_world(Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0))
@@ -155,18 +201,19 @@ func _reset_world() -> void:
 ## セットアップ中は定義パネルを大きく中央に出し、他の面を隠す
 func _show_setup(on: bool) -> void:
 	rules_panel.visible = on
+	# 位置は**器**が持つ。紙は器いっぱいに広がる（`ui/burn_paper.gd`）
 	if on:
-		rules_panel.set_anchors_preset(Control.PRESET_CENTER)
-		rules_panel.offset_left = -360
-		rules_panel.offset_right = 360
-		rules_panel.offset_top = -400
-		rules_panel.offset_bottom = 400
+		burn_paper.set_anchors_preset(Control.PRESET_CENTER)
+		burn_paper.offset_left = -360
+		burn_paper.offset_right = 360
+		burn_paper.offset_top = -400
+		burn_paper.offset_bottom = 400
 	else:
-		rules_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		rules_panel.offset_left = 12
-		rules_panel.offset_right = 576
-		rules_panel.offset_top = 88
-		rules_panel.offset_bottom = 800
+		burn_paper.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		burn_paper.offset_left = 12
+		burn_paper.offset_right = 576
+		burn_paper.offset_top = 88
+		burn_paper.offset_bottom = 800
 	hud.set_play_ui_visible(not on)
 
 
@@ -303,7 +350,11 @@ func _setup_ui() -> void:
 	hud.add_child(opt)
 	hud.option_panel = opt
 
-	hud.add_child(rules)
+	# 紙は**焼ける器**に入れる。始める儀式で上から焼け落ちる（`ui/burn_paper.gd`）。
+	# 位置ぎめはこの器に向ける（`_show_setup`）
+	burn_paper = BurnPaper.new()
+	hud.add_child(burn_paper)
+	burn_paper.hold(rules)
 	hud.rules_panel = rules
 	rules_panel = rules
 	rules.started.connect(_begin_ritual)

@@ -130,12 +130,9 @@ func _name_act(c: Dictionary) -> String:
 	var thing := Schema.target_label(String(c["kind"]), String(c["target"]))
 	match String(c["kind"]):
 		"move":
-			match String(c["target"]):
-				"toward":
-					return "%sのそばへ" % other_name
-				"away":
-					return "%sから離れて" % other_name
-			return "%sへ" % thing
+			if String(c["target"]) == "toward":
+				return "%sのそばに向かう" % other_name
+			return "%sに向かう" % thing
 		"use":
 			return "%sを使う" % thing
 		"make":
@@ -209,26 +206,19 @@ func _move(target: String) -> Array:
 	match target:
 		"anywhere":
 			out.append(_pack("move", target, _random_spot(), null, way))
-		"home":
-			if v.home != null:
-				out.append(_pack("move", target, Vector2(v.home.cell), null, way))
+		"mine":
+			# 自分のもののうち、いちばん近いところ。持っていなければ行き先にならない
+			var mine = v.world.nearest_owned(v.id, v.cell)
+			if mine != null:
+				out.append(_pack("move", target, mine.center_cell(), mine, way))
 		"board":
 			if v.world.board != null:
 				out.append(_pack("move", target, Vector2(v.world.board.cell), null, way))
 		"toward":
 			for o in v.world.neighbors_within(v.cell, 14.0, v.id):
 				out.append(_pack("move", target, o.cell, o, way))
-		"away":
-			for o in v.world.neighbors_within(v.cell, 8.0, v.id):
-				var d: Vector2 = v.cell - o.cell
-				if d.length() < 0.01:
-					d = Vector2(1, 0)
-				var spot: Vector2 = v.cell + d.normalized() * 6.0
-				spot.x = clampf(spot.x, 0.0, float(World.GRID_W - 1))
-				spot.y = clampf(spot.y, 0.0, float(World.GRID_H - 1))
-				out.append(_pack("move", target, spot, o, way))
 		_:
-			# 村に建っているものへ。まだ建っていなければ行き先にならない。
+			# 建っているものへ。まだ建っていなければ行き先にならない。
 			var s = _building_for(Schema.move_building(target))
 			if s != null:
 				out.append(_pack("move", target, s.center_cell(), s, way))
@@ -268,7 +258,7 @@ func _use_pack(target: String, at: Vector2, obj, where: String) -> Dictionary:
 
 
 ## 何か持っていれば作れる。何を使うかは本人が決めるので、材料は見ない。
-## 建つものは、置ける場所と、家なら一人に一軒・村のものなら村に一つという枠がある。
+## 建つものに数の枠はない。見るのは置ける場所が空いているかだけ。
 func _make(target: String):
 	var way = Schema.target_def("make", target)
 	if way == null or _held_but(target).is_empty():
@@ -276,11 +266,6 @@ func _make(target: String):
 	if not Schema.is_building(target):
 		# 持てるものは手の中で完結するので移動はしない
 		return _pack("make", target, v.cell, null, way)
-	if target == Schema.HOUSE:
-		if v.home != null:
-			return null
-	elif v.world.building_of(target) != null:
-		return null
 	var c: Vector2i = v.world.find_build_cell(v.cell, v.id)
 	if c.x < 0:
 		return null
@@ -289,11 +274,11 @@ func _make(target: String):
 	return out
 
 
-## その建物の実体。家は自分のもの、それ以外は村のもの。
+## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。
 func _building_for(def_id: String):
 	if def_id == "":
 		return null
-	return v.home if def_id == Schema.HOUSE else v.world.building_of(def_id)
+	return v.world.nearest_building(def_id, v.cell)
 
 
 func _talk(target: String) -> Array:

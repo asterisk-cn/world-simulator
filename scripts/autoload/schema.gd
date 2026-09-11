@@ -20,9 +20,11 @@ signal villagers_changed
 const SCOPE_SELF := "self"
 const SCOPE_PAIR := "pair"
 
+## その言葉が誰のものか。**じぶん**は一人につき1つ、**あいて**は相手ひとりごとに1つ。
+## 設計図の章の名前と、インスペクタの見出しは、どちらもここから出る（同じ物は同じ名前）。
 const SCOPE_LABEL := {
-	SCOPE_SELF: "胸のうち",
-	SCOPE_PAIR: "間柄",
+	SCOPE_SELF: "じぶん",
+	SCOPE_PAIR: "あいて",
 }
 
 # ---------------------------------------------------------------------------
@@ -57,8 +59,7 @@ const TARGETS := {
 	"move": {
 		"anywhere": {"label": "適当な場所", "duration": 0.8, "reach": -1.0},
 		"toward": {"label": "誰かのそば", "duration": 0.4, "reach": -1.0},
-		"away": {"label": "誰かから離れて", "duration": 0.4, "reach": -1.0},
-		"home": {"label": "自分の家", "duration": 0.4, "reach": -1.0},
+		"mine": {"label": "自分のところ", "duration": 0.4, "reach": -1.0},
 		"board": {"label": "掲示板", "duration": 0.4, "reach": -1.0},
 	},
 	"talk": {
@@ -97,7 +98,7 @@ const PALETTE := [
 	Color(0.50, 0.55, 0.85), Color(0.70, 0.85, 0.60), Color(0.88, 0.50, 0.55),
 ]
 
-## n×n の間柄が読める上限。これを超えると、見るための面が先に壊れる。
+## n×n の関係の表が読める上限。これを超えると、見るための面が先に壊れる。
 const MAX_VILLAGERS := 12
 
 const DEFAULT_VILLAGERS := 8
@@ -135,14 +136,13 @@ const ART_LABEL := {
 	"well": "井戸", "tower": "塔",
 }
 
-## 建物の色。建てるものを作った順に上から割り当てる（家は建てた人の色になる）。
+## 建物の色。建てるものを作った順に上から割り当てる。
+## 世界の上に建ったものは**持ち主の色**になるので、ここが使われるのは
+## まだ誰も建てていないとき（つくりかたタブの絵）と、持ち主のないもの（神が建てたもの）。
 const BUILDING_COLORS := [
 	Color(0.78, 0.36, 0.32), Color(0.55, 0.62, 0.82), Color(0.72, 0.66, 0.44),
 	Color(0.48, 0.68, 0.58), Color(0.74, 0.55, 0.70), Color(0.62, 0.60, 0.58),
 ]
-
-## 家だけは建てた人のもので、一人に一軒。それ以外の建物は村のもので、村に一つ。
-const HOUSE := "house"
 
 var parameters: Array = []
 var recipes: Array = []
@@ -170,9 +170,10 @@ func _default_recipes() -> void:
 	]
 
 
+## 家も、ただの「建てるもの」の1つ。建てた人のものになるが、何軒建つかは決まっていない。
 func _default_buildings() -> void:
 	buildings = [
-		{"id": HOUSE, "label": "家", "art": "house"},
+		{"id": "b1", "label": "家", "art": "house"},
 	]
 
 
@@ -230,7 +231,6 @@ func building_art(id: String) -> String:
 	return "house" if b == null else String(b["art"])
 
 
-## 建物の色。家は建てた人の色になるので、ここは使われない。
 func building_color(id: String) -> Color:
 	for i in range(buildings.size()):
 		if String(buildings[i]["id"]) == id:
@@ -335,7 +335,9 @@ func _make_villager(i: int) -> Dictionary:
 		"color": PALETTE[i % PALETTE.size()],
 		"quirk": p.quirk,
 		"axes": {"ei": p.ei, "sn": p.sn, "tf": p.tf, "jp": p.jp},
-		"items": {"food": randi_range(0, 2)},
+		# 手ぶらで始まる。神が握らせておく欄は作らない——
+		# 何を持つかはその人が世界から取ってくることで決まる。
+		"items": {},
 	}
 
 
@@ -358,7 +360,7 @@ func remove_villager(id: String) -> void:
 	villagers_changed.emit()
 
 
-## 次に空いている色。同じ色が2人いると、世界の上でも間柄の表でも見分けがつかない。
+## 次に空いている色。同じ色が2人いると、世界の上でも関係の表でも見分けがつかない。
 func next_color(from: Color) -> Color:
 	var used := {}
 	for h in villagers:
@@ -379,23 +381,30 @@ func next_color(from: Color) -> Color:
 # パラメータ
 # ---------------------------------------------------------------------------
 
-## カテゴリの色。カテゴリを作った順に上から割り当てる。
-const CATEGORY_COLORS := [
-	Color(0.92, 0.42, 0.34),
-	Color(0.38, 0.72, 0.96),
-	Color(0.52, 0.84, 0.46),
-	Color(0.55, 0.85, 0.95),
-	Color(1.00, 0.78, 0.40),
-	Color(0.78, 0.62, 0.95),
-	Color(0.95, 0.62, 0.45),
-	Color(0.75, 0.78, 0.82),
-]
+## 言葉の色。**語ごとに色を持たせるのはやめた。**
+##
+## 束（カテゴリ）を消したので、色を割り当てる順番そのものが無くなった。
+## 順番で色相を回しても、じぶんの9語を暖色に閉じれば色相差が小さすぎて見分けられず、
+## 閉じなければあいての色と混ざる。そして**色は人のもの**——
+## 村人の色が世界でもUIでも識別子なので、語からも色を出すと競う。
+##
+## 語が何であるかは常に隣に字で書いてある。色は「どちらの話か」だけを言う。
+const SCOPE_COLORS := {
+	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## じぶん。土の色。「どれだけ」の話
+	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## あいての正の側。「どちらへ」の話
+}
+
+## あいての負の側。好感の裏の嫌悪、敬意の裏の侮り。
+## **積み木（`PipBar`）と n×n の表（`matrix_panel`）で同じ赤を使う。**
+## 表は色しか持たないので向きを色で言うしかなく、そこだけ赤で、
+## インスペクタの積み木は1色、では同じものを2つの言い方で見せることになる。
+const PAIR_NEG := Color(0.74, 0.26, 0.22)
 
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
 ##
-## 胸のうちは「どれだけ」の話なので 0〜100。空腹が負になることはない。
-## 間柄は「どちらへ」の話なので −100〜100。真ん中が何とも思っていないところで、
+## じぶんは「どれだけ」の話なので 0〜100。空腹が負になることはない。
+## あいては「どちらへ」の話なので −100〜100。真ん中が何とも思っていないところで、
 ## 好感の裏には嫌悪があり、敬意の裏には侮りがある。
 ## 幅を1本ずつ決めさせても、読み方が増えるだけで世界の見え方は変わらなかった。
 const SCOPE_RANGE := {
@@ -404,30 +413,30 @@ const SCOPE_RANGE := {
 }
 
 
-func make_param(id: String, label: String, scope: String, category: String) -> Dictionary:
+func make_param(id: String, label: String, scope: String) -> Dictionary:
 	var r: Array = SCOPE_RANGE.get(scope, [0.0, 100.0])
 	return {
-		"id": id, "label": label, "scope": scope, "category": category,
+		"id": id, "label": label, "scope": scope,
 		"min": float(r[0]), "max": float(r[1]),
 	}
 
 
 func _default_parameters() -> void:
 	parameters = [
-		make_param("hunger", "空腹", SCOPE_SELF, "生存"),
-		make_param("sleep", "睡眠", SCOPE_SELF, "生存"),
-		make_param("safety", "不安", SCOPE_SELF, "生存"),
-		make_param("home", "居住", SCOPE_SELF, "生存"),
-		make_param("boredom", "退屈", SCOPE_SELF, "好奇心"),
-		make_param("stagnation", "停滞", SCOPE_SELF, "好奇心"),
-		make_param("loneliness", "孤独", SCOPE_SELF, "共同体"),
-		make_param("crowding", "過密", SCOPE_SELF, "共同体"),
-		make_param("unfairness", "不公平", SCOPE_SELF, "共同体"),
+		make_param("hunger", "空腹", SCOPE_SELF),
+		make_param("sleep", "睡眠", SCOPE_SELF),
+		make_param("safety", "不安", SCOPE_SELF),
+		make_param("home", "居住", SCOPE_SELF),
+		make_param("boredom", "退屈", SCOPE_SELF),
+		make_param("stagnation", "停滞", SCOPE_SELF),
+		make_param("loneliness", "孤独", SCOPE_SELF),
+		make_param("crowding", "過密", SCOPE_SELF),
+		make_param("unfairness", "不公平", SCOPE_SELF),
 
-		make_param("affinity", "好感", SCOPE_PAIR, "親しみ"),
-		make_param("trust", "信頼", SCOPE_PAIR, "親しみ"),
-		make_param("respect", "敬意", SCOPE_PAIR, "評価"),
-		make_param("debt", "負い目", SCOPE_PAIR, "評価"),
+		make_param("affinity", "好感", SCOPE_PAIR),
+		make_param("trust", "信頼", SCOPE_PAIR),
+		make_param("respect", "敬意", SCOPE_PAIR),
+		make_param("debt", "負い目", SCOPE_PAIR),
 	]
 
 
@@ -470,37 +479,16 @@ func param_label(id: String) -> String:
 	return id if d == null else String(d["label"])
 
 
-## 色はカテゴリで決まる。同じカテゴリの中では少しずつ明るさをずらして見分ける。
-func category_color(cat: String) -> Color:
-	var all := all_categories()
-	var i := all.find(cat)
-	if i < 0:
-		return Color(0.75, 0.78, 0.82)
-	return CATEGORY_COLORS[i % CATEGORY_COLORS.size()]
-
-
-func all_categories() -> Array:
-	var out: Array = []
-	for d in parameters:
-		var c := String(d["category"])
-		if not out.has(c):
-			out.append(c)
-	return out
-
-
+## 色はスコープで決まる。語ごとの色は持たない。
 func param_color(id: String) -> Color:
 	var d = param_def(id)
 	if d == null:
-		return Color.WHITE
-	var cat := String(d["category"])
-	var base := category_color(cat)
-	var n := 0
-	for other in parameters:
-		if String(other["id"]) == id:
-			break
-		if String(other["category"]) == cat:
-			n += 1
-	return base.lightened(minf(float(n) * 0.14, 0.42))
+		return SCOPE_COLORS[SCOPE_SELF]
+	return SCOPE_COLORS.get(String(d["scope"]), SCOPE_COLORS[SCOPE_SELF])
+
+
+func scope_color(scope: String) -> Color:
+	return SCOPE_COLORS.get(scope, SCOPE_COLORS[SCOPE_SELF])
 
 
 func param_min(id: String) -> float:
@@ -513,54 +501,15 @@ func param_max(id: String) -> float:
 	return 100.0 if d == null else float(d["max"])
 
 
-func categories_in(scope: String) -> Array:
-	var out: Array = []
-	for d in params_in(scope):
-		var c := String(d["category"])
-		if not out.has(c):
-			out.append(c)
-	return out
-
-
-## パラメータはカテゴリの中に足す。個々にカテゴリを選ばせない。
-func add_param(scope: String, category: String, label: String = "新パラメータ") -> Dictionary:
+## 言葉を1つ足す。属するのはスコープだけ（じぶんか、あいてか）。
+func add_param(scope: String, label: String = "新しいことば") -> Dictionary:
 	var taken: Array = []
 	for d in parameters:
 		taken.append(String(d["id"]))
-	var p := make_param(_unique_id("p", taken), label, scope, category)
+	var p := make_param(_unique_id("p", taken), label, scope)
 	parameters.append(p)
 	parameters_changed.emit()
 	return p
-
-
-## 空のカテゴリは持てないので、カテゴリを作るときは中身を1つ添える
-func add_category(scope: String) -> String:
-	var taken := categories_in(scope)
-	var i := 1
-	while taken.has("新カテゴリ%d" % i):
-		i += 1
-	var cat := "新カテゴリ%d" % i
-	add_param(scope, cat)
-	return cat
-
-
-func remove_category(scope: String, cat: String) -> void:
-	var kept: Array = []
-	for d in parameters:
-		if String(d["scope"]) == scope and String(d["category"]) == cat:
-			continue
-		kept.append(d)
-	parameters = kept
-	parameters_changed.emit()
-
-
-func rename_category(scope: String, old_name: String, new_name: String) -> void:
-	if new_name.strip_edges() == "":
-		return
-	for d in parameters:
-		if String(d["scope"]) == scope and String(d["category"]) == old_name:
-			d["category"] = new_name
-	parameters_changed.emit()
 
 
 func remove_param(id: String) -> void:
@@ -582,7 +531,8 @@ func remove_param(id: String) -> void:
 ##   使う … 世界にある物と持ち物（同じもの）＋ 建物
 ##          そこに在るのを使うのか手の中のを使うのかは、候補を作るときに分かれる
 ##   作る … つくりかたにあるもの（持てるもの / 建てるもの）
-##   動く … 村にある建物のぶんだけ行き先が増える（自分の家は元からある）
+##   動く … 建てられるものぶんだけ行き先が増える（同じものが何軒あっても、いちばん近いところへ）。
+##          「自分のところ」は元からある行き先で、自分が建てたもののうち近いところ
 func targets_of(kind: String) -> Dictionary:
 	var out := {}
 	match kind:
@@ -599,8 +549,6 @@ func targets_of(kind: String) -> Dictionary:
 		"move":
 			out = TARGETS["move"].duplicate(true)
 			for b in buildings:
-				if String(b["id"]) == HOUSE:
-					continue  # 自分の家 は元からある
 				out["go:%s" % String(b["id"])] = _target(String(b["label"]), 0.4, -1.0)
 		_:
 			return TARGETS.get(kind, {})

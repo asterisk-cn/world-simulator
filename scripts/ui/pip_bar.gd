@@ -17,9 +17,18 @@ var vmin := 0.0
 var vmax := 100.0
 var tint := Color(0.6, 0.6, 0.6)
 
+## 真ん中より下（負の側）を塗る色。**作る側（`UIKit.bar_row`）が渡す**——
+## 決めているのは `Schema.PAIR_NEG` の1か所で、n×n の表も同じ色を引いている。
+## 形（どちら側が塗られているか）だけでも向きは読めるが、
+## 表は色でしか向きを言えないので、こちらも同じ言い方に揃える。
+## 下限が負でないパラメータでは使われない。
+var neg := Color(0.6, 0.4, 0.4)
 
+
+## 大きさは作る側（`UIKit.bar_row` / `pole_row`）が決める。
+## ここから UIKit を参照すると UIKit → PipBar → UIKit の輪ができて、
+## UIKit に関数を1つ足すたびにエディタが古い UIKit を見たまま止まる。
 func _ready() -> void:
-	custom_minimum_size = Vector2(90, UIKit.BAR_H)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -43,7 +52,8 @@ func _draw() -> void:
 	# 数だけだと、たとえば緑の「孤独」がたくさん並んでいても健やかに見えてしまう。
 	var reach: float = maxf(maxf(origin, 1.0 - origin), 0.001)
 	var amount: float = clampf(absf(t - origin) / reach, 0.0, 1.0)
-	var fill := tint.lightened(0.34 * (1.0 - amount)).darkened(0.22 * amount)
+	var base := neg if (vmin < 0.0 and t < origin) else tint
+	var fill := base.lightened(0.34 * (1.0 - amount)).darkened(0.22 * amount)
 
 	var w := (size.x - GAP * float(PIPS - 1)) / float(PIPS)
 	for i in range(PIPS):

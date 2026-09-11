@@ -10,7 +10,11 @@ signal morning_started(day: int)
 const DAY_STARTS_AT := 6.0
 
 var day: int = 1
-var time_of_day: float = 0.25  ## 0.0=夜明け前 .. 1.0
+## 0.0=夜明け前 .. 1.0。**世界は 8:00 から始まる**——
+## 表示は `time_of_day * 24 + DAY_STARTS_AT` なので、8:00 は 2/24
+const STARTS_AT := 2.0 / 24.0
+
+var time_of_day: float = STARTS_AT
 var is_night: bool = false
 var speed: float = 1.0
 var paused: bool = false
@@ -19,7 +23,7 @@ var paused: bool = false
 ## 次の世界のために時間を巻き戻す。日数も速さも持ち越さない。
 func reset() -> void:
 	day = 1
-	time_of_day = 0.25
+	time_of_day = STARTS_AT
 	is_night = false
 	speed = 1.0
 	paused = true

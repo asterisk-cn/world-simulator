@@ -20,8 +20,63 @@ var structures: Array = []
 var villagers: Array = []
 var board: BulletinBoard
 
-## 家は通り抜けられない。家どうしの間は必ず空いているのでそこを通る。
+## 建物は通り抜けられない（持ち主だけは中を通れる）。建物どうしの間は必ず空いているのでそこを通る。
 var astar := AStarGrid2D.new()
+
+# ---------------------------------------------------------------------------
+# 世界が組み上がる。
+#
+# 作り直しをぱっと入れ替えると、世界が生まれた感じにならない——ただ絵が
+# 差し替わっただけに見える。**積み木の世界なのだから、組み上がるべき。**
+# 真ん中から波が広がって、地面が敷かれ、その後ろから物が生えてくる。
+# ---------------------------------------------------------------------------
+
+## 0 = まだ何も無い、1 = でき上がり。`main` が始める儀式で送る
+var birth := 1.0:
+	set(v):
+		birth = v
+		_grow()
+		queue_redraw()
+
+## 波の縁の厚み（島の半径の割合）。薄いと切り取り線に見え、
+## 厚いと粒が散らばって網点に見える
+const BIRTH_EDGE := 0.14
+
+## 物は地面より少し遅れて生える。同時だと土から生えた感じにならない
+const BIRTH_LAG := 0.10
+
+
+# ---------------------------------------------------------------------------
+# 下見の島が崩れる。
+#
+# 一斉に薄くして消すと「絵が差し替わった」に見える。**世界が壊れるのだから、
+# ボロボロと落ちるべき。** マスごとにばらばらの間で落ちはじめ、
+# 加速しながら下へ抜けて薄れる。
+# ---------------------------------------------------------------------------
+
+## 0 = そのまま、1 = ぜんぶ落ちた
+var crumble := 0.0:
+	set(v):
+		crumble = v
+		_grow()
+		queue_redraw()
+
+## 一枚が落ちきるまで（全体の割合）。短いと一斉に落ちて、長いと粘って見える
+const CRUMBLE_SPAN := 0.30
+
+## 薄れ方。**1 より大きくして終盤に寄せる**——位置は加速（`f²`）なのに
+## 薄れが一定だと、ほとんど落ちないうちに半分透けて、
+## 落ちる前に消えてしまう（＝落ちるのが早く見える）
+const CRUMBLE_FADE := 2.2
+
+## 落ちる距離（px）。画面の外まで抜ければいい
+const CRUMBLE_FALL := 420.0
+
+## 落ちはじめの偏り。**1 より小さいと、早く落ちるマスが少なくなる**——
+## 一様だと始まった途端に3割が動き出して「一斉」に見える。
+## 焼けと重ねて見せるので、始まりはポツポツでなければならない。
+## 0.80 で、崩れが始まって 0.15 秒後に動き出しているのは 1.2%
+const CRUMBLE_BIAS := 0.80
 
 
 func _ready() -> void:
@@ -138,7 +193,10 @@ func register_villager(v) -> void:
 
 
 ## 建てられたものを世界に置く。何が建つかは神の定義（`Schema.buildings`）で決まる。
-func add_structure(def_id: String, cell: Vector2i, owner_id: int, color: Color) -> Structure:
+## **建てた人のものになる**（屋根がその人の色になる）。
+## 持ち主のないもの（神が建てたもの）は owner_id を渡さない。
+func add_structure(def_id: String, cell: Vector2i, owner_id: int = -1,
+		color: Color = Color.WHITE) -> Structure:
 	var s := Structure.new()
 	s.setup(def_id, cell, owner_id, color)
 	entities.add_child(s)
@@ -158,19 +216,20 @@ func is_blocked(c: Vector2i) -> bool:
 	return in_bounds(c) and astar.is_point_solid(c)
 
 
-## from から to までの経路。自分の家の中だけは通れる。
+## from から to までの経路。建物は通り抜けられないが、**自分のものの中は通れる**。
 func find_path(from_cell: Vector2, to_cell: Vector2, own_id: int = -1) -> PackedVector2Array:
 	var a := Vector2i(roundi(from_cell.x), roundi(from_cell.y))
 	var b := Vector2i(roundi(to_cell.x), roundi(to_cell.y))
 	if not in_bounds(a) or not in_bounds(b):
 		return PackedVector2Array([from_cell])
 
-	# 自分の家は一時的に通れるようにする
+	# 自分のものは一時的に通れるようにする（中に入るため）
 	var opened: Array = []
 	if own_id >= 0:
-		var h := house_of(own_id)
-		if h != null:
-			for c in h.footprint():
+		for s in structures:
+			if s.owner_id != own_id:
+				continue
+			for c in s.footprint():
 				if in_bounds(c) and astar.is_point_solid(c):
 					astar.set_point_solid(c, false)
 					opened.append(c)
@@ -207,14 +266,14 @@ func _nearest_open(c: Vector2i) -> Vector2i:
 	return c
 
 
-## 家のまわりで空いているマス（チェストを置く場所に使う）
-func free_cell_around(house_cell: Vector2i) -> Vector2i:
+## 建物のまわりで空いているマス
+func free_cell_around(at: Vector2i) -> Vector2i:
 	var ring := [
 		Vector2i(2, 0), Vector2i(2, 1), Vector2i(-1, 0), Vector2i(-1, 1),
 		Vector2i(0, 2), Vector2i(1, 2), Vector2i(0, -1), Vector2i(1, -1),
 	]
 	for d in ring:
-		var c: Vector2i = house_cell + d
+		var c: Vector2i = at + d
 		if not in_bounds(c) or is_blocked(c):
 			continue
 		if board != null and board.cell == c:
@@ -230,7 +289,7 @@ func free_cell_around(house_cell: Vector2i) -> Vector2i:
 				break
 		if not taken:
 			return c
-	return house_cell + Vector2i(2, 1)
+	return at + Vector2i(2, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -280,20 +339,34 @@ func building_at(c: Vector2i) -> Structure:
 	return null
 
 
-## その人の家。家だけは建てた人のもので、一人に一軒。
-func house_of(owner_id: int) -> Structure:
+## その建物のうち、いちばん近いもの。
+## 同じものが何軒建つかは誰も決めていないので、「村のその1つ」を指す言い方はしない。
+func nearest_building(def_id: String, from_cell: Vector2) -> Structure:
+	var best: Structure = null
+	var best_d := INF
 	for s in structures:
-		if s.is_house() and s.owner_id == owner_id:
-			return s
-	return null
+		if s.def_id != def_id:
+			continue
+		var d: float = from_cell.distance_to(s.center_cell())
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
 
 
-## 村のその建物。家以外は村のもので、村に一つ。
-func building_of(def_id: String) -> Structure:
+## その人のものの中で、いちばん近いもの。「自分のところ」の行き先になる。
+## 何軒持っているかは決まっていないので、「その人の1軒」を指す言い方はしない。
+func nearest_owned(owner_id: int, from_cell: Vector2) -> Structure:
+	var best: Structure = null
+	var best_d := INF
 	for s in structures:
-		if s.def_id == def_id:
-			return s
-	return null
+		if s.owner_id != owner_id:
+			continue
+		var d: float = from_cell.distance_to(s.center_cell())
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
 
 
 func villager_by_id(vid: int):
@@ -344,13 +417,13 @@ func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 
 
 ## 建物どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
-const HOUSE_SPACING := 3
+const BUILD_SPACING := 3
 
 
 func _can_build_at(c: Vector2i) -> bool:
 	for s in structures:
 		for oc in s.footprint():
-			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < HOUSE_SPACING:
+			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < BUILD_SPACING:
 				return false
 	for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
 		var cc: Vector2i = c + d
@@ -366,16 +439,6 @@ func _can_build_at(c: Vector2i) -> bool:
 	return true
 
 
-## 村全体の平均的な豊かさ。不公平パラメータの基準になる。
-func wealth_average() -> float:
-	if villagers.is_empty():
-		return 0.0
-	var total := 0.0
-	for v in villagers:
-		total += v.wealth()
-	return total / float(villagers.size())
-
-
 # ---------------------------------------------------------------------------
 # 描画
 # ---------------------------------------------------------------------------
@@ -383,12 +446,27 @@ func wealth_average() -> float:
 func _draw() -> void:
 	for x in range(GRID_W):
 		for y in range(GRID_H):
-			var p := Iso.cell_to_world(Vector2(x, y))
+			var cell := Vector2(x, y)
+			# 落ちきったマスはもう無い
+			var f := _fallen(cell)
+			if f >= 1.0:
+				continue
+			# **敷かれる前のマスは描かない。** 縁では小さいまま置いて、広がりながら
+			# ひし形いっぱいになる——一枚ずつ置いていくように見える。
+			# 小さすぎるひし形は四隅が原点に潰れて、三角形に割れない
+			var u := _laid(cell) * (1.0 - f)
+			if u <= 0.03:
+				continue
+			# 落ちるほど速く（加速）、そして薄れる
+			var p := Iso.cell_to_world(cell) + Vector2(0, CRUMBLE_FALL * f * f)
 			var col: Color = GROUND_COLORS[ground[x][y]]
+			col.a = 1.0 - pow(f, CRUMBLE_FADE)
 			var poly := PackedVector2Array()
-			for pt in Iso.diamond(1.0):
+			for pt in Iso.diamond(u):
 				poly.append(pt + p)
 			draw_colored_polygon(poly, col)
+	if birth < 1.0 or crumble > 0.0:
+		return   # 外周は、島がぜんぶ敷かれているときだけ引く
 	# 外周
 	var corners := PackedVector2Array([
 		Iso.cell_to_world(Vector2(-0.5, -0.5)),
@@ -397,3 +475,52 @@ func _draw() -> void:
 		Iso.cell_to_world(Vector2(-0.5, GRID_H - 0.5)),
 	])
 	draw_polyline(corners + PackedVector2Array([corners[0]]), Color(0.15, 0.18, 0.15, 0.7), 3.0)
+
+
+## そのマスがどれだけ敷かれたか（0〜1）。真ん中から広がる波。
+##
+## 隔たりは**マス目の四角**で測る（縦横の大きいほう）。画面での距離で測ると
+## 波が円になって、島の四隅だけが最後まで残る。四角なら島の形と同じ向きに
+## 広がって、四隅が同時に埋まる
+func _laid(cell: Vector2, lag: float = 0.0) -> float:
+	if birth >= 1.0:
+		return 1.0
+	var mid := Vector2(GRID_W - 1, GRID_H - 1) * 0.5
+	var off := (cell - mid).abs()
+	var d: float = maxf(off.x, off.y) / maxf(mid.x, mid.y)
+	return clampf((birth - lag - d * (1.0 - BIRTH_EDGE)) / BIRTH_EDGE, 0.0, 1.0)
+
+
+## 位置から決まる乱れ（0〜1）。マスごとにばらばらの間で落ちはじめる
+func _grit(cell: Vector2) -> float:
+	var h := sin(cell.x * 12.9898 + cell.y * 78.233) * 43758.5453
+	return h - floor(h)
+
+
+## そのマスがどれだけ落ちたか（0〜1）
+func _fallen(cell: Vector2) -> float:
+	if crumble <= 0.0:
+		return 0.0
+	var start := pow(_grit(cell), CRUMBLE_BIAS) * (1.0 - CRUMBLE_SPAN)
+	return clampf((crumble - start) / CRUMBLE_SPAN, 0.0, 1.0)
+
+
+## 地面の波の後ろから物が生え、崩れるときは一緒に落ちる
+func _grow() -> void:
+	if entities == null:
+		return
+	for c in entities.get_children():
+		if c is Node2D:
+			var n := c as Node2D
+			var cell := Iso.world_to_cell(n.position - Vector2(0,
+				float(n.get_meta("fall", 0.0))))
+			var u := _laid(cell, BIRTH_LAG)
+			var f := _fallen(cell)
+			if not n.has_meta("base_y"):
+				n.set_meta("base_y", n.position.y)
+			var drop := CRUMBLE_FALL * f * f
+			n.set_meta("fall", drop)
+			n.position.y = float(n.get_meta("base_y")) + drop
+			n.scale = Vector2.ONE * u * (1.0 - f * 0.4)
+			n.modulate.a = 1.0 - pow(f, CRUMBLE_FADE)
+			n.visible = u > 0.01 and f < 1.0

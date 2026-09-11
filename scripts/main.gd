@@ -5,10 +5,19 @@ var world: World
 var camera: Camera2D
 var modulate_node: CanvasModulate
 var hud = null
+
+## 神の紙を置く層。世界の日夜の色を受けない（`_setup_ui`）
+var god_layer: CanvasLayer = null
 var inspector = null
 var selected = null
 
+## いま見ている建物。村人と同時には選べない（見ているものは1つ）
+var selected_building: Structure = null
+
 var rules_panel = null
+
+## 紙を入れる焼ける器。位置ぎめはこちらに向ける
+var burn_paper: BurnPaper = null
 var started := false
 
 var _panning := false
@@ -19,6 +28,9 @@ var wake := 0.0
 var _starting := false
 var _ending := false
 var _next_id := 1
+
+## 言葉が決まった後の土地を作ったか。作り直しは一度だけ
+var _land_made := false
 
 
 func _ready() -> void:
@@ -63,38 +75,90 @@ func _begin_ritual() -> void:
 		return
 	_starting = true
 
-	var seal = preload("res://scripts/ui/seal.gd").new()
-	seal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hud.add_child(seal)
-
 	var tw := create_tween()
-	tw.tween_property(seal, "pop", 1.0, 0.40).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(0.30)
-	tw.tween_property(rules_panel, "modulate:a", 0.0, 0.40)
-	tw.parallel().tween_property(seal, "modulate:a", 0.0, 0.55)
+	# **神が書いた言葉が、上から焼けていく。** 封蝋を押していたのをやめた——
+	# 押した印より、書いたものが消えていく絵のほうが強い
+	# **点火の一拍を分ける。** ただ加速させると最初の半秒がほとんど動かず、
+	# 「火が付いた」が伝わらない。まず下端に燃えぎわだけ現れて、それから走る
+	tw.tween_property(burn_paper, "burn", 0.03, 0.35).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(burn_paper, "burn", 1.0, 1.40) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# **焼けと重ねて、下見の島がポツポツと落ちはじめる。**
+	# 焼け落ちてから崩すと、紙と世界が別の出来事に見える。
+	# 落ちはじめが疎らなのは `World.CRUMBLE_BIAS` が受け持つ——
+	# 一様だと始まった途端に3割が動き出して「一斉」になる
+	# **1.00s からポツポツ落ちはじめ、焼け切り（1.75s）に見た目で2割欠け、
+	# 落ち切るのはその1秒後（2.75s）。**
+	# 焼け切りは崩れの窓の 43% 地点なので、1枚の落下が窓の半分を占めると
+	# その時点で「落ち切った」タイルは出ない。欠け具合は `World.CRUMBLE_SPAN` と
+	# `CRUMBLE_BIAS` で合わせてある
+	tw.parallel().tween_property(world, "crumble", 1.0, 1.75) \
+		.set_delay(0.65).set_trans(Tween.TRANS_SINE)
+	# 何も無くなってから作り直し、**組み上がるところを見せる**
+	tw.tween_callback(_make_land)
+	tw.tween_property(world, "birth", 1.0, 0.95).set_trans(Tween.TRANS_SINE)
+	# 土地ができてから人が来る
 	tw.tween_callback(_start_world)
 	# 世界が目を覚ます。青く沈めていた色をここで解く
 	tw.tween_property(self, "wake", 1.0, 1.1).set_trans(Tween.TRANS_SINE)
-	tw.tween_callback(seal.queue_free)
 
 
-## 定義が確定したら村人を置いて世界を動かす。以降、定義は閲覧のみ。
+## 言葉が決まってから土地を作る。
+##
+## **始めるより前の島は下見。** 起動時に一度作ってあるが、それは言葉を書くあいだ
+## 後ろに見えているだけのもので、書いた言葉で世界が変わるのだから、
+## 押した後の土地でなければ意味がない。
+func _make_land() -> void:
+	if _land_made:
+		return
+	_land_made = true
+	# 下見のあいだに触れていたものは、作り直しで消える節点を指している
+	selected = null
+	selected_building = null
+	world.regenerate()
+	world.birth = 0.0     # ここから組み上がる（`world.gd` の注）
+	world.crumble = 0.0   # 崩れは前の島の話
+	hud.on_world_reset()
+
+
+## 土地ができたら村人を置いて世界を動かす。以降、定義は閲覧のみ。
 func _start_world() -> void:
 	if started:
 		return
 	started = true
 	_show_setup(false)
-	rules_panel.modulate.a = 1.0  # 儀式で薄くした紙は、閲覧用の窓として戻ってくる
+	burn_paper.burn = 0.0  # 焼いた紙は、閲覧用の窓として戻ってくる
+	rules_panel.modulate.a = 1.0
 	rules_panel.set_editable(false)
+	# 儀式を通らずに来ることもある（`--autostart`）。そのときは一息に建てる
+	_make_land()
+	world.birth = 1.0
 	_spawn_villagers()
 	SimClock.paused = false
 	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 
 
+## 取り返しがつかないので、終える前に一度だけ訊く。
+## 訊いているあいだは時間を止める。答える前に村が変わってしまうのはおかしい。
+func _ask_end() -> void:
+	if not started or _ending:
+		return
+	var was_paused := SimClock.paused
+	SimClock.paused = true
+	var ask = preload("res://scripts/ui/confirm_popup.gd").new()
+	ask.setup("本当に終了しますか？",
+		"この村はここで終わり、設計図のところへ戻る。記録も関係も残らない。", "終了する")
+	# 実行中に足す面なので、テーマは自分で持たせる（CanvasLayer は伝えてくれない）
+	ask.theme = SimConfig.ui_theme
+	hud.add_child(ask)
+	ask.confirmed.connect(_end_ritual)
+	ask.canceled.connect(func() -> void: SimClock.paused = was_paused)
+
+
 ## 「この世界を終える」を押してから、言葉のところへ戻るまでの一拍。
 ##
 ## 始める一拍の逆をたどる。時間が止まり、目を覚ましていた世界が青へ沈み、
-## 決めた言葉の紙が戻ってくる。ここでも確認のダイアログは挟まない（紙の側で一拍置いている）。
+## 決めた言葉の紙が戻ってくる。
 func _end_ritual() -> void:
 	if not started or _ending:
 		return
@@ -109,7 +173,7 @@ func _end_ritual() -> void:
 	tw.tween_property(rules_panel, "modulate:a", 1.0, 0.45)
 
 
-## 村を畳んで、言葉のところへ戻す。島も資源も新しくなる。
+## 村を畳んで、言葉のところへ戻す。
 ## 神が決めた言葉と顔ぶれ（Schema）はそのまま残るので、書き足してまた始められる。
 func _reset_world() -> void:
 	started = false
@@ -117,8 +181,13 @@ func _reset_world() -> void:
 	_ending = false
 	_next_id = 1
 
-	world.regenerate()
-	hud.on_world_reset()
+	# **盤面は片づけない。** 始めるときに作り直すので（`_make_land`）、
+	# ここで作り直すのは二度手間。畳んだ村はそのまま後ろに残って、
+	# 次の言葉を書くあいだの下見になり、次に始めたときに崩れて消える
+	_land_made = false
+	world.birth = 1.0
+	world.crumble = 0.0
+	burn_paper.burn = 0.0   # 焼いた紙は、書くための紙として戻ってくる
 	EventLog.clear()
 	SimClock.reset()
 	camera.position = Iso.cell_to_world(Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0))
@@ -132,18 +201,19 @@ func _reset_world() -> void:
 ## セットアップ中は定義パネルを大きく中央に出し、他の面を隠す
 func _show_setup(on: bool) -> void:
 	rules_panel.visible = on
+	# 位置は**器**が持つ。紙は器いっぱいに広がる（`ui/burn_paper.gd`）
 	if on:
-		rules_panel.set_anchors_preset(Control.PRESET_CENTER)
-		rules_panel.offset_left = -310
-		rules_panel.offset_right = 310
-		rules_panel.offset_top = -360
-		rules_panel.offset_bottom = 360
+		burn_paper.set_anchors_preset(Control.PRESET_CENTER)
+		burn_paper.offset_left = -360
+		burn_paper.offset_right = 360
+		burn_paper.offset_top = -400
+		burn_paper.offset_bottom = 400
 	else:
-		rules_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		rules_panel.offset_left = 12
-		rules_panel.offset_right = 500
-		rules_panel.offset_top = 78
-		rules_panel.offset_bottom = 714
+		burn_paper.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		burn_paper.offset_left = 12
+		burn_paper.offset_right = 576
+		burn_paper.offset_top = 88
+		burn_paper.offset_bottom = 800
 	hud.set_play_ui_visible(not on)
 
 
@@ -192,6 +262,13 @@ func _setup_camera() -> void:
 
 
 func _setup_ui() -> void:
+	# **神の紙は世界の光の下にない。** 世界に置くと日夜の色（`modulate_node`）が
+	# 乗って、飛んでいる紙が青くなる。層を分けて、位置だけ世界に合わせる
+	# （`_process` で `transform` にカメラの写しを入れる）。
+	# HUD より先に足すので、上部バーは紙の上に残る
+	god_layer = CanvasLayer.new()
+	add_child(god_layer)
+
 	hud = preload("res://scripts/ui/hud.gd").new()
 	add_child(hud)
 	hud.setup(world)
@@ -201,7 +278,7 @@ func _setup_ui() -> void:
 	inspector = preload("res://scripts/ui/inspector.gd").new()
 	inspector.world = world
 	inspector.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	inspector.offset_left = -346
+	inspector.offset_left = -396
 	inspector.offset_right = -12
 	inspector.offset_top = 12
 	inspector.offset_bottom = -12
@@ -212,9 +289,10 @@ func _setup_ui() -> void:
 	roster.world = world
 	roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	roster.offset_left = 12
-	roster.offset_right = 452
-	roster.offset_top = 78
-	roster.offset_bottom = 474
+	# 持ち物の列に名前が入るので、品目が増えても「いま何をしているか」が潰れない幅
+	roster.offset_right = 620
+	roster.offset_top = 88
+	roster.offset_bottom = 540
 	roster.visible = false
 	hud.add_child(roster)
 	hud.roster_panel = roster
@@ -225,10 +303,17 @@ func _setup_ui() -> void:
 	matrix.world = world
 	matrix.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	matrix.offset_left = 12
-	matrix.offset_right = 620
-	matrix.offset_top = 78
-	matrix.offset_bottom = 72
+	matrix.offset_right = 716
+	matrix.offset_top = 88
+	matrix.offset_bottom = 82
 	matrix.closed.connect(hud.close_panels)
+	# 表のマスは個人UIへの入口。値はあちらで読ませる（表は眺めるための面）
+	matrix.pair_requested.connect(func(from_id: int, to_id: int) -> void:
+		var v = world.villager_by_id(from_id)
+		if v == null:
+			return
+		_select(v, true)
+		inspector.focus_pair(to_id))
 	matrix.visible = false
 	hud.add_child(matrix)
 	hud.matrix_panel = matrix
@@ -237,26 +322,42 @@ func _setup_ui() -> void:
 	rules.world = world
 	rules.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	rules.offset_left = 12
-	rules.offset_right = 484
-	rules.offset_top = -330
-	rules.offset_bottom = 330
+	rules.offset_right = 560
+	rules.offset_top = -380
+	rules.offset_bottom = 380
 	var dbg = preload("res://scripts/ui/debug_panel.gd").new()
 	dbg.world = world
 	dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	dbg.offset_left = 12
-	dbg.offset_right = 392
-	dbg.offset_top = 78
-	dbg.offset_bottom = 394
+	dbg.offset_right = 452
+	dbg.offset_top = 88
+	# 丈は中身が決める。枠を先に決めると、下に用のない余白が残る
+	dbg.offset_bottom = 88
 	dbg.closed.connect(hud.close_panels)
 	dbg.visible = false
 	hud.add_child(dbg)
 	hud.debug_panel = dbg
 
-	hud.add_child(rules)
+	var opt = preload("res://scripts/ui/option_panel.gd").new()
+	opt.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	opt.offset_left = 12
+	opt.offset_right = 540
+	opt.offset_top = 88
+	opt.offset_bottom = 88
+	opt.closed.connect(hud.close_panels)
+	opt.end_requested.connect(_ask_end)
+	opt.visible = false
+	hud.add_child(opt)
+	hud.option_panel = opt
+
+	# 紙は**焼ける器**に入れる。始める儀式で上から焼け落ちる（`ui/burn_paper.gd`）。
+	# 位置ぎめはこの器に向ける（`_show_setup`）
+	burn_paper = BurnPaper.new()
+	hud.add_child(burn_paper)
+	burn_paper.hold(rules)
 	hud.rules_panel = rules
 	rules_panel = rules
 	rules.started.connect(_begin_ritual)
-	rules.ended.connect(_end_ritual)
 	rules.closed.connect(hud.close_panels)
 
 	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。
@@ -266,6 +367,10 @@ func _setup_ui() -> void:
 
 
 func _process(_delta: float) -> void:
+	# 神の紙の層は、位置だけ世界に合わせる（色は受けない）
+	if god_layer != null:
+		god_layer.transform = get_canvas_transform()
+
 	# 夜は「暗い昼」ではなく色を青紫へ寄せる。暗くしすぎると角丸ブロックの色が濁る
 	var d := SimClock.darkness()
 	var night := Color(0.30, 0.36, 0.72)
@@ -311,8 +416,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				if event.pressed:
 					_try_select(get_global_mouse_position())
 
-	elif event is InputEventMouseMotion and _panning:
-		camera.position -= event.relative / camera.zoom.x
+	elif event is InputEventMouseMotion:
+		if _panning:
+			camera.position -= event.relative / camera.zoom.x
+		else:
+			_hover_at(get_global_mouse_position())
 
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
@@ -332,6 +440,20 @@ func _try_select(world_pos: Vector2) -> void:
 			hud.open_board()
 			return
 
+	var v = _villager_at(world_pos)
+	if v != null:
+		_select(v)
+		return
+	# 村人が居なければ建物。**建物にも寄れる**（記録の行から飛ぶ先になる）
+	_select_building(world.building_at(_cell_at(world_pos)))
+
+
+func _cell_at(world_pos: Vector2) -> Vector2i:
+	var c := Iso.world_to_cell(world_pos)
+	return Vector2i(roundi(c.x), roundi(c.y))
+
+
+func _villager_at(world_pos: Vector2):
 	var best = null
 	var best_d := 40.0
 	for v in world.villagers:
@@ -341,10 +463,22 @@ func _try_select(world_pos: Vector2) -> void:
 		if d < best_d:
 			best_d = d
 			best = v
-	_select(best)
+	return best
 
 
-## 一覧や間柄から選んだときは、世界の側でもその村人へ寄る。
+## カーソルの下のものに名前を出させる。**名前は常には出ていない。**
+func _hover_at(world_pos: Vector2) -> void:
+	var v = _villager_at(world_pos)
+	var s: Structure = null
+	if v == null:
+		s = world.building_at(_cell_at(world_pos))
+	for other in world.villagers:
+		other.hovered = other == v
+	for st in world.structures:
+		st.hovered = st == s
+
+
+## 一覧や関係の表から選んだときは、世界の側でもその村人へ寄る。
 ## パネルの数字と世界の姿が繋がらないと、観察する遊びの回路が切れる。
 func _select(v, focus: bool = false) -> void:
 	if selected != null and is_instance_valid(selected):
@@ -354,29 +488,67 @@ func _select(v, focus: bool = false) -> void:
 		selected.selected = true
 		if focus:
 			_focus_on(selected)
+	if v != null:
+		_select_building(null)
 	inspector.set_subject(selected)
 
 
-## 記録の行から、その出来事が起きた場所へ。
-## 相手が分かっていればその村人を選び、場所しか無ければそこへ寄る。
-func _on_jump(at: Vector2, who: int) -> void:
-	if who >= 0:
-		var v = world.villager_by_id(who)
+## 建物を選ぶ。**出るのは名前だけ**——建物は中に値を持たないので、
+## インスペクタに出すものが無い。輪と札で「これを見ている」だけを言う。
+func _select_building(s: Structure, focus: bool = false) -> void:
+	if selected_building != null and is_instance_valid(selected_building):
+		selected_building.selected = false
+	selected_building = s
+	if s != null:
+		s.selected = true
+		if focus:
+			_focus_at(s.position)
+		# 村人と建物は同時に選べない。見ているものは1つ
+		_select(null)
+
+
+## 記録の中の名前から、その名前のものへ。
+## 村人なら選んで寄り、建物なら選んで寄り、掲示板なら板を開く。
+func _on_jump(target: String) -> void:
+	if target == "board":
+		if world.board != null:
+			_focus_at(world.board.position)
+		hud.open_board()
+		return
+	var parts := target.split(":")
+	if parts.size() != 2:
+		return
+	var tid := int(parts[1])
+	if parts[0] == "v":
+		var v = world.villager_by_id(tid)
 		if v != null:
 			_select(v, true)
-			return
-	if at.x != INF:
-		_focus_at(at)
+	elif parts[0] == "s":
+		for s in world.structures:
+			if s.id == tid:
+				_select_building(s, true)
+				return
 
 
 ## 神が放った紙を世界へ飛ばす。板に着いたところで初めて貼られる。
-func _on_god_posted(from_screen: Vector2, text: String) -> void:
+func _on_god_posted(from_screen: Vector2, text: String, sheet: Control) -> void:
 	if world.board == null:
 		return
 	var paper = preload("res://scripts/world/paper_fly.gd").new()
-	add_child(paper)
-	var to: Vector2 = world.board.position + Vector2(0, -26)
-	paper.setup(get_canvas_transform().affine_inverse() * from_screen, to)
+	god_layer.add_child(paper)
+	# 板の中心ではなく、**その紙が実際に貼られる枡**へ落とす
+	var to: Vector2 = world.board.position + world.board.next_slip_point()
+	# 書いていた紙そのものを運ばせる（`ui/write_popup.gd` の `take_sheet`）
+	# 画面の高さを世界の尺で渡す。紙はこれを使って画面の外まで抜ける
+	var reach: float = get_viewport_rect().size.y / maxf(camera.zoom.y, 0.01)
+	paper.setup(get_canvas_transform().affine_inverse() * from_screen, to, sheet, reach)
+	# **降りに入ったら世界のものになる。** 上がるあいだは神の手のものなので
+	# 世界の光を受けないが、空から降りてくる紙は受けたほうが世界に居て見える
+	paper.entered_world.connect(func() -> void:
+		var at: Vector2 = paper.position
+		god_layer.remove_child(paper)
+		add_child(paper)
+		paper.position = at)
 	paper.landed.connect(func() -> void:
 		world.board.post(-1, "差出人不明", text))
 

@@ -7,15 +7,43 @@ extends Node
 
 signal param_changed(key: String, value: float)
 
-## key -> [既定値, 最小, 最大, 説明]
+## key -> [既定値, 最小, 最大, 説明, きざみ]
+##
+## **きざみは、幅をちょうど10で割った値にする。** つまみは積み木10個で描かれるので、
+## 途中の値を取れると、積み木の切れ目と値がずれて「どこにいるのか」が読めない。
+## 幅の端も既定値も、きざみの上に乗る数だけを選んである。
 const PARAM_DEF := {
-	"day_length_sec": [90.0, 20.0, 600.0, "1日の長さ"],
-	"night_starts_at": [20.0, 13.0, 24.0, "夜になる時刻"],
-	"decision_interval": [1.1, 0.2, 6.0, "考え直す間合い"],
-	"move_speed": [1.9, 0.2, 12.0, "歩く速さ"],
+	"day_length_sec": [90.0, 30.0, 330.0, "1日の長さ", 30.0],
+	"night_starts_at": [20.0, 14.0, 24.0, "夜になる時刻", 1.0],
+	"decision_interval": [1.0, 0.2, 2.2, "考え直す間合い", 0.2],
+	"move_speed": [2.0, 0.5, 5.5, "歩く速さ", 0.5],
 
-	"summaries_kept": [5.0, 1.0, 30.0, "覚えていられる日数"],
+	"summaries_kept": [5.0, 1.0, 11.0, "覚えていられる日数", 1.0],
 }
+
+
+## その目盛りのきざみ
+func step_of(key: String) -> float:
+	if not PARAM_DEF.has(key):
+		return 1.0
+	return float(PARAM_DEF[key][4])
+
+
+## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
+## 開始前（設計図の「世界」）と進行中（オプション）で同じ言い方にする。
+func text_of(v: float, key: String) -> String:
+	match key:
+		"day_length_sec":
+			return "%d秒" % int(v)
+		"night_starts_at":
+			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
+		"decision_interval":
+			return "%.1f秒" % v
+		"move_speed":
+			return "%.1f歩/秒" % v
+		"summaries_kept":
+			return "%d日" % int(v)
+	return "%d" % int(round(v))
 
 var params := {}
 

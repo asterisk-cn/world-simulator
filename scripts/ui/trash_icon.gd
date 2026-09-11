@@ -3,7 +3,9 @@ extends Control
 ## 削除モードの目印。× だと「閉じる」に見えてしまうので、ゴミ箱を描く。
 ## 角は世界のブロックと同じ Iso.rounded で丸める。
 
-var tint := UIKit.TEXT
+## 色は作る側（`UIKit.trash_toggle`）が決める。
+## ここから UIKit を参照すると輪になる（`PipBar` と同じ理由）。
+var tint := Color(0.20, 0.17, 0.13)
 
 
 func _ready() -> void:

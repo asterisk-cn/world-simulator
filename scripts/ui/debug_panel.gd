@@ -13,23 +13,21 @@ var _accum := 0.0
 
 
 func _ready() -> void:
-	add_theme_stylebox_override("panel", UIKit.panel_style())
-
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", UIKit.GAP_S)
-	add_child(root)
+	UIKit.paper_sheet(self).add_child(root)
 
 	UIKit.window_header(root, "デバッグ", _close)
 
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 6)
+	head.add_theme_constant_override("separation", UIKit.GAP_S)
 	root.add_child(head)
-	var b1 := UIKit.button(head, "持ち物を配る", _give_materials, 10)
-	b1.custom_minimum_size = Vector2(88, UIKit.ROW_H)
-	var b2 := UIKit.button(head, "全員に家", _give_houses, 10)
-	b2.custom_minimum_size = Vector2(76, UIKit.ROW_H)
+	var b1 := UIKit.button(head, "持ち物を配る", _give_materials)
+	b1.custom_minimum_size = Vector2(120, UIKit.ROW_H)
+	var b2 := UIKit.button(head, "建てるものを1つずつ", _build_one_each)
+	b2.custom_minimum_size = Vector2(178, UIKit.ROW_H)
 
-	_summary = UIKit.label("", 11, UIKit.TEXT_DIM)
+	_summary = UIKit.label("", UIKit.FS_NOTE, UIKit.TEXT_DIM)
 	root.add_child(_summary)
 
 
@@ -40,16 +38,17 @@ func _process(delta: float) -> void:
 	if _accum < 0.3:
 		return
 	_accum = 0.0
-	var houses := 0
-	var built: Array = []
+	var built := {}
 	for st in world.structures:
-		if st.is_house():
-			houses += 1
-		elif not built.has(st.label()):
-			built.append(st.label())
-	_summary.text = "家 %d / %d" % [houses, world.villagers.size()]
-	if not built.is_empty():
-		_summary.text += "　" + "・".join(built)
+		var name_text: String = st.label()
+		built[name_text] = int(built.get(name_text, 0)) + 1
+	if built.is_empty():
+		_summary.text = "まだ何も建っていない"
+		return
+	var parts: Array = []
+	for k in built:
+		parts.append("%s %d" % [String(k), int(built[k])])
+	_summary.text = "・".join(parts)
 
 
 ## 検証用。全員の手を埋める。
@@ -60,16 +59,15 @@ func _give_materials() -> void:
 	EventLog.notable("神が全員に持ち物を配った")
 
 
-## 家が建った状態をすぐ見るための近道。
-func _give_houses() -> void:
-	for v in world.villagers:
-		if v.home != null:
-			continue
-		var c: Vector2i = world.find_build_cell(v.cell)
+## 建った状態をすぐ見るための近道。誰のものでもないので、村の真ん中の空きに置く。
+func _build_one_each() -> void:
+	var center := Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0)
+	for b in Schema.buildings:
+		var c: Vector2i = world.find_build_cell(center)
 		if c.x < 0:
 			continue
-		v.home = world.add_structure(Schema.HOUSE, c, v.id, v.color)
-	EventLog.notable("神が家を建てた")
+		world.add_structure(String(b["id"]), c)
+	EventLog.notable("神が建てた")
 
 
 func _close() -> void:

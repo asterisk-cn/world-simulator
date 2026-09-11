@@ -20,8 +20,9 @@ var tint := Color(0.55, 0.42, 0.26)
 var _held := false
 
 
+## 大きさは作る側（`UIKit.slider_row` / `pole_slider`）が決める。
+## ここから UIKit を参照すると輪になる（`PipBar` と同じ理由）。
 func _ready() -> void:
-	custom_minimum_size = Vector2(112, UIKit.ROW_H - 6)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	resized.connect(queue_redraw)
 

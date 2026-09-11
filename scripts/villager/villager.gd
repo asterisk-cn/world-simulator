@@ -26,7 +26,6 @@ var memory: Memory
 var pairs := {}
 
 var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決める
-var home: Structure = null
 
 var current_action := {}
 var action_phase := "idle"  ## "move" | "act"
@@ -40,6 +39,15 @@ var _bubbles: Array = []
 var _brain = null
 var _bob := 0.0
 var selected := false
+
+## カーソルが乗っているか。**名前は常に出さない。**
+## 8人ぶんの名札が always 出ていると、世界の上が字で埋まって
+## 積み木の村が見えなくなる。かざしたときと、選んでいるときだけ出す。
+var hovered := false:
+	set(on):
+		if hovered != on:
+			hovered = on
+			queue_redraw()
 
 
 func setup(p_world, p_id: int, p_name: String, p_color: Color, p_cell: Vector2) -> void:
@@ -82,13 +90,6 @@ func item_count(item: String) -> int:
 
 func add_item(item: String, n: int) -> void:
 	inventory[item] = maxi(0, item_count(item) + n)
-
-
-func wealth() -> float:
-	var w := float(carried())
-	if home != null:
-		w += 20.0
-	return w
 
 
 func carried() -> int:
@@ -140,7 +141,7 @@ func _decide() -> void:
 	current_action = _brain.choose()
 	action_phase = "move"
 	act_timer = 0.0
-	# 家は通り抜けられないので、間の空きを通って回り込む
+	# 建物は通り抜けられないので、間の空きを通って回り込む
 	_path = world.find_path(cell, current_action.get("target_cell", cell), id)
 	_path_i = 0
 
@@ -291,8 +292,8 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 
 ## 払ったぶんが、手の中の1つになるか、世界の上に建つ。
 ##
-## 建てはじめてから建て終わるまでに、誰かが同じものを建ててしまうことがある。
-## 家は一人に一軒、村のものは村に一つなので、置く直前にもう一度確かめる。
+## 何軒建つかは誰も決めていない。見るのは置ける場所が空いているかだけで、
+## 建てはじめてから建て終わるまでにそこが埋まっていれば、その人は建てられなかった。
 func _do_make(target: String) -> bool:
 	if not Schema.is_building(target):
 		if Schema.recipe_def(target) == null:
@@ -305,10 +306,6 @@ func _do_make(target: String) -> bool:
 
 	if Schema.building_def(target) == null:
 		return false
-	var already := ((home != null) if target == Schema.HOUSE
-		else (world.building_of(target) != null))
-	if already:
-		return false
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if c.x < 0 or not world._can_build_at(c):
 		return false
@@ -316,10 +313,9 @@ func _do_make(target: String) -> bool:
 	if paid.is_empty():
 		return false  # 持ち物が何も動かないなら、その人は建てなかった
 	var s: Structure = world.add_structure(target, c, id, color)
-	if s.is_house():
-		home = s
 	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
-	EventLog.notable("%s が%sを建てた" % [vname, s.label()], s.position, id)
+	EventLog.notable("%s が%sを建てた" % [vname, s.label()],
+		{vname: "v:%d" % id, s.label(): "s:%d" % s.id})
 	return true
 
 
@@ -431,15 +427,16 @@ func _draw() -> void:
 	Iso.draw_block(self, 7.0, 3.5, 11.0, head, up + Vector2(0, -17.0), 3.5)
 
 	# 集まったときが一番見たい瞬間なのに、そこで名前が重なって読めなくなる。
-	# 近くに誰かいるときは段をずらし、選んでいない村人は薄くして譲る。
+	# 近くに誰かいるときは段をずらす。
 	var crowd: int = world.neighbors_within(cell, 2.2, id).size()
 	var tier := float(id % 3) * 9.0 if crowd > 0 else 0.0
-	var alpha := 0.95 if selected else (0.52 if crowd > 0 else 0.78)
 
 	for i in range(_bubbles.size()):
 		_bubbles[i].draw_on(self, Vector2(0, -48 - lift - tier - float(i) * 18.0))
 
-	_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, alpha))
+	# 名前はかざしたときと選んでいるときだけ
+	if selected or hovered:
+		_label(font, vname, Vector2(-40, -30 - lift - tier), 80, 11, Color(1, 1, 1, 0.95))
 
 
 ## 世界の上に置く文字。縁取りがないと昼は白飛び、夜は沈んで読めない。

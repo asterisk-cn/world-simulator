@@ -443,8 +443,10 @@ func _do_talk(other) -> bool:
 		memory.record("会話：%s と話した" % other.vname)
 		other.memory.record("会話：%s と話した" % vname)
 	else:
-		memory.record("会話：%s に「%s」と言った" % [other.vname, words])
-		other.memory.record("会話：%s に「%s」と言われた" % [vname, words])
+		# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない——
+		# 囲うと、その一言だけ別の書きもの（引用）になる
+		memory.record("会話：%s に言った——%s" % [other.vname, words])
+		other.memory.record("会話：%s が言った——%s" % [vname, words])
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
 	other.say("talk", "talk", 2.2)
 	# **自分の身に起きたこと**は、相手のつもりを白紙にする。
@@ -469,7 +471,7 @@ func _do_post() -> void:
 		if int(e["author_id"]) == id and String(e["text"]) == text:
 			return
 	board.post(id, vname, text)
-	memory.record("掲示板：「%s」を貼った" % text)
+	memory.record("掲示板：貼った——%s" % text)
 
 
 ## 掲示板を読む。読んだという事実だけを残す。
@@ -484,8 +486,8 @@ func _do_read_board() -> void:
 	for e in unread:
 		memory.mark_post_read(int(e["id"]), 1.0)
 		# 誰の紙かより、何が書いてあったかが記憶に残る
-		memory.record("掲示板：「%s」（%s）を読んだ"
-			% [String(e["text"]), String(e["author_name"])])
+		memory.record("掲示板：読んだ（%s）——%s"
+			% [String(e["author_name"]), String(e["text"])])
 
 
 # ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ func _summarize(owner_name: String, day: int) -> String:
 			best = counts[k]
 			busiest = k
 	# 出来事そのものは「今日の出来事」に並ぶので、要約は一行に留める
-	return "%d日目：%s は「%s」が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
+	return "%d日目：%s は %s が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
 
 
 func recent_summary(n: int = 2) -> String:

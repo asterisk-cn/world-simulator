@@ -203,6 +203,24 @@ func all_items() -> Array:
 	return out
 
 
+## 神が付けた名前から言葉を引く。**AIが答えるのは名前のほう**なので、
+## 世界の側でidに戻す。無い名前は空（世界に無い言葉は動かせない）
+func self_param_by_label(label: String) -> String:
+	return _by_label(self_params(), label)
+
+
+func pair_param_by_label(label: String) -> String:
+	return _by_label(pair_params(), label)
+
+
+func _by_label(defs: Array, label: String) -> String:
+	var want := label.strip_edges()
+	for d in defs:
+		if String(d["label"]) == want:
+			return String(d["id"])
+	return ""
+
+
 func item_label(id: String) -> String:
 	if ITEMS.has(id):
 		return String(ITEMS[id])

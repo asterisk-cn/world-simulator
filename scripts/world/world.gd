@@ -377,6 +377,16 @@ func nearest_owned(owner_id: int, from_cell: Vector2) -> Structure:
 	return best
 
 
+## 名前から引く。**AIが答えるのは名前のほう**なので、世界の側で本人に戻す。
+## 同じ名前が二人いたら最初の一人（名前は神が付けるので、重複を禁じていない）
+func villager_by_name(name_text: String):
+	var want := name_text.strip_edges()
+	for v in villagers:
+		if is_instance_valid(v) and String(v.vname) == want:
+			return v
+	return null
+
+
 func villager_by_id(vid: int):
 	for v in villagers:
 		if v.id == vid:

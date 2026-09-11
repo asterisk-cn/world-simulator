@@ -25,8 +25,16 @@ const RETHINK := 2.0
 ## 途中で起きたことを無視して動き続ける人は、判断していないのと同じ
 const PLAN_MAX := 3
 
-## これからするつもり。[{kind, target, obj, said}]
+## これからするつもり。[{kind, target, obj, said, 量, 言うこと}]
 var _plan: Array = []
+
+## 前に訊いたときの出来事の位置。**そこから先が「身に起きたこと」**——
+## 1回の問いのあいだに2〜3手ぶん起きるので、直前の1件だけでは本人に届かない
+var _heard := 0
+
+## この問いだけ枠を広げる。**動いた値と3手ぶんの言葉**が返るので、
+## 番号1つだけだった頃の枠では途中で切れる
+const OUT := 400
 
 
 func _init(p_villager) -> void:
@@ -99,6 +107,11 @@ func _from_plan(cands: Array) -> Dictionary:
 				continue
 			if String(step.get("said", "")) != "":
 				c["said"] = String(step["said"])
+			# 量も言うことも、つもりを立てたときに本人が決めている
+			if step.get("量", null) != null:
+				c["量"] = step["量"]
+			if String(step.get("言うこと", "")) != "":
+				c["言うこと"] = String(step["言うこと"])
 			var got := _pick(c)
 			got["by"] = "AI"
 			return got
@@ -110,6 +123,16 @@ func _from_plan(cands: Array) -> Dictionary:
 ## 身に何か起きた。つもりは白紙にする（`Villager.stirred`）
 func forget_plan() -> void:
 	_plan.clear()
+
+
+## その場で考え直す。**手の終わりを待たない**——待つと、話しかけられた人が
+## 必ず一往復ぶん立ち止まる。返事は今の手が終わるまでに戻る
+func think_over() -> void:
+	if v.asking:
+		return
+	var cands := feasible()
+	if cands.size() > 1:
+		_ask(cands)
 
 
 ## 検証用の通し番号。どの手がどこから来たかを数えるためだけに持つ
@@ -132,6 +155,7 @@ func _ask(cands: Array) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
 	var asked := cands
+	_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
 	var take := func(text: String) -> void:
 		if not is_instance_valid(v):
 			return
@@ -146,7 +170,7 @@ func _ask(cands: Array) -> bool:
 		# 手を動かしている最中なら、つもりのまま置いておく
 		if v.action_phase == "think":
 			v.begin(choose())
-	v.asking = AI.ask(_prompt(asked), _system(), take, AI.MAX_OUT, true, v.id)
+	v.asking = AI.ask(_prompt(asked), _system(), take, OUT, true, v.id)
 	return v.asking
 
 
@@ -190,9 +214,16 @@ func _read(text: String, cands: Array) -> Dictionary:
 			break
 		var n := -1
 		var said := ""
+		var how = null
+		var words := ""
 		if typeof(e) == TYPE_DICTIONARY:
 			n = int(e.get("番号", 0)) - 1
-			said = String(e.get("呼び名", "")).strip_edges()
+			# **`String()` ではなく `str()`。** `String()` は文字列系しか受けない
+			# 型変換なので、AIが数や列で返した瞬間に落ちる（実際に落ちた）。
+			# 答えは何の型で来るか分からないものとして読む
+			said = str(e.get("呼び名", "")).strip_edges()
+			how = e.get("量", null)
+			words = str(e.get("言うこと", "")).strip_edges()
 		elif typeof(e) == TYPE_FLOAT or typeof(e) == TYPE_INT:
 			n = int(e) - 1
 		if n < 0 or n >= cands.size():
@@ -203,7 +234,28 @@ func _read(text: String, cands: Array) -> Dictionary:
 			"kind": String(c["kind"]), "target": String(c["target"]),
 			"obj": c.get("obj", null),
 			"said": said.substr(0, NAME_MAX),
+			"量": how if typeof(how) == TYPE_DICTIONARY else null,
+			"言うこと": words.substr(0, WORDS_MAX),
 		})
+	# **値の動きは、読めた分だけ入れる。** ここが崩れていても、
+	# つもりが読めているなら訊き直さない（問いが増えるだけで、何も良くならない）
+	# 鍵は2つに分けてあるが、混ざって返ることがあるので**段の深さで見分ける**——
+	# 数が入っていれば自分の言葉、物が入っていれば相手への見え方
+	var mine := {}
+	var others := {}
+	for key in ["動いた", "相手が動いた"]:
+		var moved = got.get(key, null)
+		if typeof(moved) != TYPE_DICTIONARY:
+			continue
+		for label in moved:
+			var to = moved[label]
+			if typeof(to) == TYPE_DICTIONARY:
+				others[str(label)] = to
+			elif typeof(to) == TYPE_FLOAT or typeof(to) == TYPE_INT:
+				mine[str(label)] = float(to)
+	if not mine.is_empty() or not others.is_empty():
+		v.move_values(mine, others)
+
 	if plan.is_empty():
 		if EventLog.echo:
 			print("[AI] つもりが読めない: ", text.substr(0, 120))
@@ -214,23 +266,48 @@ func _read(text: String, cands: Array) -> Dictionary:
 const NAME_MAX := 16
 
 
+## **見本は載せない。** 具体例を置くと、値も台詞もそのまま写して返ってくる
+## （村中が同じ一言を言った）。形は言葉で説明すれば足りる。
 static func _system() -> String:
 	return """あなたは、ある村に住む一人の人間です。
-渡された姿と「いまできること」を読んで、**この先することを順に**答えます。
+渡された姿と「身に起きたこと」「いまできること」を読んで、
+**起きたことで自分の中がどう動いたか**と、**この先することを順に**答えます。
 
-返すのは JSON の物1つだけ。
-{"つもり": [{"番号": できることの番号, "呼び名": "それを自分ならどう言うか"}, ...]}
+返すのは JSON の物1つ。入れるのは次の3つだけ。
 
-- つもりは1つから%d つまで。先のことほど大まかでいい
-- 番号は一覧にあるものから選ぶ。無いものは選べない。同じ番号を続けてもよい
-- 呼び名は%d字以内。世界の言い方をなぞらなくていい——
-  教会へ向かうのを「詣でる」と言うか「行く」と言うかは、あなたが決めること
-- 説明も理由も書かない""" % [PLAN_MAX, NAME_MAX]
+「動いた」——起きたことで**自分の中**がどう動いたか。**平らな1段**。
+  鍵は「あなたの中にあるもの」に出ている言葉、値は**増えた／減ったぶんの数**
+  （いまの値ではない）。動かない言葉は書かない。何も動かないなら空でよい。
+
+「相手が動いた」——**相手への見え方**が動いたときだけ。**2段**。
+  外の鍵は相手の名前、その中の鍵は「知っている相手」に出ている言葉、値は増減の数。
+
+「つもり」——この先することの列。1つから%d つまで。先のことほど大まかでいい。
+  一つずつに入れるもの：
+    「番号」  … 一覧にあるものから。無いものは選べない。同じ番号を続けてもよい
+    「呼び名」… それを自分ならどう言うか。%d字以内。世界の言い方をなぞらなくていい
+                （教会へ向かうのを「詣でる」と言うか「行く」と言うかは、あなたが決める）
+    「量」    … 取る・使う・作るときだけ。持ち物の名前ごとに、いくつ
+    「言うこと」… 話すとき・貼るときだけ。%d字以内の一言
+
+説明も理由も書かない。""" % [PLAN_MAX, NAME_MAX, WORDS_MAX]
+
+
+## 言うことの長さ。長い口上は、世界の上の吹き出しにも記録にも収まらない
+const WORDS_MAX := 40
 
 
 func _prompt(cands: Array) -> String:
 	var out := PackedStringArray()
 	out.append(Inner.of(v))
+	# **前に訊いてから、身に起きたこと。** これで自分の中がどう動いたかを答える。
+	# 姿（`Inner`）には入れない——あちらは気持ちの一言と同じ姿を出す紙なので
+	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+	if not since.is_empty():
+		out.append("")
+		out.append("# 前に考えてから、あなたの身に起きたこと")
+		for e in since:
+			out.append("・%s" % String(e))
 	out.append("")
 	out.append("# いまできること")
 	for i in range(cands.size()):
@@ -271,7 +348,11 @@ func feasible() -> Array:
 func _decide_how(c: Dictionary) -> void:
 	var kind := String(c["kind"])
 	if kind == "use" or kind == "make":
-		c["move"] = _how_much(c)
+		# **いくつ動かすかも本人の答え**（つもりに添えてある）。
+		# 無いときだけ、穴を埋めるための出まかせに落ちる
+		# 量が物ごとの数で返っていないときは、穴を埋めるための出まかせに落ちる
+		var asked := _asked_how(c)
+		c["move"] = asked if not asked.is_empty() else _how_much(c)
 	# 何をしているのかが、そのまま世界の上と記録と一覧に出る。
 	# 本人が名前を言っていればそれを使う（`said`）
 	c["label"] = String(c["said"]) if c.has("said") else _name_act(c)
@@ -309,6 +390,45 @@ func _how_much(c: Dictionary) -> Dictionary:
 				move[target] = 1  # 建物は世界の上に建つので、持ち物にはならない
 			return move
 	return {}
+
+
+## 本人が答えた量を、世界の言い方（idと符号）に直す。
+##
+## **符号はこちらが決める。** 取る・作るは増え、使う・材料は減る——
+## それは量の話ではなく動詞の意味の話で、世界が知っていること（DESIGN.md §3）。
+## 本人が答えるのは「何をいくつ」だけ。世界に無い名前は落とす。
+func _asked_how(c: Dictionary) -> Dictionary:
+	var want = c.get("量", {})
+	if typeof(want) != TYPE_DICTIONARY:
+		return {}
+	var target := String(c["target"])
+	var move := {}
+	for label in want:
+		var iid := _item_by_label(str(label))
+		if iid == "":
+			continue
+		var n := absi(int(want[label])) if typeof(want[label]) in [TYPE_INT, TYPE_FLOAT] else 0
+		if n <= 0:
+			continue
+		match String(c["kind"]):
+			"use":
+				# そこに在るものは取る、手の中のものは減る
+				move[iid] = n if String(c.get("where", "hand")) == "world" else -n
+			"make":
+				# 作るものは増え、それ以外は材料として減る
+				move[iid] = n if iid == target else -n
+	if String(c["kind"]) == "make" and not Schema.is_building(target) \
+			and not move.has(target):
+		move[target] = 1
+	return move
+
+
+func _item_by_label(label: String) -> String:
+	var want := label.strip_edges()
+	for item in Schema.all_items():
+		if Schema.item_label(String(item)) == want:
+			return String(item)
+	return ""
 
 
 ## 手持ちから払うぶんを見繕う。判断ではなく、穴を埋めるための出まかせ。

@@ -41,6 +41,8 @@ var asking := false
 var think_again_at := 0.0
 
 
+
+
 ## 最初のつもりを訊く（世界が目を覚ます前に、`main` から一度だけ）
 func think_now() -> void:
 	if _brain != null and action_phase == "idle":
@@ -52,11 +54,39 @@ func has_thought() -> bool:
 	return action_phase != "think" and action_phase != "idle"
 
 
+## 【AI差し替え口】さっきしたことで、自分の中の値がどう動いたか。
+##
+## **動かすのは本人の答えだけ。** どの言葉がどれだけ動くかの表はどこにも無いし、
+## 作らない（神が付けた言葉なので、作れない）。世界が見るのは
+## **その言葉がこの世界にあるか**と、**目盛りの端**（`SelfParams.set_v` が丸める）だけ。
+func move_values(mine: Dictionary, others: Dictionary) -> void:
+	# 鍵も値も、AIが何の型で返すか分からない（`str()` で読む）
+	for label in mine:
+		var id := Schema.self_param_by_label(str(label))
+		if id != "" and typeof(mine[label]) in [TYPE_INT, TYPE_FLOAT]:
+			params.offset(id, float(mine[label]))
+	for name in others:
+		var who = world.villager_by_name(str(name))
+		if who == null or not pairs.has(who.id):
+			continue   # 会ったことのない相手への見え方は、まだ無い
+		var moves = others[name]
+		if typeof(moves) != TYPE_DICTIONARY:
+			continue
+		for label in moves:
+			var pid := Schema.pair_param_by_label(str(label))
+			if pid != "" and typeof(moves[label]) in [TYPE_INT, TYPE_FLOAT]:
+				pairs[who.id].offset(pid, float(moves[label]))
+
+
 ## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
 ## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
 func stirred() -> void:
-	if _brain != null:
-		_brain.forget_plan()
+	if _brain == null:
+		return
+	_brain.forget_plan()
+	# **その場で訊く。** 手の終わりまで待つと、話しかけられた人は必ず
+	# 一往復ぶん立ち止まる（会話は頻度が高いので、そこが待ちの主な出どころになる）
+	_brain.think_over()
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
 var decision_timer := 0.0
@@ -264,6 +294,10 @@ func _complete_action() -> void:
 	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
 	if done:
 		say(kind, target)
+	else:
+		# **空振りも身に起きたこと。** 行ってみたら居なかった、採り尽くされていた——
+		# 世界の事実なので、次に訊くときに本人へ渡す（不安や孤独が動く元になる）
+		memory.record("空振り：%s" % action_label())
 
 
 ## 本人が答えたぶん（`Brain._how_much`）を、そのまま世界に映す。
@@ -397,13 +431,20 @@ func _do_talk(other) -> bool:
 	var reach: float = float(way["reach"]) if way != null else 2.2
 	if cell.distance_to(other.cell) > reach:
 		return false
+	# **何を言うかは本人がつもりを立てたときに決めている。**
+	# 世界が運ぶのは言葉そのものだけで、受け取りかたは聞いた人の次の問い（§5）
+	var words := String(current_action.get("言うこと", ""))
 	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
 	pair_to(other.id)
 	other.pair_to(id)
 	memory.last_talk_day[other.id] = SimClock.day
 	other.memory.last_talk_day[id] = SimClock.day
-	memory.record("会話：%s と話した" % other.vname)
-	other.memory.record("会話：%s と話した" % vname)
+	if words == "":
+		memory.record("会話：%s と話した" % other.vname)
+		other.memory.record("会話：%s と話した" % vname)
+	else:
+		memory.record("会話：%s に「%s」と言った" % [other.vname, words])
+		other.memory.record("会話：%s に「%s」と言われた" % [vname, words])
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
 	other.say("talk", "talk", 2.2)
 	# **自分の身に起きたこと**は、相手のつもりを白紙にする。
@@ -419,10 +460,11 @@ func _do_post() -> void:
 	if board == null:
 		return
 	_last_post_day = SimClock.day
-	var berry = world.nearest_harvest(cell, HarvestNode.Kind.BERRY)
-	if berry == null:
+	# **何を書くかは本人。** 書くことを決めずに来たなら、貼らずに帰る——
+	# 世界が代わりに文面を作ると、そこだけ神でも村人でもない誰かの言葉になる
+	var text := String(current_action.get("言うこと", ""))
+	if text == "":
 		return
-	var text := "%s に木の実がある" % world.place_name(berry.cell)
 	for e in board.posts:
 		if int(e["author_id"]) == id and String(e["text"]) == text:
 			return

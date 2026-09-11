@@ -29,6 +29,7 @@ var _have: HFlowContainer
 var _have_sig := ""
 var _have_ready := false
 var _now: Label
+var _feel: Label
 var _self_bars := {}     ## param id -> PipBar
 var _pair_bars := {}     ## other_id -> { param id -> PipBar }
 var _summary: Label
@@ -105,6 +106,7 @@ func rebuild() -> void:
 	_have_sig = ""
 	_have_ready = false
 	_now = null
+	_feel = null
 	_summary = null
 	_eps_box = null
 	_eps_count = -1
@@ -144,6 +146,13 @@ func _build_now() -> void:
 	# 囲いは「紙の上に別の物体が乗っている」ことを言う形で、
 	# ここで言いたいのは「いちばん読んでほしい一言」だった。
 	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
+
+	# 【AI差し替え口】いまの気持ちの一言（`villager/feeling.gd`）。
+	# **その人自身の言葉**なので鍵括弧で囲む——掲示板の記録と同じ書き方で、
+	# 世界を測った値ではなく、本人が言ったことだと分かる。
+	# AIに繋がっていなければ行ごと出ない（規則で作った嘘を置くより、無いほうがいい）
+	_feel = UIKit.wrapped(_body, "", UIKit.FS_BODY, UIKit.TEXT)
+	_feel.visible = false
 
 	# 持ち物は絵と名前を対で出す。絵だけだと、神がつけた名前の物が何なのか読めない。
 	UIKit.spacer(_body, UIKit.GAP)
@@ -278,6 +287,7 @@ func _refresh() -> void:
 
 	if _now != null:
 		_now.text = subject.action_label()
+	_refresh_feeling()
 
 	_refresh_have()
 
@@ -307,6 +317,19 @@ func _refresh() -> void:
 	if _summary != null:
 		_summary.text = subject.memory.recent_summary(2)
 	_refresh_episodes()
+
+
+## 気持ちの一言。**訊くのは神がいま見ている人だけ**——8人ぶんを常に訊くと、
+## 誰も読まない一言のために毎分お金が出ていく。
+## 返ってくるまでは行が無いので、紙は繋がっていないときと同じ形で出る。
+func _refresh_feeling() -> void:
+	if _feel == null:
+		return
+	var line := String(subject.feeling)
+	_feel.visible = line != ""
+	if line != "":
+		_feel.text = "「%s」" % line
+	Feeling.ask(subject)
 
 
 ## 品目が変わったときだけ並べ直す。数だけなら札の字を書き換える。

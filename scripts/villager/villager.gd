@@ -27,6 +27,13 @@ var pairs := {}
 
 var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決める
 
+## 【AI差し替え口】いまの気持ちの一言（`villager/feeling.gd`）。
+## 世界が知っているのは何が起きたかだけなので、どう感じているかはAIが答える。
+## 繋がっていなければ空のまま——紙にはその行が出ない。
+var feeling := ""
+var feeling_for := ""   ## その一言を作ったときの `action_label()`
+var feeling_at := 0.0   ## 最後に訊いた実時間。同じ人に訊き直す間隔の底
+
 var current_action := {}
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0

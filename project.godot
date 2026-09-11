@@ -25,6 +25,7 @@ SimConfig="*res://scripts/autoload/sim_config.gd"
 Schema="*res://scripts/autoload/schema.gd"
 SimClock="*res://scripts/autoload/sim_clock.gd"
 EventLog="*res://scripts/autoload/event_log.gd"
+AI="*res://scripts/autoload/ai.gd"
 
 [display]
 

@@ -1,3 +1,6 @@
 .godot/
 export_presets.cfg
 *.translation
+
+# AIの鍵。作りながら試すとき用（`user://openai.key` が本来の置き場）
+.openai-key

@@ -502,6 +502,10 @@ func on_night() -> void:
 # ---------------------------------------------------------------------------
 
 func action_label() -> String:
+	# 考えているあいだは手が空いている。**「待機」ではない**——
+	# 世界の上では頭の粒で、紙ではこの一行で、同じことを言う
+	if action_phase == "think":
+		return "考えている"
 	return String(current_action.get("label", "待機"))
 
 

@@ -145,14 +145,16 @@ func _build_now() -> void:
 	# **強さは字の段が担う。** 面で囲って地の色を変えていたが、
 	# 囲いは「紙の上に別の物体が乗っている」ことを言う形で、
 	# ここで言いたいのは「いちばん読んでほしい一言」だった。
-	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
-
 	# 【AI差し替え口】いまの気持ちの一言（`villager/feeling.gd`）。
-	# **その人自身の言葉**なので鍵括弧で囲む——掲示板の記録と同じ書き方で、
-	# 世界を測った値ではなく、本人が言ったことだと分かる。
+	# **こちらを先に、大きく。** いちばん読んでほしいのは何をしているかではなく、
+	# その人がいまどう感じているか。していることは、その下の小さい行で足りる。
+	# **傾けない。** 傾いた書体を持っていないので、同じ字を歪ませることになる。
+	# 気持ちと行動は、**順番と字の段**で分かれていれば足りる。
 	# AIに繋がっていなければ行ごと出ない（規則で作った嘘を置くより、無いほうがいい）
-	_feel = UIKit.wrapped(_body, "", UIKit.FS_BODY, UIKit.TEXT)
+	_feel = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
 	_feel.visible = false
+
+	_now = UIKit.wrapped(_body, "", UIKit.FS_BODY, UIKit.TEXT)
 
 	# 持ち物は絵と名前を対で出す。絵だけだと、神がつけた名前の物が何なのか読めない。
 	UIKit.spacer(_body, UIKit.GAP)
@@ -328,7 +330,7 @@ func _refresh_feeling() -> void:
 	var line := String(subject.feeling)
 	_feel.visible = line != ""
 	if line != "":
-		_feel.text = "「%s」" % line
+		_feel.text = line
 	Feeling.ask(subject)
 
 

@@ -58,7 +58,7 @@ const BEHAVIORS := {
 const TARGETS := {
 	"move": {
 		"anywhere": {"label": "適当な場所", "duration": 0.8, "reach": -1.0},
-		"toward": {"label": "誰かのそば", "duration": 0.4, "reach": -1.0},
+		"toward": {"label": "誰かのところ", "duration": 0.4, "reach": -1.0},
 		"mine": {"label": "自分のところ", "duration": 0.4, "reach": -1.0},
 		"board": {"label": "掲示板", "duration": 0.4, "reach": -1.0},
 	},

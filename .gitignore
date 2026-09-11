@@ -4,3 +4,6 @@ export_presets.cfg
 
 # AIの鍵。作りながら試すとき用（`user://openai.key` が本来の置き場）
 .openai-key
+
+# この機械の中（ollama）に訊くときのモデル名。作りながら試すとき用
+.ollama-model

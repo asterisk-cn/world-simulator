@@ -48,6 +48,7 @@ var matrix_panel = null
 var rules_panel = null
 var debug_panel = null
 var option_panel = null
+var _loading: Label = null
 
 
 func setup(p_world) -> void:
@@ -224,6 +225,23 @@ func _toggle_rules() -> void:
 
 func _toggle_debug() -> void:
 	_show_only(debug_panel)
+
+
+## 世界が始まる前の一行。**何を待っているのかを言う**——
+## 黙って止まっていると、遅いのではなく壊れて見える
+func say_loading(text: String) -> void:
+	if _loading == null:
+		_loading = UIKit.label("", UIKit.FS_HEAD, Color(0.98, 0.96, 0.90))
+		_loading.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_loading.offset_left = -360
+		_loading.offset_right = 360
+		_loading.offset_top = -120
+		_loading.offset_bottom = -90
+		_loading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_loading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_loading)
+	_loading.text = text
+	_loading.visible = text != ""
 
 
 func _toggle_option() -> void:

@@ -95,13 +95,21 @@ func _ready() -> void:
 ##
 ## 同じ島に別の村を建て直すのではなく、島も資源も新しくする。
 ## 前の村の跡が残った土地に次の言葉を置くと、そこが「同じ世界の続き」に見えてしまう。
-func regenerate() -> void:
+## 土地を作り直す。
+##
+## `keep_people` を立てると**村人だけ残す**——儀式のあいだに先に置いて、
+## AIへの問いを走らせておくため（`main._begin_ritual`）。
+## 残した村人の居場所は、作り直したあとで呼ぶ側が置き直す
+func regenerate(keep_people: bool = false) -> void:
 	for c in entities.get_children():
+		if keep_people and c is Villager:
+			continue
 		entities.remove_child(c)
 		c.queue_free()
 	harvests.clear()
 	structures.clear()
-	villagers.clear()
+	if not keep_people:
+		villagers.clear()
 	board = null
 
 	ground.clear()

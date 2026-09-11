@@ -510,8 +510,16 @@ func _detail() -> void:
 		+ "始まったあとはオプションから触る。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
 	_index.remember("詳細", body.get_meta("head_row"))
+	_who(body)
 	_world(body)
 	UIKit.spacer(_body, UIKit.PAD_L)
+
+
+## 判断を担うAIも、目盛りと同じくここで決められる（始まったあとはオプション）。
+## 世界の語彙ではないので、章の中でも目盛りの側に置く
+func _who(box: Node) -> void:
+	var rows := UIKit.rows(box)
+	UIKit.row_pad(rows).add_child(WhoPicker.new())
 
 
 func _world(box: Node) -> void:

@@ -35,6 +35,28 @@ var feeling_for := ""   ## その一言を作ったときの `action_label()`
 var feeling_at := 0.0   ## 最後に訊いた実時間。同じ人に訊き直す間隔の底
 
 var current_action := {}
+## AIに訊いていて、まだ返事が来ていない。**そのあいだは前の判断が続く**
+var asking := false
+## AIの答えが二度とも使えなかったとき、次に訊き直す時刻（実時間）
+var think_again_at := 0.0
+
+
+## 最初のつもりを訊く（世界が目を覚ます前に、`main` から一度だけ）
+func think_now() -> void:
+	if _brain != null and action_phase == "idle":
+		_decide()
+
+
+## つもりが立ったか（あるいは自分で決めて動き出したか）
+func has_thought() -> bool:
+	return action_phase != "think" and action_phase != "idle"
+
+
+## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
+## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
+func stirred() -> void:
+	if _brain != null:
+		_brain.forget_plan()
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
 var decision_timer := 0.0
@@ -111,18 +133,25 @@ func carried() -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	# **止まっていても、ゆらゆらする。** 世界の時間が止まっていても、
+	# 考え込んでいても、息をしていない人は置物に見える。
+	# ここだけは世界の時間ではなく本当の時間で動く
+	_bob += delta * (3.0 if SimClock.paused or action_phase == "think" else 6.0)
+	if SimClock.paused or action_phase == "think":
+		queue_redraw()
 	if SimClock.paused:
 		return
 	var dt := delta * SimClock.speed
 
 	decision_timer -= dt
 	if action_phase == "idle" or decision_timer <= 0.0:
-		if action_phase == "idle":
+		if action_phase == "idle" \
+				and float(Time.get_ticks_msec()) / 1000.0 >= think_again_at:
 			_decide()
 		decision_timer = SimConfig.p("decision_interval")
 
 	_execute(dt)
-	_bob += dt * 6.0
+
 
 	var kept: Array = []
 	for b in _bubbles:
@@ -145,7 +174,22 @@ func say(kind: String, target: String, span: float = 1.8) -> void:
 
 
 func _decide() -> void:
-	current_action = _brain.choose()
+	var c: Dictionary = _brain.choose()
+	if c.is_empty():
+		# 訊いている最中。**立ち止まって待つ**——返事が来たら `begin()` が来る。
+		# ここで代わりの行動を始めると、判断していないのに動いたことになる
+		action_phase = "think"
+		current_action = {}
+		return
+	begin(c)
+
+
+## 決まった行動を始める。AIの返事も、規則で選んだぶんも、ここを通る
+func begin(c: Dictionary) -> void:
+	if c.is_empty():
+		action_phase = "idle"
+		return
+	current_action = c
 	action_phase = "move"
 	act_timer = 0.0
 	# 建物は通り抜けられないので、間の空きを通って回り込む
@@ -154,6 +198,8 @@ func _decide() -> void:
 
 
 func _execute(dt: float) -> void:
+	if action_phase == "think":
+		return   # 返事待ち。世界は動くが、この人は動かない
 	if current_action.is_empty():
 		action_phase = "idle"
 		return
@@ -208,8 +254,7 @@ func _complete_action() -> void:
 		"talk":
 			match target:
 				"talk":
-					if obj != null and is_instance_valid(obj):
-						_do_talk(obj)
+					done = obj != null and is_instance_valid(obj) and _do_talk(obj)
 				"post":
 					_do_post()
 				"read":
@@ -345,7 +390,13 @@ func _do_use(target: String, obj) -> bool:
 
 ## 会話。起きた事実だけを双方に記録する。
 ## 【AI差し替え口】何を話すか・何を伝えるか・相手をどう思うようになったかはAIの担当。
-func _do_talk(other) -> void:
+## 行ってみたら居なかった、は空振り。**歩きを手の中に畳んだぶん、
+## 着く頃には相手が動いていることがある**（世界の間合いは規則として残っている）
+func _do_talk(other) -> bool:
+	var way = Schema.target_def("talk", "talk")
+	var reach: float = float(way["reach"]) if way != null else 2.2
+	if cell.distance_to(other.cell) > reach:
+		return false
 	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
 	pair_to(other.id)
 	other.pair_to(id)
@@ -355,6 +406,10 @@ func _do_talk(other) -> void:
 	other.memory.record("会話：%s と話した" % vname)
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
 	other.say("talk", "talk", 2.2)
+	# **自分の身に起きたこと**は、相手のつもりを白紙にする。
+	# 話しかけられてもなお前のつもりのまま動くのは、判断していないのと同じ
+	other.stirred()
+	return true
 
 
 ## 掲示板に貼る。いまは観測した事実だけを貼る。
@@ -414,7 +469,10 @@ func action_label() -> String:
 
 func _draw() -> void:
 	var font: Font = SimConfig.ui_font if SimConfig.ui_font != null else ThemeDB.fallback_font
-	var lift := sin(_bob) * (1.6 if action_phase == "move" else 0.4)
+	# 歩いているときは大きく、立っているときは小さく。考えているときはその間——
+	# 息はしているが、足は出ていない
+	var sway := 1.6 if action_phase == "move" else (0.9 if action_phase == "think" else 0.4)
+	var lift := sin(_bob) * sway
 	var up := Vector2(0, -lift)
 
 	Iso.draw_shadow(self, 0.5, 0.26)
@@ -437,6 +495,18 @@ func _draw() -> void:
 	# 近くに誰かいるときは段をずらす。
 	var crowd: int = world.neighbors_within(cell, 2.2, id).size()
 	var tier := float(id % 3) * 9.0 if crowd > 0 else 0.0
+
+	# **考えている印。** 止まっている理由が読めないと、生きているのではなく
+	# 壊れて見える。内側を代弁してはいない——「次の考えがまだ届いていない」は
+	# 世界が知っている事実で、神がAIの遅さを読むためのものでもある。
+	# 字ではなく粒で描く（フォント任せの記号は意味が引けない）
+	if action_phase == "think":
+		var at := Vector2(0, -46 - lift - tier)
+		var beat := fmod(_bob * 0.5, 3.0)
+		for i in range(3):
+			var on: bool = float(i) <= beat
+			draw_circle(at + Vector2(float(i - 1) * 6.0, 0.0), 2.0,
+				Color(0.99, 0.98, 0.94, 0.85 if on else 0.28))
 
 	for i in range(_bubbles.size()):
 		_bubbles[i].draw_on(self, Vector2(0, -48 - lift - tier - float(i) * 18.0))

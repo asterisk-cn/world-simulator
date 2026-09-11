@@ -294,10 +294,12 @@ func _complete_action() -> void:
 	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
 	if done:
 		say(kind, target)
+		EventLog.mind(vname, "した：%s" % action_label())
 	else:
 		# **空振りも身に起きたこと。** 行ってみたら居なかった、採り尽くされていた——
 		# 世界の事実なので、次に訊くときに本人へ渡す（不安や孤独が動く元になる）
 		memory.record("空振り：%s" % action_label())
+		EventLog.mind(vname, "空振り：%s" % action_label())
 
 
 ## 本人が答えたぶん（`Brain._how_much`）を、そのまま世界に映す。

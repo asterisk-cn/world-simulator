@@ -188,6 +188,33 @@ func _missed(asked: Array) -> void:
 		v.think_again_at = AI._now() + RETHINK
 
 
+## 内側を見るための一行（`--echo-mind`）。世界には出さない
+func _moves_text(mine: Dictionary, others: Dictionary) -> String:
+	var out: Array = []
+	for k in mine:
+		out.append("%s%+d" % [str(k), int(mine[k])])
+	for name in others:
+		var m = others[name]
+		if typeof(m) != TYPE_DICTIONARY:
+			continue
+		for k in m:
+			out.append("%s への %s%+d" % [str(name), str(k), int(m[k])])
+	return " / ".join(out) if out.size() > 0 else "（なし）"
+
+
+func _plan_text(plan: Array) -> String:
+	var out: Array = []
+	for step in plan:
+		var one := String(step["said"]) if String(step.get("said", "")) != "" \
+			else "%s %s" % [String(step["kind"]), String(step["target"])]
+		if String(step.get("言うこと", "")) != "":
+			one += "（%s）" % String(step["言うこと"])
+		if step.get("量", null) != null:
+			one += str(step["量"])
+		out.append(one)
+	return " → ".join(out)
+
+
 ## 答えを読む。**使えなければ空**を返す（読めなかったのはAIの失敗で、
 ## 村人の気まぐれではない）。返るのは `{"つもり": [手, ...]}`
 func _read(text: String, cands: Array) -> Dictionary:
@@ -251,15 +278,19 @@ func _read(text: String, cands: Array) -> Dictionary:
 			var to = moved[label]
 			if typeof(to) == TYPE_DICTIONARY:
 				others[str(label)] = to
-			elif typeof(to) == TYPE_FLOAT or typeof(to) == TYPE_INT:
+			elif (typeof(to) == TYPE_FLOAT or typeof(to) == TYPE_INT) \
+					and absf(float(to)) > 0.001:
+				# 0 は「動いていない」。書かれていても動きではない
 				mine[str(label)] = float(to)
 	if not mine.is_empty() or not others.is_empty():
+		EventLog.mind(v.vname, "動いた：%s" % _moves_text(mine, others))
 		v.move_values(mine, others)
 
 	if plan.is_empty():
 		if EventLog.echo:
 			print("[AI] つもりが読めない: ", text.substr(0, 120))
 		return {}
+	EventLog.mind(v.vname, "つもり：%s" % _plan_text(plan))
 	return {"つもり": plan}
 
 
@@ -333,6 +364,11 @@ func feasible() -> Array:
 		var k := String(kind)
 		for target in Schema.targets_of(k):
 			out.append_array(_candidates(k, String(target)))
+	# **毎回混ぜる。** 一覧に順番の意味は無いのに、並べたままだと先頭が選ばれやすく、
+	# 朝いちばん全員が同じ人のところへ歩き出していた（村人の登録順だったため）。
+	# 距離で並べ替える手もあるが、それは「近い順」という別の偏りを足すだけで、
+	# 近さは各行の「（少し歩く）／（遠い）」がもう言っている
+	out.shuffle()
 	return out
 
 

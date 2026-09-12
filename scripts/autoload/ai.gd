@@ -114,6 +114,11 @@ var _down_at := -1.0
 var _answers: Array = []
 const RATE_SPAN := 20.0
 
+## 直近の**往復にかかった秒**。訊く時機を決めるのに使う（`Brain`）
+var _lags: Array = []
+const LAG_KEEP := 8
+const LAG_GUESS := 2.0   ## まだ測れていないときの見当
+
 var _key := ""
 var _queue: Array = []   ## [{system, prompt, max, json, on_done}]
 var _lanes: Array = []   ## [{http, job}]
@@ -290,6 +295,10 @@ func _find_where() -> void:
 ## `want_json` を立てると、返るのが JSON の物1つになる。
 ## 返り値は「受け付けたか」——鍵が無い・溢れたときは false
 ## `who` はこの問いの主（村人のid）。**同じ主の古い問いは置き換える**
+## 検証用：便の種類ごとの往復（急ぎ／普通）
+static var lag_quick: Array = []
+static var lag_full: Array = []
+
 func ask(prompt: String, system_text: String, on_done: Callable,
 		max_out: int = MAX_OUT, want_json: bool = false, who: int = -1) -> bool:
 	if not available() or prompt == "":
@@ -302,6 +311,7 @@ func ask(prompt: String, system_text: String, on_done: Callable,
 		"on_done": on_done,
 		"who": who,
 		"tries": 0,
+		"quick": max_out <= 200 and want_json,
 	}
 	if who >= 0:
 		for i in range(_queue.size()):
@@ -359,6 +369,7 @@ func _pump() -> void:
 
 
 func _send(lane: int, job: Dictionary) -> void:
+	job["sent_at"] = _now()
 	_lanes[lane]["job"] = job
 	_lanes[lane]["http"].timeout = WAIT_LOCAL if local else WAIT_OUT
 
@@ -490,11 +501,32 @@ func rate() -> float:
 	return float(_answers.size()) / span
 
 
+## いま一往復にどれくらいかかっているか。**待ちに並ぶ時間も含む**——
+## 訊く時機を決めるのはこの実測で、モデルの速さの公称ではない
+func lag() -> float:
+	if _lags.is_empty():
+		return LAG_GUESS
+	var sum := 0.0
+	for x in _lags:
+		sum += float(x)
+	return sum / float(_lags.size())
+
+
 func _finish(lane: int, text: String) -> void:
 	var job: Dictionary = _lanes[lane]["job"]
 	_lanes[lane]["job"] = {}
 	if text != "":
 		_answers.append(_now())
+		var at := float(job.get("sent_at", -1.0))
+		if at > 0.0:
+			var took := _now() - at
+			if bool(job.get("quick", false)):
+				lag_quick.append(took)
+			else:
+				lag_full.append(took)
+			_lags.append(took)
+			while _lags.size() > LAG_KEEP:
+				_lags.pop_front()
 	if not job.is_empty():
 		var cb: Callable = job["on_done"]
 		if cb.is_valid():

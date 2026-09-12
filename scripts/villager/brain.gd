@@ -21,12 +21,11 @@ var _retried := false
 ## 二度とも駄目だったときに、次に訊くまでの間（秒）
 const RETHINK := 2.0
 
-## 1回の問いで答えてもらう手の数。**長すぎると決め打ちになる**——
-## 途中で起きたことを無視して動き続ける人は、判断していないのと同じ
-const PLAN_MAX := 3
-
-## これからするつもり。[{kind, target, obj, said, 量, 言うこと}]
-var _plan: Array = []
+## **訊くのは1手ずつ。** 3手まとめて訊いていたが、会話のたびに白紙になるので
+## 実測で受け取った96手のうち44手（46%）が使われずに捨てられていた。
+## 1問1手なら捨てるものが無く、問いの数もほとんど変わらない（実測 0.84手/問）。
+## 手は5〜6秒、往復は2秒なので、**手の始まりで訊けば終わりには届いている**
+var _next := {}
 
 ## 前に訊いたときの出来事の位置。**そこから先が「身に起きたこと」**——
 ## 1回の問いのあいだに2〜3手ぶん起きるので、直前の1件だけでは本人に届かない
@@ -35,6 +34,8 @@ var _heard := 0
 ## この問いだけ枠を広げる。**動いた値と3手ぶんの言葉**が返るので、
 ## 番号1つだけだった頃の枠では途中で切れる
 const OUT := 400
+## 急ぎ便の枠。返す言葉と1手だけなので細い
+const OUT_QUICK := 150
 
 
 func _init(p_villager) -> void:
@@ -64,65 +65,75 @@ func choose() -> Dictionary:
 	if cands.is_empty():
 		return _fallback()
 
-	# つもりが立っていれば、その次の手を始める
-	var step := _from_plan(cands)
-	if not step.is_empty():
-		# **最後の手を始めたら、そこで次のつもりを訊いておく。**
-		# 手を動かしているあいだに考えが戻るので、待ちが隠れる
-		if _plan.is_empty():
-			_ask(cands)
-		return step
-
-	# つもりが尽きた。AIが居れば訊いて待つ（立ち止まる）
-	if v.asking:
-		return {}
-	if _ask(cands):
-		return {}
-	if AI.available():
-		return {}   # 訊けなかっただけ。次のきっかけで訊き直す
-	var r := _pick(cands.pick_random())
-	r["by"] = "ランダム"
-	return r
-
-
-## つもりの次の手を、いまの世界で始められる形にする。
-## **成り立たなければ、つもりごと捨てる**——着いてみたら相手が居ない、
-## 持っていたはずのものが無い。そこから先の順番も、もう本人の考えと合わない
-func _from_plan(cands: Array) -> Dictionary:
-	while not _plan.is_empty():
-		var step: Dictionary = _plan.pop_front()
-		var who = step.get("obj", null)
-		if who != null and not is_instance_valid(who):
-			_plan.clear()
+	# 前の手を始めたときに訊いておいた答え。古びていたら捨てる
+	var got := _take_ready(cands)
+	if got.is_empty():
+		# 手持ちが無い。訊いて、返るまで立ち止まる
+		if v.asking or _ask(cands):
 			return {}
-		for e in cands:
-			var c: Dictionary = e
-			if String(c["kind"]) != String(step["kind"]) \
-					or String(c["target"]) != String(step["target"]):
-				continue
-			# **相手が決まっている手は、その相手でなければ別の手**（誰と話すかは違う話）。
-			# 決まっていない手（適当な場所へ、木を使う）は、
-			# いま立っているものに読み替える——「どの木か」は本人も見ていない
-			if who != null and c.get("obj", null) != who:
-				continue
-			if String(step.get("said", "")) != "":
-				c["said"] = String(step["said"])
-			# 量も言うことも、つもりを立てたときに本人が決めている
-			if step.get("量", null) != null:
-				c["量"] = step["量"]
-			if String(step.get("言うこと", "")) != "":
-				c["言うこと"] = String(step["言うこと"])
-			var got := _pick(c)
-			got["by"] = "AI"
-			return got
-		_plan.clear()   # この手が成り立たないなら、続きも合わない
+		if AI.available():
+			return {}   # 訊けなかっただけ。次のきっかけで訊き直す
+		var r := _pick(cands.pick_random())
+		r["by"] = "ランダム"
+		return r
+
+	# **この手を始めた瞬間に、次の手を訊いておく。**
+	# 手は5〜6秒、往復は2秒なので、終わる頃には届いている。
+	# ただし話す手では訊かない——答えが届く頃には相手の言葉が来ていて、
+	# その答えは古い（話すあいだの訊き時は `Villager` が持つ）
+	if not _is_talk_step(got):
+		_ask(cands)
+	return got
+
+
+## 話す手か（この手を始めるときは、次を訊かない）
+func _is_talk_step(c: Dictionary) -> bool:
+	return not c.is_empty() and String(c.get("kind", "")) == "talk" \
+		and String(c.get("target", "")) == "talk"
+
+
+## 訊いておいた答えを受け取る。**相手が居なくなっていたら捨てる**
+func _take_ready(cands: Array) -> Dictionary:
+	var step: Dictionary = _next
+	_next = {}
+	if step.is_empty():
 		return {}
+	var who = step.get("obj", null)
+	if who != null and not is_instance_valid(who):
+		return {}
+	for e in cands:
+		var c: Dictionary = e
+		if String(c["kind"]) != String(step["kind"]) \
+				or String(c["target"]) != String(step["target"]):
+			continue
+		if who != null and c.get("obj", null) != who:
+			continue
+		if String(step.get("said", "")) != "":
+			c["said"] = String(step["said"])
+		if step.get("量", null) != null:
+			c["量"] = step["量"]
+		if String(step.get("言うこと", "")) != "":
+			c["言うこと"] = String(step["言うこと"])
+		var out := _pick(c)
+		out["by"] = "AI"
+		return out
 	return {}
 
 
-## 身に何か起きた。つもりは白紙にする（`Villager.stirred`）
+## 身に何か起きた。訊いておいた手は捨てる（`Villager.stirred`）——
+## 起きたことを読む前に決めた手なので、いまの本人の考えではない
 func forget_plan() -> void:
-	_plan.clear()
+	_next = {}
+
+
+## 話している最中に訊く（返事が届いた／相手が去った／待ちきる直前）。
+## つもりは白紙にしない——いまの手は続いていて、これはその**次**の手を訊く問い
+func think_next() -> void:
+	if v.asking:
+		return
+	var cands := feasible()
+	if cands.size() > 1:
+		_ask(cands)
 
 
 ## その場で考え直す。**手の終わりを待たない**——待つと、話しかけられた人が
@@ -132,7 +143,10 @@ func think_over() -> void:
 		return
 	var cands := feasible()
 	if cands.size() > 1:
-		_ask(cands)
+		_ask(cands, true)   # 急ぎ便。返事を待たせている
+
+
+## 検証用の数。つもりが尽きた理由を分ける——使い切ったのか、途中で捨てたのか
 
 
 ## 検証用の通し番号。どの手がどこから来たかを数えるためだけに持つ
@@ -151,11 +165,19 @@ func _pick(c: Dictionary) -> Dictionary:
 ##
 ## 答えが読めなかったときはその場でランダムに落として始める——
 ## **答えが来ない相手を待ち続けると、村人は二度と動かない。**
-func _ask(cands: Array) -> bool:
+## `quick` は**急ぎ便**——話しかけられて、返事を待たせている問い。
+## 訊くのは「返す言葉と次の1手」だけで、値の動きも思ったことも載せない。
+## 出力が 120→40 トークンになるぶん、往復が半分になる。
+##
+## **便を増やしてはいない。** 同じ一本の問いの、深さを変えているだけ
+## （出力の項目を減らしているだけ）。値は次の普通便が、
+## そのあいだに起きたこと全部を読んで振り返る（`_heard` を進めない）
+func _ask(cands: Array, quick: bool = false) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
 	var asked := cands
-	_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
+	if not quick:
+		_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
 	var take := func(text: String) -> void:
 		if not is_instance_valid(v):
 			return
@@ -165,12 +187,14 @@ func _ask(cands: Array) -> bool:
 			_missed(asked)
 			return
 		_retried = false
-		_plan = read["つもり"]
+		_next = read["手"]
 		# 立ち止まって待っていたなら、その場で動き出す。
-		# 手を動かしている最中なら、つもりのまま置いておく
-		if v.action_phase == "think":
+		# **話している最中なら、その場面はここで閉じる**——
+		# 話す手を閉じる理由になるのは、自分の次の判断だけ
+		if v.action_phase == "think" or v.has_next_now():
 			v.begin(choose())
-	v.asking = AI.ask(_prompt(asked), _system(), take, OUT, true, v.id)
+	v.asking = AI.ask(_prompt(asked, quick), _system(quick), take,
+		OUT_QUICK if quick else OUT, true, v.id)
 	return v.asking
 
 
@@ -202,17 +226,39 @@ func _moves_text(mine: Dictionary, others: Dictionary) -> String:
 	return " / ".join(out) if out.size() > 0 else "（なし）"
 
 
-func _plan_text(plan: Array) -> String:
-	var out: Array = []
-	for step in plan:
-		var one := String(step["said"]) if String(step.get("said", "")) != "" \
-			else "%s %s" % [String(step["kind"]), String(step["target"])]
-		if String(step.get("言うこと", "")) != "":
-			one += "（%s）" % String(step["言うこと"])
-		if step.get("量", null) != null:
-			one += str(step["量"])
-		out.append(one)
-	return " → ".join(out)
+func _step_text(step: Dictionary) -> String:
+	var one := String(step["said"]) if String(step.get("said", "")) != "" \
+		else "%s %s" % [String(step["kind"]), String(step["target"])]
+	if String(step.get("言うこと", "")) != "":
+		one += "（%s）" % String(step["言うこと"])
+	if step.get("量", null) != null:
+		one += str(step["量"])
+	return one
+
+
+## 答えの1つぶんを、覚えておける形にする。読めなければ空
+func _step_of(e, cands: Array) -> Dictionary:
+	var n := -1
+	var said := ""
+	var how = null
+	var words := ""
+	if typeof(e) == TYPE_DICTIONARY:
+		n = int(e.get("番号", 0)) - 1
+		said = str(e.get("呼び名", "")).strip_edges()
+		how = e.get("量", null)
+		words = str(e.get("言うこと", "")).strip_edges()
+	elif typeof(e) == TYPE_FLOAT or typeof(e) == TYPE_INT:
+		n = int(e) - 1
+	if n < 0 or n >= cands.size():
+		return {}
+	var c: Dictionary = cands[n]
+	return {
+		"kind": String(c["kind"]), "target": String(c["target"]),
+		"obj": c.get("obj", null),
+		"said": said.substr(0, NAME_MAX),
+		"量": how if typeof(how) == TYPE_DICTIONARY else null,
+		"言うこと": words.substr(0, WORDS_MAX),
+	}
 
 
 ## 答えを読む。**使えなければ空**を返す（読めなかったのはAIの失敗で、
@@ -228,42 +274,17 @@ func _read(text: String, cands: Array) -> Dictionary:
 			print("[AI] 読めない答え: ", text.substr(0, 120))
 		return {}
 	var got: Dictionary = j.data
-	# **形にうるさくしない。** 頼んだ形（`{"つもり": [...]}`）で返らないことがある——
-	# 手が1つだけ、番号だけの列、いきなり中身。読める形はどれも読む
-	var steps = got.get("つもり", null)
-	if typeof(steps) != TYPE_ARRAY:
-		steps = [got] if got.has("番号") else null
-	if typeof(steps) != TYPE_ARRAY or steps.is_empty():
-		return {}
-	var plan: Array = []
-	for e in steps:
-		if plan.size() >= PLAN_MAX:
-			break
-		var n := -1
-		var said := ""
-		var how = null
-		var words := ""
-		if typeof(e) == TYPE_DICTIONARY:
-			n = int(e.get("番号", 0)) - 1
-			# **`String()` ではなく `str()`。** `String()` は文字列系しか受けない
-			# 型変換なので、AIが数や列で返した瞬間に落ちる（実際に落ちた）。
-			# 答えは何の型で来るか分からないものとして読む
-			said = str(e.get("呼び名", "")).strip_edges()
-			how = e.get("量", null)
-			words = str(e.get("言うこと", "")).strip_edges()
-		elif typeof(e) == TYPE_FLOAT or typeof(e) == TYPE_INT:
-			n = int(e) - 1
-		if n < 0 or n >= cands.size():
-			continue
-		var c: Dictionary = cands[n]
-		# 名前は**その人の言葉**。長い説明が返ったら頭だけ使う
-		plan.append({
-			"kind": String(c["kind"]), "target": String(c["target"]),
-			"obj": c.get("obj", null),
-			"said": said.substr(0, NAME_MAX),
-			"量": how if typeof(how) == TYPE_DICTIONARY else null,
-			"言うこと": words.substr(0, WORDS_MAX),
-		})
+	# **形にうるさくしない。** 頼んだ形で返らないことがある——
+	# 手が物で返る、列で返る、番号だけで返る。読める形はどれも読む
+	var one = got.get("手", null)
+	if one == null:
+		one = got.get("つもり", null)   # 前の言い方で返ってくることがある
+	if typeof(one) == TYPE_ARRAY:
+		one = one[0] if one.size() > 0 else null
+	if one == null and got.has("番号"):
+		one = got
+	var step := _step_of(one, cands)
+
 	# **値の動きは、読めた分だけ入れる。** ここが崩れていても、
 	# つもりが読めているなら訊き直さない（問いが増えるだけで、何も良くならない）
 	# 鍵は2つに分けてあるが、混ざって返ることがあるので**段の深さで見分ける**——
@@ -286,12 +307,20 @@ func _read(text: String, cands: Array) -> Dictionary:
 		EventLog.mind(v.vname, "動いた：%s" % _moves_text(mine, others))
 		v.move_values(mine, others)
 
-	if plan.is_empty():
+	# **受け取りかたも、その人の言葉で残す。** 値の動きだけだと、
+	# 貼り紙を読んで何を思ったのかが紙からも記憶からも消える
+	var felt := str(got.get("思ったこと", "")).strip_edges()
+	if felt != "":
+		felt = felt.substr(0, WORDS_MAX)
+		v.memory.record("思った：%s" % felt)
+		EventLog.mind(v.vname, "思った：%s" % felt)
+
+	if step.is_empty():
 		if EventLog.echo:
-			print("[AI] つもりが読めない: ", text.substr(0, 120))
+			print("[AI] 手が読めない: ", text.substr(0, 120))
 		return {}
-	EventLog.mind(v.vname, "つもり：%s" % _plan_text(plan))
-	return {"つもり": plan}
+	EventLog.mind(v.vname, "つぎ：%s" % _step_text(step))
+	return {"手": step}
 
 
 const NAME_MAX := 16
@@ -299,12 +328,24 @@ const NAME_MAX := 16
 
 ## **見本は載せない。** 具体例を置くと、値も台詞もそのまま写して返ってくる
 ## （村中が同じ一言を言った）。形は言葉で説明すれば足りる。
-static func _system() -> String:
+static func _system(quick: bool = false) -> String:
+	if quick:
+		return """あなたは、ある村に住む一人の人間です。
+いま誰かに話しかけられました。**返す言葉**と、**話が終わったら何をするか**を答えます。
+
+返すのは JSON の物1つ。入れるのは「手」だけ——次にすること1つ。
+    「番号」  … 一覧にあるものから。無いものは選べない
+    「呼び名」… それを自分ならどう言うか。%d字以内
+    「言うこと」… 話すとき・貼るときだけ。%d字以内の一言
+
+返すなら、一覧の「話す」を選んで「言うこと」を書く。
+返さずに立ち去るなら、別の手を選ぶ。それも答えのうち。
+説明も理由も書かない。""" % [NAME_MAX, WORDS_MAX]
 	return """あなたは、ある村に住む一人の人間です。
 渡された姿と「身に起きたこと」「いまできること」を読んで、
 **起きたことで自分の中がどう動いたか**と、**この先することを順に**答えます。
 
-返すのは JSON の物1つ。入れるのは次の3つだけ。
+返すのは JSON の物1つ。入れるのは次の4つだけ。
 
 「動いた」——起きたことで**自分の中**がどう動いたか。**平らな1段**。
   鍵は「あなたの中にあるもの」に出ている言葉、値は**増えた／減ったぶんの数**
@@ -313,27 +354,31 @@ static func _system() -> String:
 「相手が動いた」——**相手への見え方**が動いたときだけ。**2段**。
   外の鍵は相手の名前、その中の鍵は「知っている相手」に出ている言葉、値は増減の数。
 
-「つもり」——この先することの列。1つから%d つまで。先のことほど大まかでいい。
-  一つずつに入れるもの：
-    「番号」  … 一覧にあるものから。無いものは選べない。同じ番号を続けてもよい
+「思ったこと」——身に起きたことのどれかについて、そう思ったという一言。
+  貼り紙を読んだ、言われた、空振りした——受け取りかたがあるときだけ。%d字以内。
+  無ければ書かない。
+
+「手」——次にすること**1つだけ**。入れるもの：
+    「番号」  … 一覧にあるものから。無いものは選べない
     「呼び名」… それを自分ならどう言うか。%d字以内。世界の言い方をなぞらなくていい
                 （教会へ向かうのを「詣でる」と言うか「行く」と言うかは、あなたが決める）
     「量」    … 取る・使う・作るときだけ。持ち物の名前ごとに、いくつ
     「言うこと」… 話すとき・貼るときだけ。%d字以内の一言
 
-説明も理由も書かない。""" % [PLAN_MAX, NAME_MAX, WORDS_MAX]
+説明も理由も書かない。""" % [WORDS_MAX, NAME_MAX, WORDS_MAX]
 
 
 ## 言うことの長さ。長い口上は、世界の上の吹き出しにも記録にも収まらない
 const WORDS_MAX := 40
 
 
-func _prompt(cands: Array) -> String:
-	var out := PackedStringArray()
-	out.append(Inner.of(v))
+func _prompt(cands: Array, quick: bool = false) -> String:
 	# **前に訊いてから、身に起きたこと。** これで自分の中がどう動いたかを答える。
-	# 姿（`Inner`）には入れない——あちらは気持ちの一言と同じ姿を出す紙なので
+	# 同じ行を姿の「今日あったこと」にも出すと**二度渡す**ことになるので、
+	# そのぶんは姿から抜いてもらう（`Inner.of` の `skip_tail`）
 	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+	var out := PackedStringArray()
+	out.append(Inner.of(v, since.size()))
 	if not since.is_empty():
 		out.append("")
 		out.append("# 前に考えてから、あなたの身に起きたこと")
@@ -344,7 +389,10 @@ func _prompt(cands: Array) -> String:
 	for i in range(cands.size()):
 		out.append("%d. %s%s" % [i + 1, _name_act(cands[i]), _far(cands[i])])
 	out.append("")
-	out.append("この先%d手まで、するつもりのことを順に。" % PLAN_MAX)
+	if quick:
+		out.append("何と返す？ そのあと何をする？")
+	else:
+		out.append("次にすることを1つ。")
 	return "\n".join(out)
 
 

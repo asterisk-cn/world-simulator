@@ -50,22 +50,22 @@ const BEHAVIORS := {
 }
 
 ## 型ごとに選べる対象のうち、世界に元からあるもの。
-##   duration … かかる時間
+##   duration … かかる時間。**ゆっくり**——見ている人が目で追える速さに揃えてある
 ##   reach    … その場で行うのに必要な近さ（マス）。
 ##              -1 は「目的地まで移動してから行う」動作。
 ##              0以上なら、いま届く範囲になければそもそも選択肢に出ない。
 ##              遠ければ先に「動く」必要がある。
 const TARGETS := {
 	"move": {
-		"anywhere": {"label": "適当な場所", "duration": 0.8, "reach": -1.0},
-		"toward": {"label": "誰かのところ", "duration": 0.4, "reach": -1.0},
-		"mine": {"label": "自分のところ", "duration": 0.4, "reach": -1.0},
-		"board": {"label": "掲示板", "duration": 0.4, "reach": -1.0},
+		"anywhere": {"label": "適当な場所", "duration": 1.6, "reach": -1.0},
+		"toward": {"label": "誰かのところ", "duration": 0.8, "reach": -1.0},
+		"mine": {"label": "自分のところ", "duration": 0.8, "reach": -1.0},
+		"board": {"label": "掲示板", "duration": 0.8, "reach": -1.0},
 	},
 	"talk": {
-		"talk": {"label": "誰か", "duration": 1.5, "reach": 2.2},
-		"post": {"label": "掲示板に貼る", "duration": 2.0, "reach": 2.2},
-		"read": {"label": "掲示板を読む", "duration": 1.5, "reach": 2.2},
+		"talk": {"label": "誰か", "duration": 3.0, "reach": 2.2},
+		"post": {"label": "掲示板に貼る", "duration": 4.0, "reach": 2.2},
+		"read": {"label": "掲示板を読む", "duration": 3.0, "reach": 2.2},
 	},
 	# 使う / 作る の対象は、世界にある物と神が決めた「つくりかた」から作る。
 	"use": {},
@@ -74,10 +74,17 @@ const TARGETS := {
 
 ## 「使う」は、それがどこにあるかで間合いと時間が変わる。
 ## 何をするか（採る / 食べる / 祈る）ではなく、どこにあるかだけで決まる。
+## 作る・建てる・そこへ向かうのにかかる時間。**対象では変えない。**
+## 何を作るのが大変かをプログラムは知らない——知っているのは神が付けた名前だけで、
+## 名前から手間は読めない（籠と家で時間が違うはず、と決めるのは世界の越権）。
+const MAKE_SEC := 3.2
+const BUILD_SEC := 5.0
+const GO_SEC := 0.8
+
 const USE_WAYS := {
-	"world": {"duration": 1.4, "reach": -1.0},    # そこに在るものへ行って使う
-	"hand": {"duration": 0.8, "reach": 999.0},    # 手の中のものを使う
-	"building": {"duration": 4.0, "reach": 1.6},  # 建物のそばで使う
+	"world": {"duration": 2.8, "reach": -1.0},    # そこに在るものへ行って使う
+	"hand": {"duration": 1.6, "reach": 999.0},    # 手の中のものを使う
+	"building": {"duration": 8.0, "reach": 1.6},  # 建物のそばで使う
 }
 
 # ---------------------------------------------------------------------------
@@ -561,19 +568,19 @@ func targets_of(kind: String) -> Dictionary:
 				out[String(b["id"])] = _target(String(b["label"]))
 		"make":
 			for r in recipes:
-				out[String(r["id"])] = _target(String(r["label"]), 1.6, 999.0)
+				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, 999.0)
 			for b in buildings:
-				out[String(b["id"])] = _target(String(b["label"]), 2.5, -1.0)
+				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, -1.0)
 		"move":
 			out = TARGETS["move"].duplicate(true)
 			for b in buildings:
-				out["go:%s" % String(b["id"])] = _target(String(b["label"]), 0.4, -1.0)
+				out["go:%s" % String(b["id"])] = _target(String(b["label"]), GO_SEC, -1.0)
 		_:
 			return TARGETS.get(kind, {})
 	return out
 
 
-func _target(label: String, duration: float = 0.8, reach: float = 999.0) -> Dictionary:
+func _target(label: String, duration: float = 1.6, reach: float = 999.0) -> Dictionary:
 	return {"label": label, "duration": duration, "reach": reach}
 
 

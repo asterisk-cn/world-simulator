@@ -40,6 +40,29 @@ var asking := false
 ## AIの答えが二度とも使えなかったとき、次に訊き直す時刻（実時間）
 var think_again_at := 0.0
 
+## 空振りの理由。**世界が見たこと**を、そのまま帳面に書くために持つ
+var _miss := ""
+
+## 立ち止まりの正体を分けて測る（検証用）。
+## `think` に入る道は2つ——出来事に呼ばれた（話しかけられた）と、
+## つもりが尽きて時機で訊いた。どちらがどれだけ止めているかで、直す場所が変わる
+static var think_event := 0.0
+static var think_timing := 0.0
+## 手が見込みより早く閉じた回数（話す手が返事で閉じる、など）
+static var act_early := 0
+static var act_full := 0
+var _why := ""
+
+
+## 話す手のいま。**言い終えたか**と、**返事が返ったか**、そして**何と言ったか**
+var _spoke := false
+var _replied := false
+var _asked_next := false
+var _said_words := ""
+
+## 返事を待ちきる長さ。観測された返事の上限（実測で 0.2〜9秒、多くは3〜8秒）
+const TALK_MAX := 8.0
+
 
 
 
@@ -84,6 +107,14 @@ func stirred() -> void:
 	if _brain == null:
 		return
 	_brain.forget_plan()
+	_why = "出来事"
+	# **止まるのは歩いているときだけ。** 「居合わせる」とは歩き去らないことで、
+	# 採りかけの手を落とすことではない。手を動かしている最中なら続けたまま、
+	# つもりだけ白紙にして訊く——考える2秒が手の中に入る
+	if action_phase == "move":
+		current_action = {}
+		action_phase = "idle"
+	think_again_at = 0.0
 	# **その場で訊く。** 手の終わりまで待つと、話しかけられた人は必ず
 	# 一往復ぶん立ち止まる（会話は頻度が高いので、そこが待ちの主な出どころになる）
 	_brain.think_over()
@@ -167,6 +198,11 @@ func _process(delta: float) -> void:
 	# 考え込んでいても、息をしていない人は置物に見える。
 	# ここだけは世界の時間ではなく本当の時間で動く
 	_bob += delta * (3.0 if SimClock.paused or action_phase == "think" else 6.0)
+	if action_phase == "think":
+		if _why == "出来事":
+			think_event += delta
+		else:
+			think_timing += delta
 	if SimClock.paused or action_phase == "think":
 		queue_redraw()
 	if SimClock.paused:
@@ -214,11 +250,59 @@ func _decide() -> void:
 	begin(c)
 
 
+## いま話している最中か
+func _is_talk() -> bool:
+	return String(current_action.get("kind", "")) == "talk" \
+		and String(current_action.get("target", "")) == "talk"
+
+
+## 話しかけた相手が、間合いから出たか
+func _talk_gone() -> bool:
+	var who = current_action.get("obj", null)
+	if who == null or not is_instance_valid(who):
+		return true
+	var way = Schema.target_def("talk", "talk")
+	var reach: float = float(way["reach"]) if way != null else 2.2
+	return cell.distance_to(who.cell) > reach
+
+
+## その人からの返事を待っているか
+func waiting_for(who) -> bool:
+	return _is_talk() and current_action.get("obj", null) == who and _spoke
+
+
+func said_words() -> String:
+	return _said_words
+
+
+## その人からの返事が届いた。待っていたなら、そこで場面が閉じる
+func replied_by(who) -> void:
+	if _is_talk() and current_action.get("obj", null) == who:
+		_replied = true
+
+
+func _close_act() -> void:
+	action_phase = "idle"
+	current_action = {}
+	_spoke = false
+	_replied = false
+	_asked_next = false
+
+
+## 話しているあいだに次の判断が届いた。**そこで場面が閉じ、次の手へ移る**
+func has_next_now() -> bool:
+	return _is_talk() and _spoke
+
+
 ## 決まった行動を始める。AIの返事も、規則で選んだぶんも、ここを通る
 func begin(c: Dictionary) -> void:
 	if c.is_empty():
 		action_phase = "idle"
 		return
+	_spoke = false
+	_replied = false
+	_asked_next = false
+	_why = ""
 	current_action = c
 	action_phase = "move"
 	act_timer = 0.0
@@ -254,11 +338,32 @@ func _execute(dt: float) -> void:
 			return
 
 	if action_phase == "act":
+		# **話すのは、着いた瞬間に言う。** 言い終えてから待つのであって、
+		# 待ってから言うのではない（返事は言葉が出たあとにしか返らない）
+		if not _spoke and _is_talk():
+			_spoke = true
+			_complete_action()
 		act_timer += dt
+		if _is_talk():
+			# **話す手は、返事では閉じない。** 自分で選んだ手なので、
+			# 閉じる理由になるのは**自分の次の判断**だけ——返事を聞いてもその場に留まる。
+			# 相手が間合いを出たか、待ちきったら、そこで終わる（DESIGN.md §3 の間合い）
+			# **話しているあいだに、次を訊いておく。** 訊くのは
+			# 返事が届いたとき・相手が去りかけたとき・待ちきる一往復前。
+			# ここで訊いておけば、手が閉じたときには次が届いている
+			if not _asked_next and (_replied or act_timer >= TALK_MAX - AI.lag()):
+				_asked_next = true
+				_brain.think_next()
+			if _talk_gone() or act_timer >= TALK_MAX:
+				if not _replied:
+					# 返事は来なかった。それも身に起きたこと
+					memory.record("返事は無かった——%s" % action_label())
+					EventLog.mind(vname, "返事は無かった：%s" % action_label())
+				_close_act()
+			return
 		if act_timer >= float(current_action.get("duration", 0.6)):
 			_complete_action()
-			action_phase = "idle"
-			current_action = {}
+			_close_act()
 
 
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
@@ -296,10 +401,13 @@ func _complete_action() -> void:
 		say(kind, target)
 		EventLog.mind(vname, "した：%s" % action_label())
 	else:
-		# **空振りも身に起きたこと。** 行ってみたら居なかった、採り尽くされていた——
-		# 世界の事実なので、次に訊くときに本人へ渡す（不安や孤独が動く元になる）
-		memory.record("空振り：%s" % action_label())
-		EventLog.mind(vname, "空振り：%s" % action_label())
+		# **空振りも身に起きたこと。** 世界は理由まで知っている（居なかった、
+		# 残っていなかった、払えなかった）ので、そこまで書く——
+		# 行動の名前をもう一度書いても、何があったかを言ったことにならない
+		var why: String = _miss if _miss != "" else "%s——できなかった" % action_label()
+		_miss = ""
+		memory.record(why)
+		EventLog.mind(vname, "空振り：%s" % why)
 
 
 ## 本人が答えたぶん（`Brain._how_much`）を、そのまま世界に映す。
@@ -388,6 +496,7 @@ func _do_make(target: String) -> bool:
 			return false
 		var moved := _apply(current_action.get("move", {}), "make", target, null)
 		if moved.is_empty():
+			_miss = "%s を作ろうとしたが、払うものが無かった" % Schema.item_label(target)
 			return false
 		memory.record("制作：%s%s" % [action_label(), _moved_text(moved, target)])
 		return true
@@ -396,10 +505,13 @@ func _do_make(target: String) -> bool:
 		return false
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if c.x < 0 or not world._can_build_at(c):
+		_miss = "%s を建てようとしたが、置ける場所が無かった" % Schema.target_label("make", target)
 		return false
 	var paid := _apply(current_action.get("move", {}), "make", target, null)
 	if paid.is_empty():
-		return false  # 持ち物が何も動かないなら、その人は建てなかった
+		# 持ち物が何も動かないなら、その人は建てなかった
+		_miss = "%s を建てようとしたが、払うものが無かった" % Schema.target_label("make", target)
+		return false
 	var s: Structure = world.add_structure(target, c, id, color)
 	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
 	EventLog.notable("%s が%sを建てた" % [vname, s.label()],
@@ -415,10 +527,13 @@ func _do_make(target: String) -> bool:
 func _do_use(target: String, obj) -> bool:
 	var where := String(current_action.get("where", "hand"))
 	if where == "building" and (obj == null or not is_instance_valid(obj)):
+		_miss = "%s へ着いたが、もう無かった" % Schema.target_label("use", target)
 		return false
 	var moved := _apply(current_action.get("move", {}), "use", target, obj)
 	# 建物に入るように、持ち物が何も動かない使い方もある。それは空振りではない。
 	if where != "building" and moved.is_empty():
+		_miss = "%s を採ろうとしたが、残っていなかった" % Schema.item_label(target) \
+			if where == "world" else "%s を使おうとしたが、手に無かった" % Schema.item_label(target)
 		return false
 	memory.record("使用：%s%s" % [action_label(), _moved_text(moved, target)])
 	return true
@@ -432,6 +547,7 @@ func _do_talk(other) -> bool:
 	var way = Schema.target_def("talk", "talk")
 	var reach: float = float(way["reach"]) if way != null else 2.2
 	if cell.distance_to(other.cell) > reach:
+		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false
 	# **何を言うかは本人がつもりを立てたときに決めている。**
 	# 世界が運ぶのは言葉そのものだけで、受け取りかたは聞いた人の次の問い（§5）
@@ -451,6 +567,16 @@ func _do_talk(other) -> bool:
 		other.memory.record("会話：%s が言った——%s" % [vname, words])
 	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
 	other.say("talk", "talk", 2.2)
+	# **これが返事なら、相手の場面はここで閉じる**（待っていた相手に届いた）。
+	# 一往復は**一つの場面**として記録に綴じる——8人の行が交互に並ぶ中では、
+	# 一往復が数行離れて、神の目に会話として映らない
+	var back: bool = other.waiting_for(self)
+	other.replied_by(self)
+	_said_words = words
+	if back and words != "" and String(other.said_words()) != "":
+		EventLog.social("%s——%s ／ %s——%s" % [
+			other.vname, other.said_words(), vname, words],
+			{other.vname: "v:%d" % other.id, vname: "v:%d" % id})
 	# **自分の身に起きたこと**は、相手のつもりを白紙にする。
 	# 話しかけられてもなお前のつもりのまま動くのは、判断していないのと同じ
 	other.stirred()
@@ -486,7 +612,7 @@ func _do_read_board() -> void:
 	if unread.is_empty():
 		return
 	for e in unread:
-		memory.mark_post_read(int(e["id"]), 1.0)
+		memory.mark_post_read(int(e["id"]))
 		# 誰の紙かより、何が書いてあったかが記憶に残る
 		memory.record("掲示板：読んだ（%s）——%s"
 			% [String(e["author_name"]), String(e["text"])])
@@ -496,9 +622,18 @@ func _do_read_board() -> void:
 # 夜
 # ---------------------------------------------------------------------------
 
-## 【要検討】記憶の扱いは未決。いまは一日ぶんの出来事を要約に畳んでいるだけ。
+## 一日を畳む。**何を覚えていて何を忘れるかは本人**（`villager/recall.gd`）。
+## 繋がっていなければ、数えただけの一行が穴を埋める
 func on_night() -> void:
-	memory.nightly_compress(vname, SimClock.day)
+	Recall.ask(self, SimClock.day)
+
+
+## 帳面を閉じる。**判断の側が見ている位置も一緒にずらす**——
+## 出来事の位置で「前に考えてから」を覚えているので、頭から落とすとずれる
+func fold_day(n: int) -> void:
+	var dropped: int = memory.fold(n)
+	if _brain != null:
+		_brain.forget_before(dropped)
 
 
 # ---------------------------------------------------------------------------

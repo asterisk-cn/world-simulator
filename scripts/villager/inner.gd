@@ -11,7 +11,9 @@ class_name Inner
 ## その人の姿を言葉にする。**神が付けた名前のまま**渡す——言い換えると、
 ## 神がこの世界に置いた言葉ではないものが村人の口から出る。
 ## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す
-static func of(v) -> String:
+## `skip_tail` は**呼ぶ側が別に見せるぶん**。判断の問いは「前に考えてから
+## 起きたこと」を自分で並べるので、そのぶんをここで出すと**同じ行を二度渡す**ことになる
+static func of(v, skip_tail: int = 0) -> String:
 	var out := PackedStringArray()
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
@@ -63,10 +65,11 @@ static func of(v) -> String:
 	out.append("# していること")
 	out.append(v.action_label())
 
-	if not v.memory.episodes.is_empty():
+	if v.memory.episodes.size() > skip_tail:
 		out.append("")
 		out.append("# 今日あったこと")
-		for e in v.memory.episodes.slice(maxi(v.memory.episodes.size() - 8, 0)):
+		var upto: int = maxi(v.memory.episodes.size() - skip_tail, 0)
+		for e in v.memory.episodes.slice(maxi(upto - 8, 0), upto):
 			out.append("・%s" % String(e))
 
 	var past := String(v.memory.recent_summary(2))

@@ -31,6 +31,23 @@ const ENV_OLLAMA_MODEL := "OLLAMA_MODEL"
 const ENV_OLLAMA_URL := "OLLAMA_URL"     ## 別の機械に置いてあるとき
 const OLLAMA_FILE := "res://.ollama-model"  ## 作りながら試すとき用
 
+## **もう一つの口——Jev（TypeSafe の System One）。**
+## 文章を作らず、**型のついた答えと確率**を返す。村の問いの骨は
+## 「一覧から1つ選ぶ」なので、そこはこちらのほうが速くて安い。
+##
+## 実測（同じ姿と候補で）：**往復 0.5秒**（文章のモデルは 1.6〜2.4秒）、
+## 8人ぶん同時に投げて 0.59秒＝**毎秒13.5件**（村が要るのは毎秒1.5件）。
+## 候補が5件でも40件でも往復は変わらない。入力 $0.042/M、**出力は無料**。
+##
+## できないことも実測した。**言葉を作らない**し、**先を読まない**——
+## 手の中の木の実は食べるが（0.57）、少し歩いた先の木の実は採りに行かない（0.06）。
+## だから言葉と、その先を読む話は文章のモデルに残す。
+const JEV_URL := "https://api.typesafe.ai/v1/systemone"
+const JEV_MODEL := "jev-latest"
+const JEV_KEY_FILE := "user://typesafe.key"
+const JEV_DEV_KEY_FILE := "res://.typesafe-key"
+const ENV_JEV_KEY := "TYPESAFE_API_KEY"
+
 ## 鍵の置き場。**リポジトリには入れない**（`.gitignore`）。
 ## 遊ぶ側の鍵は `user://` に置く（書き出した本体からも読める）。
 ## `res://` のほうは作りながら試すためのもので、書き出すと中に入ってしまうので、
@@ -120,7 +137,8 @@ const LAG_KEEP := 8
 const LAG_GUESS := 2.0   ## まだ測れていないときの見当
 
 var _key := ""
-var _queue: Array = []   ## [{system, prompt, max, json, on_done}]
+var _jev_key := ""
+var _queue: Array = []   ## [{system, prompt, max, json, on_done} または {jev, state, questions}]
 var _lanes: Array = []   ## [{http, job}]
 
 ## 選べるもの。[{name, local, model, url}]。最後は必ず「AIを使わない」
@@ -136,6 +154,7 @@ var off := false
 
 func _ready() -> void:
 	_find_where()
+	_jev_key = _find_jev_key()
 	_tagger = HTTPRequest.new()
 	_tagger.timeout = 5.0
 	add_child(_tagger)
@@ -333,6 +352,48 @@ func set_key(key: String) -> void:
 		ready_changed.emit(available())
 
 
+## Jev に訊けるか。文章の相手とは別の鍵なので、片方だけ在ることもある
+func can_decide() -> bool:
+	return not off and _jev_key != ""
+
+
+func _find_jev_key() -> String:
+	var env := OS.get_environment(ENV_JEV_KEY).strip_edges()
+	if env != "":
+		return env
+	for path in [JEV_KEY_FILE, JEV_DEV_KEY_FILE]:
+		if FileAccess.file_exists(path):
+			var f := FileAccess.open(path, FileAccess.READ)
+			if f != null:
+				var k := f.get_as_text().strip_edges()
+				if k != "":
+					return k
+	return ""
+
+
+## **型のついた答えを訊く。** `questions` は Jev の形そのまま
+## （`{"手": {"type": "choice", "instructions": …, "criteria": {…}}}`）。
+## `on_done` は `answers` の物を受ける（失敗したら空）
+func decide(state: String, questions: Dictionary, on_done: Callable,
+		who: int = -1) -> bool:
+	if not can_decide() or questions.is_empty():
+		return false
+	var job := {
+		"jev": true, "state": state, "questions": questions,
+		"on_done": on_done, "who": who, "tries": 0,
+	}
+	if who >= 0:
+		for i in range(_queue.size()):
+			if int(_queue[i].get("who", -1)) == who and bool(_queue[i].get("jev", false)):
+				dropped += 1
+				_queue[i] = job
+				_pump()
+				return true
+	_queue.append(job)
+	_pump()
+	return true
+
+
 func _find_key() -> String:
 	var env := OS.get_environment(ENV_KEY).strip_edges()
 	if env != "":
@@ -372,6 +433,19 @@ func _send(lane: int, job: Dictionary) -> void:
 	job["sent_at"] = _now()
 	_lanes[lane]["job"] = job
 	_lanes[lane]["http"].timeout = WAIT_LOCAL if local else WAIT_OUT
+
+	# **型のついた問い（Jev）。** 宛先も形も違うので、ここで分かれる
+	if bool(job.get("jev", false)):
+		sent += 1
+		var jbody := {"state": String(job["state"]), "model": JEV_MODEL,
+			"questions": job["questions"]}
+		var jerr: int = _lanes[lane]["http"].request(JEV_URL,
+			["content-type: application/json",
+			 "authorization: Bearer %s" % _jev_key],
+			HTTPClient.METHOD_POST, JSON.stringify(jbody))
+		if jerr != OK:
+			_fail(lane, "繋げなかった（%d）" % jerr)
+		return
 
 	var msgs: Array = []
 	if String(job["system"]) != "":
@@ -429,6 +503,16 @@ func _on_done(result: int, code: int, _headers: PackedStringArray,
 	if typeof(u) == TYPE_DICTIONARY:
 		last_usage = u
 	_misses = 0
+
+	# 型のついた答えは、そのまま呼び側へ渡す（文章ではないので読み方が違う）
+	if bool(_lanes[lane]["job"].get("jev", false)):
+		var ans = got.get("answers", null)
+		if typeof(ans) != TYPE_DICTIONARY or ans.is_empty():
+			_fail(lane, "答えが空")
+			return
+		_finish_any(lane, ans)
+		return
+
 	var text := _first_text(got)
 	if text == "":
 		# 枠を思考で使い切ると、200 のまま空が返る
@@ -513,9 +597,14 @@ func lag() -> float:
 
 
 func _finish(lane: int, text: String) -> void:
+	_finish_any(lane, text)
+
+
+## 呼び側へ返す。文章なら String、型のついた答えなら Dictionary
+func _finish_any(lane: int, got) -> void:
 	var job: Dictionary = _lanes[lane]["job"]
 	_lanes[lane]["job"] = {}
-	if text != "":
+	if typeof(got) != TYPE_STRING or String(got) != "":
 		_answers.append(_now())
 		var at := float(job.get("sent_at", -1.0))
 		if at > 0.0:
@@ -530,5 +619,5 @@ func _finish(lane: int, text: String) -> void:
 	if not job.is_empty():
 		var cb: Callable = job["on_done"]
 		if cb.is_valid():
-			cb.call(text)
+			cb.call(got)
 	_pump()

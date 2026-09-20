@@ -188,7 +188,7 @@ func _build_personality() -> void:
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
-		"一人につき1つ持つ言葉。0〜100。\n並びは設計図で決めたまま。")
+		"一人につき1つ持つ言葉。0〜50。\n並びは設計図で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
@@ -206,7 +206,7 @@ func _build_self_params() -> void:
 
 func _build_pairs() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
-		"相手ひとりごとに持つ値。−100〜100。\n会ったことのある相手だけが並ぶ。",
+		"相手ひとりごとに持つ値。−50〜50。\n会ったことのある相手だけが並ぶ。",
 		subject.pairs.is_empty())
 
 	if subject.pairs.is_empty():

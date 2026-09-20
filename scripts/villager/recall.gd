@@ -60,7 +60,7 @@ static func prompt(v, day: int) -> String:
 	var out := PackedStringArray()
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
-	out.append("ひとことで言うと：%s" % v.personality.quirk)
+	out.append("性格：%s" % v.personality.quirk)
 
 	# **持っているぶんは全部渡す。** 落ちる寸前の一行を本人が見ないなら、
 	# 「まだ覚えていたい」を今日の一行に書き直すこともできない

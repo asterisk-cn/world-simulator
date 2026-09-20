@@ -16,9 +16,11 @@ class_name Feeling
 ## それ以上伸ばすと段落になって、「一言」ではなくなる
 const MAX_CHARS := 32
 
-## 同じ人に訊き直さない間（実時間の秒）。
-## していることが変わったら訊き直すが、それが速いときの底になる
-const COOL := 6.0
+## 訊き直す間（実時間の秒）。**ここが更新の周期そのもの**——
+## 「していることが変わったら」だけで訊いていた頃は、歩いている村人の一言が
+## 半日変わらないことがあった。1日（実時間171秒）で一人あたり20回ほど。
+## 一つの手が 1.6〜8秒なので、これより長いと手をまたいでも心が動かない
+const COOL := 8.0
 
 ## 出力の上限。一行しか要らないので細い（`AI.MAX_OUT` の但し書きに注意——
 ## 考えるモデルに替えるなら、思考ぶんのぶん広げる）
@@ -31,9 +33,8 @@ static func ask(v) -> void:
 		return
 	var act := String(v.action_label())
 	var now := float(Time.get_ticks_msec()) / 1000.0
-	# していることが同じなら、気持ちも同じでいい
-	if v.feeling != "" and v.feeling_for == act:
-		return
+	# **していることが同じでも訊き直す。** 同じ手を続けているあいだに
+	# 気持ちが動かないのは、身体の話であって心の話ではない
 	if now - v.feeling_at < COOL:
 		return
 	v.feeling_at = now
@@ -41,8 +42,13 @@ static func ask(v) -> void:
 	# 返るまでに選び直されている／死んでいることがあるので、本人か確かめる
 	var id: int = v.id
 	var take := func(text: String) -> void:
-		if is_instance_valid(v) and v.id == id and text != "":
-			v.feeling = _one_line(text)
+		if not is_instance_valid(v) or v.id != id or text == "":
+			return
+		var line := _one_line(text)
+		# **変わったときだけ残す。** 同じ一言が並ぶと、変わった瞬間が読めない
+		if line != v.feeling:
+			EventLog.mind(v.vname, "気持ち：%s" % line)
+		v.feeling = line
 	AI.ask(prompt(v), system(), take, MAX_OUT)
 
 

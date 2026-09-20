@@ -101,6 +101,14 @@ func move_values(mine: Dictionary, others: Dictionary) -> void:
 				pairs[who.id].offset(pid, float(moves[label]))
 
 
+## 【AI差し替え口】いまの値。**段階で訊いた答えを、幅に写す**（`Brain._read_jev`）。
+## 増減の申告と違って、いくつ動くかを本人が測らなくていい——
+## 「切迫している」と答えれば、それが幅のどこかは世界が知っている
+func set_values(mine: Dictionary) -> void:
+	for id in mine:
+		params.set_v(String(id), float(mine[id]))
+
+
 ## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
 ## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
 func stirred() -> void:
@@ -207,6 +215,13 @@ func _process(delta: float) -> void:
 		queue_redraw()
 	if SimClock.paused:
 		return
+
+	# 【AI差し替え口】気持ちは**ひとりでに更新される**（`villager/feeling.gd`）。
+	# 神が見ている人にだけ訊いていたので、誰も見ていない村では一言が
+	# 一度も生まれず、変わっていく様子もどこにも残らなかった。
+	# 間隔は `Feeling.COOL` が持っているので、ここは毎フレーム呼んでいい
+	Feeling.ask(self)
+
 	var dt := delta * SimClock.speed
 
 	decision_timer -= dt

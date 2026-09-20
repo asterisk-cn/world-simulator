@@ -15,14 +15,29 @@ var summaries: Array = []     ## 過去の日ごとの要約
 var read_posts := {}          ## post_id -> {"day": int}
 var last_talk_day := {}       ## villager_id -> day
 
+## **見た場所を覚えている。** 物は動かないので、視界から外れても
+## 「あそこに木があった」は残る（人は動くので覚えない）。
+## 行ってみて無ければ忘れる——覚えているだけで、そこに在るとは限らない
+var seen := {}                ## item_id -> Vector2（最後に見た場所）
+
+
+func saw(item_id: String, at: Vector2) -> void:
+	seen[item_id] = at
+
+
+func gone(item_id: String) -> void:
+	seen.erase(item_id)
+
 
 ## その日の帳面に書く。**一日ぶんは全部持つ**——夜に本人が畳むまでに
 ## 世界が頭から捨てると、本人が見ていないものを世界が忘れさせたことになる。
 ## 上限は歯止めで、忘却ではない（1日は 60〜70 手ほど）
 const KEEP := 300
 
+## **一行ごとに時刻を打つ。** 時刻は世界が知っている事実で、
+## これがあると「今日あったこと」に一日の流れが乗る（夜に畳むときにも効く）
 func record(text: String) -> void:
-	episodes.append(text)
+	episodes.append("%s %s" % [SimClock.clock_text(), text])
 	if episodes.size() > KEEP:
 		episodes.pop_front()
 
@@ -80,7 +95,12 @@ func _summarize(owner_name: String, day: int) -> String:
 	var counts := {}
 	var deeds := 0
 	for e in episodes:
-		var head: String = String(e).split("：")[0]
+		# 頭の時刻を落としてから、型で束ねる
+		var line: String = String(e)
+		var sp := line.find(" ")
+		if sp > 0:
+			line = line.substr(sp + 1)
+		var head: String = line.split("：")[0]
 		if head == NOT_A_DEED:
 			continue
 		deeds += 1

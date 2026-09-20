@@ -7,3 +7,6 @@ export_presets.cfg
 
 # この機械の中（ollama）に訊くときのモデル名。作りながら試すとき用
 .ollama-model
+
+# TypeSafe（Jev）の鍵。作りながら試すとき用
+.typesafe-key

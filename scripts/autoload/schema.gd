@@ -56,11 +56,14 @@ const BEHAVIORS := {
 ##              0以上なら、いま届く範囲になければそもそも選択肢に出ない。
 ##              遠ければ先に「動く」必要がある。
 const TARGETS := {
+	# **「動く」に行き先は無い。** 話す・使う・作るは歩きを手の中に畳んでいる
+	# （`reach: -1` の動作は目的地まで行ってから行う）ので、
+	# 「◯◯のところへ向かう」を別に並べると、同じ一手を二度訊くことになる。
+	# 実際それが候補の過半を占め、選ばれた手の 74% が「向かう」で、
+	# 着いた先で何かをするところまで繋がらなかった。
+	# ここに残すのは**行き先の無い動き**だけ——ぶらぶらするのは、それ自体が一手
 	"move": {
 		"anywhere": {"label": "適当な場所", "duration": 1.6, "reach": -1.0},
-		"toward": {"label": "誰かのところ", "duration": 0.8, "reach": -1.0},
-		"mine": {"label": "自分のところ", "duration": 0.8, "reach": -1.0},
-		"board": {"label": "掲示板", "duration": 0.8, "reach": -1.0},
 	},
 	"talk": {
 		"talk": {"label": "誰か", "duration": 3.0, "reach": 2.2},
@@ -428,18 +431,23 @@ const PAIR_NEG := Color(0.74, 0.26, 0.22)
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
 ##
-## じぶんは「どれだけ」の話なので 0〜100。空腹が負になることはない。
-## あいては「どちらへ」の話なので −100〜100。真ん中が何とも思っていないところで、
+## じぶんは「どれだけ」の話なので 0〜50。空腹が負になることはない。
+## あいては「どちらへ」の話なので −50〜50。真ん中が何とも思っていないところで、
 ## 好感の裏には嫌悪があり、敬意の裏には侮りがある。
 ## 幅を1本ずつ決めさせても、読み方が増えるだけで世界の見え方は変わらなかった。
+##
+## **50 きざみ。** 100 では1日で 8 まで来た人と 60 まで来た人が並んで、
+## どこが「満ちた」のか読めなかった。10 に落とすと逆で、**1日で半数が上限に
+## 張り付いた**（幅だけ 1/10 にして、動かす量は ±1〜2 のままだったため）。
+## 50 はその中間で、積み木10粒に対して **1粒＝5**。
 const SCOPE_RANGE := {
-	SCOPE_SELF: [0.0, 100.0],
-	SCOPE_PAIR: [-100.0, 100.0],
+	SCOPE_SELF: [0.0, 50.0],
+	SCOPE_PAIR: [-50.0, 50.0],
 }
 
 
 func make_param(id: String, label: String, scope: String) -> Dictionary:
-	var r: Array = SCOPE_RANGE.get(scope, [0.0, 100.0])
+	var r: Array = SCOPE_RANGE.get(scope, [0.0, 10.0])
 	return {
 		"id": id, "label": label, "scope": scope,
 		"min": float(r[0]), "max": float(r[1]),
@@ -523,7 +531,7 @@ func param_min(id: String) -> float:
 
 func param_max(id: String) -> float:
 	var d = param_def(id)
-	return 100.0 if d == null else float(d["max"])
+	return 10.0 if d == null else float(d["max"])
 
 
 ## 言葉を1つ足す。属するのはスコープだけ（じぶんか、あいてか）。
@@ -572,9 +580,8 @@ func targets_of(kind: String) -> Dictionary:
 			for b in buildings:
 				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, -1.0)
 		"move":
+			# 建物への行き先も並べない。建っているものは「使う」で行ける
 			out = TARGETS["move"].duplicate(true)
-			for b in buildings:
-				out["go:%s" % String(b["id"])] = _target(String(b["label"]), GO_SEC, -1.0)
 		_:
 			return TARGETS.get(kind, {})
 	return out

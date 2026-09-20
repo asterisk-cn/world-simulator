@@ -8,6 +8,20 @@ class_name Inner
 ## それをどう受け取るかは書かない。
 
 
+## 言葉の幅。**書かずに読む**——幅は神が決めるものなので、
+## 幅を決め打ちで書くと、変えた瞬間に嘘になる（実際 100 から 10 に変えた）。
+## 全部同じ幅なら見出しに一度だけ、違うなら行ごとに添える
+static func _span(defs: Array) -> String:
+	if defs.is_empty():
+		return ""
+	var lo := float(defs[0]["min"])
+	var hi := float(defs[0]["max"])
+	for d in defs:
+		if float(d["min"]) != lo or float(d["max"]) != hi:
+			return ""   # 揃っていない。行ごとに出す
+	return "（%d〜%d）" % [int(lo), int(hi)]
+
+
 ## その人の姿を言葉にする。**神が付けた名前のまま**渡す——言い換えると、
 ## 神がこの世界に置いた言葉ではないものが村人の口から出る。
 ## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す
@@ -17,7 +31,7 @@ static func of(v, skip_tail: int = 0) -> String:
 	var out := PackedStringArray()
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
-	out.append("ひとことで言うと：%s" % v.personality.quirk)
+	out.append("性格：%s" % v.personality.quirk)
 	var axes := PackedStringArray()
 	for a in Personality.AXES:
 		var x: float = v.personality.axis(String(a[0]))
@@ -26,11 +40,14 @@ static func of(v, skip_tail: int = 0) -> String:
 
 	var mine := PackedStringArray()
 	for d in Schema.self_params():
-		mine.append("%s %d" % [String(d["label"]),
-			int(round(v.params.get_v(String(d["id"]))))])
+		var one := "%s %d" % [String(d["label"]),
+			int(round(v.params.get_v(String(d["id"]))))]
+		if _span(Schema.self_params()) == "":
+			one += "（%d〜%d）" % [int(d["min"]), int(d["max"])]
+		mine.append(one)
 	if mine.size() > 0:
 		out.append("")
-		out.append("# あなたの中にあるもの（0〜100）")
+		out.append("# あなたの感情%s" % _span(Schema.self_params()))
 		out.append(" / ".join(mine))
 
 	var others := PackedStringArray()
@@ -46,7 +63,7 @@ static func of(v, skip_tail: int = 0) -> String:
 		others.append("%s：%s" % [String(other.vname), " / ".join(vals)])
 	if others.size() > 0:
 		out.append("")
-		out.append("# 知っている相手（−100〜100）")
+		out.append("# 知っている相手%s" % _span(Schema.pair_params()))
 		out.append_array(others)
 
 	# **名前で渡す。** `wood` のような中の呼び名を渡すと、
@@ -65,6 +82,14 @@ static func of(v, skip_tail: int = 0) -> String:
 	out.append("# していること")
 	out.append(v.action_label())
 
+	# 【AI差し替え口】本人がいま感じていること（`villager/feeling.gd`）。
+	# **世界の事実ではないが、本人のもの**なので渡す——渡さないと、
+	# 20秒ごとの一言が毎回ゼロから作られて、心が続いているように見えない
+	if String(v.feeling) != "":
+		out.append("")
+		out.append("# 今感じていること")
+		out.append(String(v.feeling))
+
 	if v.memory.episodes.size() > skip_tail:
 		out.append("")
 		out.append("# 今日あったこと")
@@ -78,7 +103,10 @@ static func of(v, skip_tail: int = 0) -> String:
 		out.append("# 覚えていること")
 		out.append(past)
 
+	# 行き先は座標で渡している（`Brain._at`）ので、**起点もここに要る**。
+	# 遠いか近いかを刻むのは世界の仕事ではない——引き算は読む側がやる
 	out.append("")
 	out.append("# いま")
 	out.append("%d日目 %s" % [SimClock.day, SimClock.clock_text()])
+	out.append("いるところ（%d, %d）" % [int(round(v.cell.x)), int(round(v.cell.y))])
 	return "\n".join(out)

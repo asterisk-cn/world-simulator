@@ -291,7 +291,8 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 		"kind": String(c["kind"]), "target": String(c["target"]),
 		"obj": c.get("obj", null), "said": "", "量": null, "言うこと": "",
 	}
-	if v.action_phase == "think" or v.has_next_now():
+	# **話している最中なら割り込まない**——会話は2往復で閉じる一つの手
+	if v.action_phase == "think":
 		v.begin(choose())
 
 
@@ -330,9 +331,9 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 		_retried = false
 		_next = read["手"]
 		# 立ち止まって待っていたなら、その場で動き出す。
-		# **話している最中なら、その場面はここで閉じる**——
-		# 話す手を閉じる理由になるのは、自分の次の判断だけ
-		if v.action_phase == "think" or v.has_next_now():
+		# **話している最中なら割り込まない**——会話は2往復で閉じる一つの手なので、
+		# 届いた判断はその場面が終わるまで待つ
+		if v.action_phase == "think":
 			v.begin(choose())
 	v.asking = AI.ask(_prompt(asked, quick), _system(quick), take,
 		OUT_QUICK if quick else OUT, true, v.id)

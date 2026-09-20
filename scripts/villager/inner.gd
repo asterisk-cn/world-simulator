@@ -22,6 +22,41 @@ static func _span(defs: Array) -> String:
 	return "（%d〜%d）" % [int(lo), int(hi)]
 
 
+## 今日あったことに載る行数。紙にも問いにも収まるところまで
+const TAIL := 8
+
+## **一つの型で埋め尽くさない。** 新しい順に詰めるだけだと、
+## 会話のあいだ8行とも台詞になって、採った・作ったが紙から消えた——
+## 木の実を60個採った日でも、その人の今日がおしゃべりだけに見える。
+## どの型が大事かは言わない（それは判断）。**枠の半分までしか同じ型を入れない**
+## だけで、あとは新しい順。枠が余ったら、こぼれたぶんから新しい順に戻す
+static func _tail(rows: Array) -> PackedStringArray:
+	var cap: int = maxi(TAIL / 2, 1)
+	var n := {}
+	var keep: Array = []
+	var over: Array = []
+	for i in range(rows.size() - 1, -1, -1):
+		var line := String(rows[i])
+		var sp := line.find(" ")
+		var head: String = line.substr(sp + 1).split("：")[0] if sp > 0 else ""
+		if keep.size() < TAIL and int(n.get(head, 0)) < cap:
+			n[head] = int(n.get(head, 0)) + 1
+			keep.append(i)
+		else:
+			over.append(i)
+	for i in over:
+		if keep.size() >= TAIL:
+			break
+		keep.append(i)
+	# **並べ直すのは帳面の順で。** 時刻の字で並べると、日付をまたいだ夜が
+	# 朝より前に来る（この世界の一日は 05:00 に始まって翌 06:00 に終わる）
+	keep.sort()
+	var out := PackedStringArray()
+	for i in keep:
+		out.append("・%s" % String(rows[i]))
+	return out
+
+
 ## その人の姿を言葉にする。**神が付けた名前のまま**渡す——言い換えると、
 ## 神がこの世界に置いた言葉ではないものが村人の口から出る。
 ## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す
@@ -91,11 +126,12 @@ static func of(v, skip_tail: int = 0) -> String:
 		out.append(String(v.feeling))
 
 	if v.memory.episodes.size() > skip_tail:
-		out.append("")
-		out.append("# 今日あったこと")
 		var upto: int = maxi(v.memory.episodes.size() - skip_tail, 0)
-		for e in v.memory.episodes.slice(maxi(upto - 8, 0), upto):
-			out.append("・%s" % String(e))
+		var tail := _tail(v.memory.episodes.slice(0, upto))
+		if tail.size() > 0:
+			out.append("")
+			out.append("# 今日あったこと")
+			out.append_array(tail)
 
 	var past := String(v.memory.recent_summary(2))
 	if past != "":

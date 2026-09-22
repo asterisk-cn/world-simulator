@@ -54,14 +54,22 @@ static var act_full := 0
 var _why := ""
 
 
-## 話す手のいま。**言い終えたか**と、**返事が返ったか**、そして**何と言ったか**
-var _spoke := false
-var _replied := false
-var _asked_next := false
-var _said_words := ""
+## 話す手のいま。会話は**2往復で1つの場面**で、この手のあいだに閉じる
+var _spoke := false            ## 1行目を言い終えたか
+var _talking := false          ## 間合いに入って、場面が始まっているか
+var _scene: Array = []         ## [{"who": 名前, "words": 言葉}] いまの会話
+var _scene_wait := false       ## 次のひと言を訊いている最中
+var _beat := 0.0               ## 次のひと言までの間
 
-## 返事を待ちきる長さ。観測された返事の上限（実測で 0.2〜9秒、多くは3〜8秒）
-const TALK_MAX := 8.0
+## 場面の往復。A→B→A→B で終わり。**長さは世界が決める**——
+## どこで切り上げるかを本人に訊くと、それは別の手になる
+const TALK_TURNS := 4
+
+## ひと言と次のひと言のあいだ（実時間の秒）。読める速さに置く
+const TALK_BEAT := 1.2
+
+## 場面が閉じないまま流れる上限。返事が返らないときの歯止めで、尺ではない
+const TALK_MAX := 24.0
 
 
 
@@ -281,32 +289,14 @@ func _talk_gone() -> bool:
 	return cell.distance_to(who.cell) > reach
 
 
-## その人からの返事を待っているか
-func waiting_for(who) -> bool:
-	return _is_talk() and current_action.get("obj", null) == who and _spoke
-
-
-func said_words() -> String:
-	return _said_words
-
-
-## その人からの返事が届いた。待っていたなら、そこで場面が閉じる
-func replied_by(who) -> void:
-	if _is_talk() and current_action.get("obj", null) == who:
-		_replied = true
-
-
 func _close_act() -> void:
 	action_phase = "idle"
 	current_action = {}
 	_spoke = false
-	_replied = false
-	_asked_next = false
-
-
-## 話しているあいだに次の判断が届いた。**そこで場面が閉じ、次の手へ移る**
-func has_next_now() -> bool:
-	return _is_talk() and _spoke
+	_talking = false
+	_scene = []
+	_scene_wait = false
+	_beat = 0.0
 
 
 ## 決まった行動を始める。AIの返事も、規則で選んだぶんも、ここを通る
@@ -315,8 +305,10 @@ func begin(c: Dictionary) -> void:
 		action_phase = "idle"
 		return
 	_spoke = false
-	_replied = false
-	_asked_next = false
+	_talking = false
+	_scene = []
+	_scene_wait = false
+	_beat = 0.0
 	_why = ""
 	current_action = c
 	action_phase = "move"
@@ -353,32 +345,89 @@ func _execute(dt: float) -> void:
 			return
 
 	if action_phase == "act":
-		# **話すのは、着いた瞬間に言う。** 言い終えてから待つのであって、
-		# 待ってから言うのではない（返事は言葉が出たあとにしか返らない）
-		if not _spoke and _is_talk():
-			_spoke = true
-			_complete_action()
 		act_timer += dt
 		if _is_talk():
-			# **話す手は、返事では閉じない。** 自分で選んだ手なので、
-			# 閉じる理由になるのは**自分の次の判断**だけ——返事を聞いてもその場に留まる。
-			# 相手が間合いを出たか、待ちきったら、そこで終わる（DESIGN.md §3 の間合い）
-			# **話しているあいだに、次を訊いておく。** 訊くのは
-			# 返事が届いたとき・相手が去りかけたとき・待ちきる一往復前。
-			# ここで訊いておけば、手が閉じたときには次が届いている
-			if not _asked_next and (_replied or act_timer >= TALK_MAX - AI.lag()):
-				_asked_next = true
-				_brain.think_next()
-			if _talk_gone() or act_timer >= TALK_MAX:
-				if not _replied:
-					# 返事は来なかった。それも身に起きたこと
-					memory.record("返事は無かった——%s" % action_label())
-					EventLog.mind(vname, "返事は無かった：%s" % action_label())
-				_close_act()
+			_talk_tick(dt)
 			return
 		if act_timer >= float(current_action.get("duration", 0.6)):
 			_complete_action()
 			_close_act()
+
+
+## 会話の場面を回す。**この手のあいだに始まって終わる**——
+## 相手の手は止めないので、相手が歩き去ればそこで閉じる。
+## 訊いているあいだ本人は立っているが、それは話しているあいだであって
+## 「考えている」ではない（頭の粒は出さない）
+func _talk_tick(dt: float) -> void:
+	var other = current_action.get("obj", null)
+	# **着いた瞬間に言う。** 言い終えてから返事を待つのであって、
+	# 待ってから言うのではない
+	if not _spoke:
+		_spoke = true
+		_complete_action()
+		if not _talking:
+			_close_act()   # 着いたら居なかった（空振りは `_complete_action` が記録済み）
+			return
+		_beat = TALK_BEAT
+		return
+	if _scene_wait:
+		if act_timer >= TALK_MAX:
+			_seal_scene("返事は返ってこなかった")
+		return
+	if other == null or not is_instance_valid(other) or _talk_gone():
+		_seal_scene("%s はもう間合いに居なかった"
+			% (other.vname if other != null and is_instance_valid(other) else "相手"))
+		return
+	_beat -= dt
+	if _beat > 0.0:
+		return
+	if _scene.size() >= TALK_TURNS:
+		_seal_scene("")
+		return
+	# 次に言うのは、いま言った人ではないほう
+	var who = other if (_scene.size() % 2) == 1 else self
+	var to = self if who == other else other
+	_scene_wait = true
+	var mine: int = id
+	var got := func(line: String) -> void:
+		if not is_instance_valid(self) or id != mine or not _scene_wait:
+			return
+		_take_line(who, to, line)
+	if not Talk.reply(who, to, _scene, got):
+		_seal_scene("")
+
+
+## ひと言が返ってきた。**空は沈黙**で、そこで場面が終わる
+func _take_line(who, to, line: String) -> void:
+	_scene_wait = false
+	if line == "" or not is_instance_valid(who) or not is_instance_valid(to):
+		_seal_scene("%s は黙っていた" % (who.vname if is_instance_valid(who) else "相手"))
+		return
+	_scene.append({"who": who.vname, "words": line})
+	# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない
+	who.memory.record("会話：%s に言った——%s" % [to.vname, line])
+	to.memory.record("会話：%s が言った——%s" % [who.vname, line])
+	who.say("talk", "talk", TALK_BEAT + 0.6)
+	_beat = TALK_BEAT
+
+
+## 場面を綴じる。**一往復ずつ離れて並ぶと、神の目に会話として映らない**ので、
+## 場面ぜんぶで1行にする
+func _seal_scene(note: String) -> void:
+	if _scene.size() >= 2:
+		var parts := PackedStringArray()
+		var marks := {}
+		for e in _scene:
+			parts.append("%s——%s" % [String(e["who"]), String(e["words"])])
+		var other = current_action.get("obj", null)
+		marks[vname] = "v:%d" % id
+		if other != null and is_instance_valid(other):
+			marks[other.vname] = "v:%d" % other.id
+		EventLog.social(" ／ ".join(parts), marks)
+	if note != "":
+		memory.record(note)
+		EventLog.mind(vname, note)
+	_close_act()
 
 
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
@@ -564,37 +613,29 @@ func _do_talk(other) -> bool:
 	if cell.distance_to(other.cell) > reach:
 		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false
-	# **何を言うかは本人がつもりを立てたときに決めている。**
-	# 世界が運ぶのは言葉そのものだけで、受け取りかたは聞いた人の次の問い（§5）
+	# **何を言うかは本人が手を選んだときに決めている。**
+	# 世界が運ぶのは言葉そのものだけ。ここから先の往復は `Talk` が訊く
 	var words := String(current_action.get("言うこと", ""))
 	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
 	pair_to(other.id)
 	other.pair_to(id)
 	memory.last_talk_day[other.id] = SimClock.day
 	other.memory.last_talk_day[id] = SimClock.day
+	# **相手の手は止めない。** 話しかけられても、いましていることは続く——
+	# 返すのは言葉だけで、それは相手の一手を消費しない。
+	# 記録には残るので、相手が次に考えるときにはちゃんと目に入る
+	_talking = true
+	_scene = []
+	# **手を選んだのが Jev なら、言葉はまだ無い。** その1行目も `Talk` に訊く
+	# （場面が空のまま始まって、最初に口を開くのはこちら）
 	if words == "":
-		memory.record("会話：%s と話した" % other.vname)
-		other.memory.record("会話：%s と話した" % vname)
-	else:
-		# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない——
-		# 囲うと、その一言だけ別の書きもの（引用）になる
-		memory.record("会話：%s に言った——%s" % [other.vname, words])
-		other.memory.record("会話：%s が言った——%s" % [vname, words])
-	# 話しかけられた側にも同じ絵を出す。誰と話しているかは2つ並ぶことで読める
-	other.say("talk", "talk", 2.2)
-	# **これが返事なら、相手の場面はここで閉じる**（待っていた相手に届いた）。
-	# 一往復は**一つの場面**として記録に綴じる——8人の行が交互に並ぶ中では、
-	# 一往復が数行離れて、神の目に会話として映らない
-	var back: bool = other.waiting_for(self)
-	other.replied_by(self)
-	_said_words = words
-	if back and words != "" and String(other.said_words()) != "":
-		EventLog.social("%s——%s ／ %s——%s" % [
-			other.vname, other.said_words(), vname, words],
-			{other.vname: "v:%d" % other.id, vname: "v:%d" % id})
-	# **自分の身に起きたこと**は、相手のつもりを白紙にする。
-	# 話しかけられてもなお前のつもりのまま動くのは、判断していないのと同じ
-	other.stirred()
+		return true
+	# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない——
+	# 囲うと、その一言だけ別の書きもの（引用）になる
+	memory.record("会話：%s に言った——%s" % [other.vname, words])
+	other.memory.record("会話：%s が言った——%s" % [vname, words])
+	_scene.append({"who": vname, "words": words})
+	say("talk", "talk", TALK_BEAT + 0.6)
 	return true
 
 

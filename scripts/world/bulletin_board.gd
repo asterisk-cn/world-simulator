@@ -35,10 +35,10 @@ func post(author_id: int, author_name: String, text: String) -> Dictionary:
 	posts_changed.emit()
 	queue_redraw()
 	if author_id == -1:
-		EventLog.notable("掲示板に差出人不明の張り紙が現れた：「%s」" % text,
+		EventLog.notable("掲示板に差出人不明の張り紙が現れた——%s" % text,
 			{"掲示板": "board"})
 	else:
-		EventLog.social("%s が掲示板に貼った：「%s」" % [author_name, text],
+		EventLog.social("%s が掲示板に貼った——%s" % [author_name, text],
 			{author_name: "v:%d" % author_id, "掲示板": "board"})
 	return entry
 

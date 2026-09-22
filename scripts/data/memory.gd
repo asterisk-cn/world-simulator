@@ -2,42 +2,91 @@ class_name Memory
 extends RefCounted
 ## 記憶。夜になると生の履歴が要約に畳まれる。
 ##
-## 【要検討】扱いは未決。DESIGN.md §6 を参照。
+## **持ち主は三者。** その日の帳面は世界、覚えていることは本人（夜に畳む、
+## `villager/recall.gd`）、器の大きさは神（`覚えていられる日数`）。DESIGN.md §6。
 
 ## 移動はその日を語る材料にならない。どこへ歩いたかではなく、何をしたかを残す。
 const NOT_A_DEED := "移動"
 
 var episodes: Array = []      ## 今日の生の出来事（文字列）
 var summaries: Array = []     ## 過去の日ごとの要約
-var read_posts := {}          ## post_id -> {"day": int, "belief": float}
+## どの紙が目に入ったか。**世界の事実**（可視性の一部）なので、ここが持つ。
+## どう受け取ったかは本人の話で、読んだことが出来事として次の問いに渡る
+var read_posts := {}          ## post_id -> {"day": int}
 var last_talk_day := {}       ## villager_id -> day
 
+## **見た場所を覚えている。** 物は動かないので、視界から外れても
+## 「あそこに木があった」は残る（人は動くので覚えない）。
+## 行ってみて無ければ忘れる——覚えているだけで、そこに在るとは限らない
+var seen := {}                ## item_id -> Vector2（最後に見た場所）
 
+
+func saw(item_id: String, at: Vector2) -> void:
+	seen[item_id] = at
+
+
+func gone(item_id: String) -> void:
+	seen.erase(item_id)
+
+
+## その日の帳面に書く。**一日ぶんは全部持つ**——夜に本人が畳むまでに
+## 世界が頭から捨てると、本人が見ていないものを世界が忘れさせたことになる。
+## 上限は歯止めで、忘却ではない（1日は 60〜70 手ほど）
+const KEEP := 300
+
+## **一行ごとに時刻を打つ。** 時刻は世界が知っている事実で、
+## これがあると「今日あったこと」に一日の流れが乗る（夜に畳むときにも効く）
 func record(text: String) -> void:
-	episodes.append(text)
-	if episodes.size() > 60:
+	episodes.append("%s %s" % [SimClock.clock_text(), text])
+	if episodes.size() > KEEP:
 		episodes.pop_front()
 
 
-func mark_post_read(post_id: int, belief: float) -> void:
-	read_posts[post_id] = {"day": SimClock.day, "belief": clampf(belief, 0.0, 2.0)}
+## **信じた度合いは持たない。** それは判断で、世界の欄ではない
+func mark_post_read(post_id: int) -> void:
+	read_posts[post_id] = {"day": SimClock.day}
 
 
 func has_read_post(post_id: int) -> bool:
 	return read_posts.has(post_id)
 
 
-## 【AI差し替え口】本来はその日の出来事を渡して、
-## 何を覚えていて何を忘れるか・どう要約するかをAIが決める。
+## 【AI差し替え口】その日を畳むのは本人（`villager/recall.gd`）。
+## **繋がっていないときだけ**、ここの集計が穴を埋める。
 func nightly_compress(owner_name: String, day: int) -> String:
-	var summary := _summarize(owner_name, day)
-	if summary != "":
-		summaries.append(summary)
+	var summary := tally(owner_name, day)
+	remember(summary)
+	fold(episodes.size())
+	return summary
+
+
+## 覚えておく一行を足す。覚えていられる日数を超えたぶんは、古いほうから落ちる
+func remember(line: String) -> void:
+	if line == "":
+		return
+	summaries.append(line)
 	var keep := int(SimConfig.p("summaries_kept"))
 	while summaries.size() > keep:
 		summaries.pop_front()
-	episodes.clear()
-	return summary
+
+
+## その日の帳面を閉じる。**畳んだあとは生の出来事を持たない**——
+## 何を残すかは畳むときに決まっているので、両方持つと
+## 「本人が忘れたもの」が残っていることになる。
+##
+## 落とすのは**訊いたときにあったぶんだけ**。返事を待つあいだに起きたことは
+## 明日の帳面に残す（夜の一往復は、外で2秒・この機械の中で12秒かかる）
+func fold(n: int) -> int:
+	var drop: int = mini(n, episodes.size())
+	for i in range(drop):
+		episodes.pop_front()
+	return drop
+
+
+## 数えただけの一行。**要約ではない**（何が起きたかを一つも語っていない）。
+## 判断する者が居ないときの穴埋めとして残してある
+func tally(owner_name: String, day: int) -> String:
+	return _summarize(owner_name, day)
 
 
 func _summarize(owner_name: String, day: int) -> String:
@@ -46,7 +95,12 @@ func _summarize(owner_name: String, day: int) -> String:
 	var counts := {}
 	var deeds := 0
 	for e in episodes:
-		var head: String = String(e).split("：")[0]
+		# 頭の時刻を落としてから、型で束ねる
+		var line: String = String(e)
+		var sp := line.find(" ")
+		if sp > 0:
+			line = line.substr(sp + 1)
+		var head: String = line.split("：")[0]
 		if head == NOT_A_DEED:
 			continue
 		deeds += 1
@@ -60,7 +114,7 @@ func _summarize(owner_name: String, day: int) -> String:
 			best = counts[k]
 			busiest = k
 	# 出来事そのものは「今日の出来事」に並ぶので、要約は一行に留める
-	return "%d日目：%s は「%s」が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
+	return "%d日目：%s は %s が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
 
 
 func recent_summary(n: int = 2) -> String:

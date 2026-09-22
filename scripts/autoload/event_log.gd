@@ -13,9 +13,24 @@ var entries: Array = []
 ## ヘッドレスで挙動を観察するとき用。`godot -- --echo-log` で標準出力にも流す。
 var echo: bool = false
 
+## **一人ずつの内側**も流す（`--echo-mind`）。
+## 村の記録は「何が起きたか」しか持たない（それが正しい——神が見るのはそこまで）。
+## 作っている側は「なぜそうしたか」を見たいので、そこだけ別の口にする。
+## 標準出力は Godot がそのまま
+## `~/Library/Application Support/Godot/app_userdata/World Simulator/logs/` に残す。
+var echo_mind: bool = false
+
 
 func _ready() -> void:
-	echo = OS.get_cmdline_user_args().has("--echo-log")
+	var args := OS.get_cmdline_user_args()
+	echo = args.has("--echo-log") or args.has("--echo-mind")
+	echo_mind = args.has("--echo-mind")
+
+
+## 村人ひとりの内側。誰の話かが先頭に来るように揃える
+func mind(who: String, text: String) -> void:
+	if echo_mind:
+		print("[%s %s] %s" % [SimClock.clock_text(), who, text])
 
 
 ## **行き先は文の中の名前が持つ。** 以前は「どこで・誰に」を添えて行をまるごと

@@ -12,6 +12,7 @@ signal closed
 signal end_requested
 
 
+
 func _ready() -> void:
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", UIKit.GAP_S)
@@ -35,6 +36,15 @@ func _ready() -> void:
 			float(d[1]), float(d[2]), SimConfig.step_of(key),
 			func(x: float) -> void: SimConfig.set_param(key, x),
 			UIKit.WOOD, 150, SimConfig.text_of.bind(key))
+
+	# **AI**。世界の語彙ではなく、この遊びの側の話なのでここに置く。
+	# 開始前は設計図の「詳細」で決める（同じ値の同じ面）。
+	# 「あいて」とは呼ばない——この世界では、あいては村人から見た他の村人
+	UIKit.heading(root, "AI",
+		"村人の判断を担うもの。次に何をするか、それを何と呼ぶかはここが答える。\n"
+		+ "使えるものが並ぶ。世界の語彙ではないので、始まったあとも替えられる。")
+	var who_rows := UIKit.rows(root)
+	UIKit.row_pad(who_rows).add_child(WhoPicker.new())
 
 	# 出口は目盛りから離す。同じ紙でも、読むものと壊すものは別の段
 	UIKit.spacer(root, UIKit.PAD_L)

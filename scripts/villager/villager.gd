@@ -155,7 +155,6 @@ var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
 var decision_timer := 0.0
 
-var _last_post_day := -1
 var _path: PackedVector2Array = PackedVector2Array()
 var _path_i := 0
 var _bubbles: Array = []
@@ -695,7 +694,6 @@ func _do_post() -> bool:
 	var board = world.board
 	if board == null:
 		return false
-	_last_post_day = SimClock.day
 	# **何を書くかは本人。** 書かなかったなら、貼らずに帰る——
 	# 世界が代わりに文面を作ると、そこだけ神でも村人でもない誰かの言葉になる
 	var text := String(current_action.get("言うこと", ""))

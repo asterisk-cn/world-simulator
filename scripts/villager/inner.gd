@@ -62,7 +62,11 @@ static func _tail(rows: Array) -> PackedStringArray:
 ## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す
 ## `skip_tail` は**呼ぶ側が別に見せるぶん**。判断の問いは「前に考えてから
 ## 起きたこと」を自分で並べるので、そのぶんをここで出すと**同じ行を二度渡す**ことになる
-static func of(v, skip_tail: int = 0) -> String:
+## `hide_values` は**じぶんとあいての値を見せない**（あいては名前だけ残す）。
+## 判断の問いは同じ一回でその値を訊き直すので、いまの値を見せると、
+## 見えた値に寄せて答える輪になる。じぶんで上限に張り付き、あいてでも
+## 30秒で 56組中24組が 90 を超えた（どれも一度も下がらずに上がり続けた）
+static func of(v, skip_tail: int = 0, hide_values: bool = false) -> String:
 	var out := PackedStringArray()
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
@@ -80,7 +84,7 @@ static func of(v, skip_tail: int = 0) -> String:
 		if _span(Schema.self_params()) == "":
 			one += "（%d〜%d）" % [int(d["min"]), int(d["max"])]
 		mine.append(one)
-	if mine.size() > 0:
+	if mine.size() > 0 and not hide_values:
 		out.append("")
 		out.append("# あなたの感情%s" % _span(Schema.self_params()))
 		out.append(" / ".join(mine))
@@ -91,6 +95,9 @@ static func of(v, skip_tail: int = 0) -> String:
 		var other = v.world.villager_by_id(int(oid)) if v.world != null else null
 		if pp == null or other == null:
 			continue
+		if hide_values:
+			others.append(String(other.vname))
+			continue
 		var vals := PackedStringArray()
 		for d in Schema.pair_params():
 			vals.append("%s %d" % [String(d["label"]),
@@ -98,8 +105,12 @@ static func of(v, skip_tail: int = 0) -> String:
 		others.append("%s：%s" % [String(other.vname), " / ".join(vals)])
 	if others.size() > 0:
 		out.append("")
-		out.append("# 知っている相手%s" % _span(Schema.pair_params()))
-		out.append_array(others)
+		if hide_values:
+			out.append("# 知っている相手")
+			out.append(" / ".join(others))
+		else:
+			out.append("# 知っている相手%s" % _span(Schema.pair_params()))
+			out.append_array(others)
 
 	# **名前で渡す。** `wood` のような中の呼び名を渡すと、
 	# この世界に無い言葉が村人の口から出る（神が付けたのは「木」のほう）

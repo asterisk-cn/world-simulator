@@ -335,7 +335,7 @@ func begin(c: Dictionary) -> void:
 	action_phase = "move"
 	act_timer = 0.0
 	# 建物は通り抜けられないので、間の空きを通って回り込む
-	_path = world.find_path(cell, current_action.get("target_cell", cell), id)
+	_path = world.find_path(cell, current_action.get("target_cell", cell))
 	_path_i = 0
 
 

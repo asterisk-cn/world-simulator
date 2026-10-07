@@ -32,8 +32,8 @@ const WORD_W := 200
 
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
-	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜50。",
-	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −50〜50。\n真ん中が何とも思っていないところ。",
+	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。0〜100。\n0 が何も感じていないところ。",
+	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。0〜100。\n0 が何とも思っていないところ。",
 }
 
 var world = null
@@ -199,7 +199,8 @@ func _rebuild() -> void:
 
 	_chapter("もちもの",
 		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
-		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。",
+		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。\n"
+		+ "茂み・木・岩の姿のものは島に在って、採れる。消せば島にも生えない。",
 		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
@@ -348,7 +349,8 @@ func _art_picker(def: Dictionary, arts: Array) -> Control:
 	var art := String(def["art"])
 	var tint: Color = (Schema.building_color(String(def["id"]))
 		if Schema.is_building(String(def["id"])) else ItemIcon.NO_TINT)
-	if not editable:
+	# 島に在るものの姿は選べない（世界の上の姿と手の中の姿を揃える）
+	if not editable or Schema.WORLD_ARTS.has(String(def["id"])):
 		var seen := ItemIcon.of_art(art, 20)
 		seen.accent = tint
 		seen.tooltip_text = String(Schema.ART_LABEL.get(art, ""))

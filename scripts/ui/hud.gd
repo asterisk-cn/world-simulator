@@ -7,9 +7,8 @@ signal jump_requested(target: String)
 ## この世界を終えて、言葉のところへ戻る。
 signal end_requested
 
-## 神が紙を放った。画面上のどこから飛び出すかを添える。
-## `sheet` は**書いていた紙そのもの**。飛ばす側が子に付けて運ぶ（`paper_fly.gd`）
-signal god_posted(from_screen: Vector2, text: String, sheet: Control)
+## 神の紙が焼け切った。ここで初めて板に貼られる（`_burn_post`）
+signal god_posted(text: String)
 
 var world = null
 
@@ -20,8 +19,6 @@ var _board_list: VBoxContainer
 var _board_panel: PanelContainer
 var _write_btn: Button
 
-## 紙が飛び出す元。「神のお告げ」を押した場所を覚えておく
-var _write_from := Vector2.ZERO
 var _top_bar: PanelContainer
 var _pause_btn: Button
 var _speed_btns: Array = []
@@ -402,9 +399,6 @@ func _paper_style(by_god: bool) -> StyleBoxFlat:
 func _open_write() -> void:
 	if world == null or world.board == null:
 		return
-	# 紙が飛び出す元は、**書いた紙のあった場所**——画面の真ん中。
-	# 行き先と重なることがあるが、軌跡の側で読ませる（`paper_fly.gd`）。
-	_write_from = get_viewport().get_visible_rect().size * 0.5
 	var pop = preload("res://scripts/ui/write_popup.gd").new()
 	# 差出人不明になることは窓の「?」が言っている。欄に書き添えると2回言うことになる
 	pop.setup("神のお告げ", [{"label": "", "text": ""}], "貼る", true)
@@ -413,23 +407,53 @@ func _open_write() -> void:
 
 
 ## 押した瞬間に貼られると、神が紙を落とした感じにならない。
-## 紙を世界へ放って、板に着いたところで貼られる（main が受ける）。
+## 書いていた紙がその場で下から焼けて、焼け切ったところで板に現れる。
+## 設計図を焼くのと同じ絵（`ui/burn_paper.gd`）——神の言葉は、紙が燃えて世界へ入る。
 func _submit_post(values: PackedStringArray) -> void:
 	if world == null or world.board == null or values.is_empty():
 		return
 	var text := String(values[0]).strip_edges()
 	if text == "":
 		return
-	# **書いていた紙を取り上げてから窓を閉じる。** 別の紙を描いて飛ばすと、
+	# **書いていた紙を取り上げてから窓を閉じる。** 別の紙を描いて焼くと、
 	# 決めた瞬間にフォームが消えて別の形の紙が現れる（`write_popup.take_sheet`）
 	var sheet: Control = null
+	var at := Rect2()
 	for c in get_children():
 		if c is WritePopup:
-			sheet = (c as WritePopup).take_sheet()
+			var pop := c as WritePopup
+			at = pop.sheet_rect()
+			sheet = pop.take_sheet()
 			break
-	# 窓を閉じて、紙が板に着くところを世界の上で見せる
 	_show_only(null)
-	god_posted.emit(_write_from, text, sheet)
+	if sheet == null:
+		god_posted.emit(text)
+		return
+	_burn_post(sheet, at, text)
+
+
+## 点火の一拍と、走る火の尺。設計図（`main._begin_ritual`）と同じ族だが、
+## こちらは誰の考えも待たないので時間だけで燃やす
+const POST_IGNITE := 0.30
+const POST_BURN := 1.40
+
+
+## 紙をその場で焼く。**幕が消えた真ん中に紙が一枚だけ残り、下から焼けていく。**
+## 焼け切ったら板に貼る——板が光るのは `BulletinBoard` の側
+func _burn_post(sheet: Control, at: Rect2, text: String) -> void:
+	var burner := BurnPaper.new()
+	add_child(burner)
+	burner.position = at.position
+	burner.size = at.size
+	burner.hold(sheet)
+	var tw := create_tween()
+	tw.tween_property(burner, "burn", 0.03, POST_IGNITE).set_trans(Tween.TRANS_SINE)
+	# 走りだしてから速くなる。火は燃え広がるほど速い
+	tw.tween_property(burner, "burn", 1.0, POST_BURN) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void:
+		burner.queue_free()
+		god_posted.emit(text))
 
 
 func _refresh_board() -> void:

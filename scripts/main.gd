@@ -6,8 +6,6 @@ var camera: Camera2D
 var modulate_node: CanvasModulate
 var hud = null
 
-## 神の紙を置く層。世界の日夜の色を受けない（`_setup_ui`）
-var god_layer: CanvasLayer = null
 var inspector = null
 var selected = null
 
@@ -382,13 +380,6 @@ func _setup_camera() -> void:
 
 
 func _setup_ui() -> void:
-	# **神の紙は世界の光の下にない。** 世界に置くと日夜の色（`modulate_node`）が
-	# 乗って、飛んでいる紙が青くなる。層を分けて、位置だけ世界に合わせる
-	# （`_process` で `transform` にカメラの写しを入れる）。
-	# HUD より先に足すので、上部バーは紙の上に残る
-	god_layer = CanvasLayer.new()
-	add_child(god_layer)
-
 	hud = preload("res://scripts/ui/hud.gd").new()
 	add_child(hud)
 	hud.setup(world)
@@ -488,9 +479,6 @@ func _setup_ui() -> void:
 
 func _process(_delta: float) -> void:
 	_burn_along()
-	# 神の紙の層は、位置だけ世界に合わせる（色は受けない）
-	if god_layer != null:
-		god_layer.transform = get_canvas_transform()
 
 	# 夜は「暗い昼」ではなく色を青紫へ寄せる。暗くしすぎると角丸ブロックの色が濁る
 	var d := SimClock.darkness()
@@ -651,27 +639,11 @@ func _on_jump(target: String) -> void:
 				return
 
 
-## 神が放った紙を世界へ飛ばす。板に着いたところで初めて貼られる。
-func _on_god_posted(from_screen: Vector2, text: String, sheet: Control) -> void:
+## 神の紙が焼け切った。ここで初めて板に貼られる（`hud._burn_post`）
+func _on_god_posted(text: String) -> void:
 	if world.board == null:
 		return
-	var paper = preload("res://scripts/world/paper_fly.gd").new()
-	god_layer.add_child(paper)
-	# 板の中心ではなく、**その紙が実際に貼られる枡**へ落とす
-	var to: Vector2 = world.board.position + world.board.next_slip_point()
-	# 書いていた紙そのものを運ばせる（`ui/write_popup.gd` の `take_sheet`）
-	# 画面の高さを世界の尺で渡す。紙はこれを使って画面の外まで抜ける
-	var reach: float = get_viewport_rect().size.y / maxf(camera.zoom.y, 0.01)
-	paper.setup(get_canvas_transform().affine_inverse() * from_screen, to, sheet, reach)
-	# **降りに入ったら世界のものになる。** 上がるあいだは神の手のものなので
-	# 世界の光を受けないが、空から降りてくる紙は受けたほうが世界に居て見える
-	paper.entered_world.connect(func() -> void:
-		var at: Vector2 = paper.position
-		god_layer.remove_child(paper)
-		add_child(paper)
-		paper.position = at)
-	paper.landed.connect(func() -> void:
-		world.board.post(-1, "差出人不明", text))
+	world.board.post(-1, "差出人不明", text)
 
 
 func _focus_on(v) -> void:

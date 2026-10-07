@@ -15,9 +15,7 @@ extends Control
 signal submitted(values: PackedStringArray)
 signal canceled
 
-## 紙の幅。**飛んでいく紙（`paper_fly.gd`）が放たれる大きさの元**なので、
-## ここを変えると飛び始めの大きさも一緒に動く。神が書いていた紙が
-## そのまま飛んでいくのだから、二つが別々の値を持っていてはいけない
+## 紙の幅
 const SHEET_W := 560.0
 
 var _title := ""
@@ -106,9 +104,15 @@ func _ready() -> void:
 		first.select_all.call_deferred()
 
 
-## **書いていた紙そのものを渡す。** 別の紙を描いて飛ばすと、決めた瞬間に
-## フォームが消えて別の形の紙が現れる（貼り紙の縦横比は 1.44:1 固定なので、
-## 幅を合わせても丈が2倍になる）。書いた紙が飛ぶのだから、その紙を渡す。
+## 紙がいま画面のどこにあるか。**取り上げる前に訊く**——外すと位置が分からなくなる
+func sheet_rect() -> Rect2:
+	if _paper == null:
+		return Rect2()
+	return _paper.get_global_rect()
+
+
+## **書いていた紙そのものを渡す。** 別の紙を描いて焼くと、決めた瞬間に
+## フォームが消えて別の形の紙が現れる。書いた紙が焼けるのだから、その紙を渡す。
 ##
 ## `submitted` は `queue_free` の前に出しているので、受けた側がここで
 ## 取り上げれば、窓と一緒に消えることはない。取り上げなければ普通に消える。
@@ -117,15 +121,15 @@ func take_sheet() -> Control:
 		return null
 	var sheet := _paper
 	_paper = null
-	# 飛ぶあいだ触れる場所ではない。欄の指も外す（外さないと桁が残る）
+	# 焼けるあいだ触れる場所ではない。欄の指も外す（外さないと桁が残る）
 	for e in _edits:
 		(e as LineEdit).release_focus()
 	_no_touch(sheet)
 	# 紙の親は真ん中に寄せる入れ物で、この窓そのものではない
 	sheet.get_parent().remove_child(sheet)
-	# **`CanvasLayer` と同じ罠。** ここを渡すと親が Node2D になるので、
-	# 窓に置いたテーマが中へ伝わらない。あて忘れると、飛んでいく紙の中の
-	# 欄とボタンだけがエンジン既定の灰色の箱になる（DESIGN.md §9）
+	# **`CanvasLayer` の罠。** 窓から外すと、窓に置いたテーマが中へ伝わらない。
+	# あて忘れると、焼ける紙の中の欄とボタンだけが
+	# エンジン既定の灰色の箱になる（DESIGN.md §9）
 	sheet.theme = SimConfig.ui_theme
 	sheet.size = sheet.size
 	return sheet

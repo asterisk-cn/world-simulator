@@ -153,7 +153,6 @@ func stirred() -> void:
 	_brain.think_over()
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
-var decision_timer := 0.0
 
 var _last_post_day := -1
 var _path: PackedVector2Array = PackedVector2Array()
@@ -249,12 +248,9 @@ func _process(delta: float) -> void:
 
 	var dt := delta * SimClock.speed
 
-	decision_timer -= dt
-	if action_phase == "idle" or decision_timer <= 0.0:
-		if action_phase == "idle" \
-				and float(Time.get_ticks_msec()) / 1000.0 >= think_again_at:
-			_decide()
-		decision_timer = SimConfig.p("decision_interval")
+	if action_phase == "idle" \
+			and float(Time.get_ticks_msec()) / 1000.0 >= think_again_at:
+		_decide()
 
 	_execute(dt)
 

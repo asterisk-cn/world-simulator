@@ -50,22 +50,25 @@ const BEHAVIORS := {
 }
 
 ## 型ごとに選べる対象のうち、世界に元からあるもの。
-##   duration … かかる時間
+##   duration … かかる時間。**ゆっくり**——見ている人が目で追える速さに揃えてある
 ##   reach    … その場で行うのに必要な近さ（マス）。
 ##              -1 は「目的地まで移動してから行う」動作。
 ##              0以上なら、いま届く範囲になければそもそも選択肢に出ない。
 ##              遠ければ先に「動く」必要がある。
 const TARGETS := {
+	# **「動く」に行き先は無い。** 話す・使う・作るは歩きを手の中に畳んでいる
+	# （`reach: -1` の動作は目的地まで行ってから行う）ので、
+	# 「◯◯のところへ向かう」を別に並べると、同じ一手を二度訊くことになる。
+	# 実際それが候補の過半を占め、選ばれた手の 74% が「向かう」で、
+	# 着いた先で何かをするところまで繋がらなかった。
+	# ここに残すのは**行き先の無い動き**だけ——ぶらぶらするのは、それ自体が一手
 	"move": {
-		"anywhere": {"label": "適当な場所", "duration": 0.8, "reach": -1.0},
-		"toward": {"label": "誰かのそば", "duration": 0.4, "reach": -1.0},
-		"mine": {"label": "自分のところ", "duration": 0.4, "reach": -1.0},
-		"board": {"label": "掲示板", "duration": 0.4, "reach": -1.0},
+		"anywhere": {"label": "適当な場所", "duration": 1.6, "reach": -1.0},
 	},
 	"talk": {
-		"talk": {"label": "誰か", "duration": 1.5, "reach": 2.2},
-		"post": {"label": "掲示板に貼る", "duration": 2.0, "reach": 2.2},
-		"read": {"label": "掲示板を読む", "duration": 1.5, "reach": 2.2},
+		"talk": {"label": "誰か", "duration": 3.0, "reach": 2.2},
+		"post": {"label": "掲示板に貼る", "duration": 4.0, "reach": 2.2},
+		"read": {"label": "掲示板を読む", "duration": 3.0, "reach": 2.2},
 	},
 	# 使う / 作る の対象は、世界にある物と神が決めた「つくりかた」から作る。
 	"use": {},
@@ -74,10 +77,17 @@ const TARGETS := {
 
 ## 「使う」は、それがどこにあるかで間合いと時間が変わる。
 ## 何をするか（採る / 食べる / 祈る）ではなく、どこにあるかだけで決まる。
+## 作る・建てる・そこへ向かうのにかかる時間。**対象では変えない。**
+## 何を作るのが大変かをプログラムは知らない——知っているのは神が付けた名前だけで、
+## 名前から手間は読めない（籠と家で時間が違うはず、と決めるのは世界の越権）。
+const MAKE_SEC := 3.2
+const BUILD_SEC := 5.0
+const GO_SEC := 0.8
+
 const USE_WAYS := {
-	"world": {"duration": 1.4, "reach": -1.0},    # そこに在るものへ行って使う
-	"hand": {"duration": 0.8, "reach": 999.0},    # 手の中のものを使う
-	"building": {"duration": 4.0, "reach": 1.6},  # 建物のそばで使う
+	"world": {"duration": 2.8, "reach": -1.0},    # そこに在るものへ行って使う
+	"hand": {"duration": 1.6, "reach": 999.0},    # 手の中のものを使う
+	"building": {"duration": 8.0, "reach": 1.6},  # 建物のそばで使う
 }
 
 # ---------------------------------------------------------------------------
@@ -201,6 +211,24 @@ func all_items() -> Array:
 	for r in recipes:
 		out.append(String(r["id"]))
 	return out
+
+
+## 神が付けた名前から言葉を引く。**AIが答えるのは名前のほう**なので、
+## 世界の側でidに戻す。無い名前は空（世界に無い言葉は動かせない）
+func self_param_by_label(label: String) -> String:
+	return _by_label(self_params(), label)
+
+
+func pair_param_by_label(label: String) -> String:
+	return _by_label(pair_params(), label)
+
+
+func _by_label(defs: Array, label: String) -> String:
+	var want := label.strip_edges()
+	for d in defs:
+		if String(d["label"]) == want:
+			return String(d["id"])
+	return ""
 
 
 func item_label(id: String) -> String:
@@ -403,18 +431,23 @@ const PAIR_NEG := Color(0.74, 0.26, 0.22)
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
 ##
-## じぶんは「どれだけ」の話なので 0〜100。空腹が負になることはない。
-## あいては「どちらへ」の話なので −100〜100。真ん中が何とも思っていないところで、
+## じぶんは「どれだけ」の話なので 0〜50。空腹が負になることはない。
+## あいては「どちらへ」の話なので −50〜50。真ん中が何とも思っていないところで、
 ## 好感の裏には嫌悪があり、敬意の裏には侮りがある。
 ## 幅を1本ずつ決めさせても、読み方が増えるだけで世界の見え方は変わらなかった。
+##
+## **50 きざみ。** 100 では1日で 8 まで来た人と 60 まで来た人が並んで、
+## どこが「満ちた」のか読めなかった。10 に落とすと逆で、**1日で半数が上限に
+## 張り付いた**（幅だけ 1/10 にして、動かす量は ±1〜2 のままだったため）。
+## 50 はその中間で、積み木10粒に対して **1粒＝5**。
 const SCOPE_RANGE := {
-	SCOPE_SELF: [0.0, 100.0],
-	SCOPE_PAIR: [-100.0, 100.0],
+	SCOPE_SELF: [0.0, 50.0],
+	SCOPE_PAIR: [-50.0, 50.0],
 }
 
 
 func make_param(id: String, label: String, scope: String) -> Dictionary:
-	var r: Array = SCOPE_RANGE.get(scope, [0.0, 100.0])
+	var r: Array = SCOPE_RANGE.get(scope, [0.0, 10.0])
 	return {
 		"id": id, "label": label, "scope": scope,
 		"min": float(r[0]), "max": float(r[1]),
@@ -498,7 +531,7 @@ func param_min(id: String) -> float:
 
 func param_max(id: String) -> float:
 	var d = param_def(id)
-	return 100.0 if d == null else float(d["max"])
+	return 10.0 if d == null else float(d["max"])
 
 
 ## 言葉を1つ足す。属するのはスコープだけ（じぶんか、あいてか）。
@@ -543,19 +576,18 @@ func targets_of(kind: String) -> Dictionary:
 				out[String(b["id"])] = _target(String(b["label"]))
 		"make":
 			for r in recipes:
-				out[String(r["id"])] = _target(String(r["label"]), 1.6, 999.0)
+				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, 999.0)
 			for b in buildings:
-				out[String(b["id"])] = _target(String(b["label"]), 2.5, -1.0)
+				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, -1.0)
 		"move":
+			# 建物への行き先も並べない。建っているものは「使う」で行ける
 			out = TARGETS["move"].duplicate(true)
-			for b in buildings:
-				out["go:%s" % String(b["id"])] = _target(String(b["label"]), 0.4, -1.0)
 		_:
 			return TARGETS.get(kind, {})
 	return out
 
 
-func _target(label: String, duration: float = 0.8, reach: float = 999.0) -> Dictionary:
+func _target(label: String, duration: float = 1.6, reach: float = 999.0) -> Dictionary:
 	return {"label": label, "duration": duration, "reach": reach}
 
 

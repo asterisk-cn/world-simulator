@@ -32,8 +32,8 @@ const WORD_W := 200
 
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
-	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜100。",
-	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −100〜100。\n真ん中が何とも思っていないところ。",
+	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜50。",
+	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −50〜50。\n真ん中が何とも思っていないところ。",
 }
 
 var world = null
@@ -510,8 +510,16 @@ func _detail() -> void:
 		+ "始まったあとはオプションから触る。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
 	_index.remember("詳細", body.get_meta("head_row"))
+	_who(body)
 	_world(body)
 	UIKit.spacer(_body, UIKit.PAD_L)
+
+
+## 判断を担うAIも、目盛りと同じくここで決められる（始まったあとはオプション）。
+## 世界の語彙ではないので、章の中でも目盛りの側に置く
+func _who(box: Node) -> void:
+	var rows := UIKit.rows(box)
+	UIKit.row_pad(rows).add_child(WhoPicker.new())
 
 
 func _world(box: Node) -> void:

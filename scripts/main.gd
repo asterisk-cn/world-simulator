@@ -80,9 +80,16 @@ func _begin_ritual() -> void:
 	# 押した印より、書いたものが消えていく絵のほうが強い
 	# **点火の一拍を分ける。** ただ加速させると最初の半秒がほとんど動かず、
 	# 「火が付いた」が伝わらない。まず下端に燃えぎわだけ現れて、それから走る
+	# **村人は先に置いて、裏で考えさせる。** 紙が燃えて島が崩れるあいだ
+	# （2秒あまり）は、どのみち待ち時間になる。そこへ問いを重ねる
+	_people_in()
+	# 燃えている紙には触れない。**押した瞬間からもう書き換えられない**——
+	# 燃えながら書き足せる紙は、一度きりの創作の器にならない
+	_seal_paper(rules_panel)
 	tw.tween_property(burn_paper, "burn", 0.03, 0.35).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(burn_paper, "burn", 1.0, 1.40) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# ここから先は `_burn_along` が燃やす。**考えが戻るのを火が待つ**ので、
+	# 尺は時間だけでは決まらない（読み込みを別の面で言わず、火に言わせる）
+	tw.tween_callback(func() -> void: _burning = true)
 	# **焼けと重ねて、下見の島がポツポツと落ちはじめる。**
 	# 焼け落ちてから崩すと、紙と世界が別の出来事に見える。
 	# 落ちはじめが疎らなのは `World.CRUMBLE_BIAS` が受け持つ——
@@ -92,15 +99,83 @@ func _begin_ritual() -> void:
 	# 焼け切りは崩れの窓の 43% 地点なので、1枚の落下が窓の半分を占めると
 	# その時点で「落ち切った」タイルは出ない。欠け具合は `World.CRUMBLE_SPAN` と
 	# `CRUMBLE_BIAS` で合わせてある
-	tw.parallel().tween_property(world, "crumble", 1.0, 1.75) \
+	# 崩れもゆっくりに。火と同じ速さで進まないと、片方だけ先に終わって待ちが見える
+	tw.parallel().tween_property(world, "crumble", 1.0, 2.05) \
 		.set_delay(0.65).set_trans(Tween.TRANS_SINE)
-	# 何も無くなってから作り直し、**組み上がるところを見せる**
+	# 島が崩れきってから作り直す。**村人は残して置き直す**——
+	# 考えはもう走っているので、ここで捨てるとまた最初から待つことになる
 	tw.tween_callback(_make_land)
-	tw.tween_property(world, "birth", 1.0, 0.95).set_trans(Tween.TRANS_SINE)
-	# 土地ができてから人が来る
-	tw.tween_callback(_start_world)
-	# 世界が目を覚ます。青く沈めていた色をここで解く
+
+
+## **火が燃え切る速さは、村人が考え終わる速さ。**
+##
+## 置かれた瞬間に全員が考え込んで立ち尽くすと、世界が壊れて見える。かといって
+## 儀式のあとに「読み込み中」の面を出すと、二段になって間延びする。
+## だから**火そのものに待たせる**——最後のひと筋は、
+## 最後の村人の考えが戻ってから燃える。
+##
+## 直線では結ばない。**行き先へ滑り込むように寄る**（`BURN_EASE`）ので、
+## 考えが戻っていないところで火が壁に当たって止まる、という見え方にならない。
+## 誰の考えも待たずに燃えるぶんが `BURN_FREE`、そこから先は戻り具合が天井。
+## **ゆっくり燃やす。** 村人の生成でほぼ必ず待つので、そこまでを速く進めると
+## 「走って、止まる」になる。元の尺（1.40秒）より落として、
+## 考えが戻るのが速い相手なら時間のほうが天井になるようにしてある。
+const BURN_SPAN := 2.60    ## 時間だけで燃えるときの尺
+const BURN_FREE := 0.45    ## 誰も待たずに燃えるところまで
+const BURN_EASE := 5.0     ## 行き先へ寄る速さ
+const BIRTH_SPAN := 0.95
+## 待つのはここまで。返らない相手を永久には待たない
+const THINK_WAIT := 40.0
+
+var _burning := false
+var _closed := false
+var _burn_since := -1.0
+
+
+func _burn_along() -> void:
+	if not _burning:
+		return
+	if _burn_since < 0.0:
+		_burn_since = Time.get_ticks_msec() / 1000.0
+	var yet: Array = []
+	for v in world.villagers:
+		if is_instance_valid(v) and not v.has_thought():
+			yet.append(String(v.vname))
+	# 人がまだ置かれていないあいだは、誰の考えも戻りようがない
+	var all: int = maxi(world.villagers.size(), 1)
+	var ready := 0.0 if not started else float(all - yet.size()) / float(all)
+	var t := (Time.get_ticks_msec() / 1000.0) - _burn_since
+	var over: bool = t > THINK_WAIT or not AI.available()
+	# 時間のぶん（元の尺）と、考えの戻り具合。**遅いほうが天井**
+	var by_time := pow(clampf(t / BURN_SPAN, 0.0, 1.0), 1.7)
+	var allow: float = 1.0 if over else minf(by_time,
+		BURN_FREE + (1.0 - BURN_FREE) * ready)
+	# **火は戻らない。** 点火の一拍（0.03）を先に置いてあるので、
+	# そのまま寄せると時間の天井（まだ0に近い）へ引き戻してしまう
+	var d := get_process_delta_time()
+	if allow > burn_paper.burn:
+		burn_paper.burn += (allow - burn_paper.burn) * minf(BURN_EASE * d, 1.0)
+	if allow >= 1.0 and burn_paper.burn > 0.985:
+		burn_paper.burn = 1.0
+
+	# 名前は出さない。**まだ居ない人の名前を先に呼ぶ**ことになるし、
+	# 待っているあいだに名簿が流れるのは、待ちものの表示としてうるさい
+	hud.say_loading("" if yet.is_empty() or over else "村人を生成中…")
+
+	if burn_paper.burn < 1.0:
+		return
+	# 燃え切った。紙を片づけ、世界が組み上がり、目を覚まし、時間が動き出す
+	_burning = false
+	_burn_since = -1.0
+	hud.say_loading("")
+	_close_setup()
+	for v in world.villagers:
+		v.visible = true
+	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
+	var tw := create_tween()
+	tw.tween_property(world, "birth", 1.0, BIRTH_SPAN).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(self, "wake", 1.0, 1.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func() -> void: SimClock.paused = false)
 
 
 ## 言葉が決まってから土地を作る。
@@ -115,25 +190,70 @@ func _make_land() -> void:
 	# 下見のあいだに触れていたものは、作り直しで消える節点を指している
 	selected = null
 	selected_building = null
-	world.regenerate()
+	world.regenerate(true)   # 村人は残す（考えが走っている）
+	_place_villagers()
 	world.birth = 0.0     # ここから組み上がる（`world.gd` の注）
 	world.crumble = 0.0   # 崩れは前の島の話
 	hud.on_world_reset()
 
 
 ## 土地ができたら村人を置いて世界を動かす。以降、定義は閲覧のみ。
-func _start_world() -> void:
+## 人を置いて、最初のつもりを訊く。**下見の島の上で先に考えはじめてもらう**——
+## 訊いているのは「何をするつもりか」で、どの木かどの場所かではないので、
+## 土地が作り直されても、つもりはそのまま新しい土地に読み替えられる（`Brain._from_plan`）。
+## 世界はまだ見せない（`world.birth` は 0 のまま、人も隠したまま）
+func _people_in() -> void:
 	if started:
 		return
 	started = true
+	_spawn_villagers()
+	for v in world.villagers:
+		v.visible = false
+		v.think_now()
+
+
+## 作り直した土地の上へ、居場所だけ置き直す
+func _place_villagers() -> void:
+	var center := Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0)
+	var n: int = world.villagers.size()
+	for i in range(n):
+		var a := TAU * float(i) / float(maxi(n, 1))
+		var c := center + Vector2(cos(a), sin(a)) * randf_range(3.0, 6.0)
+		c.x = clampf(c.x, 1.0, World.GRID_W - 2.0)
+		c.y = clampf(c.y, 1.0, World.GRID_H - 2.0)
+		world.villagers[i].cell = c
+		world.villagers[i].position = Iso.cell_to_world(c)
+
+
+## 燃えはじめた紙から手を離させる。見えてはいるが、もう触れない
+func _seal_paper(at: Node) -> void:
+	if at is Control:
+		(at as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in at.get_children():
+		_seal_paper(c)
+
+
+## 紙を片づける。**燃え切ってから**——焼いた紙は、閲覧用の窓として戻ってくる
+func _close_setup() -> void:
+	if _closed:
+		return
+	_closed = true
 	_show_setup(false)
-	burn_paper.burn = 0.0  # 焼いた紙は、閲覧用の窓として戻ってくる
+	burn_paper.burn = 0.0
 	rules_panel.modulate.a = 1.0
 	rules_panel.set_editable(false)
-	# 儀式を通らずに来ることもある（`--autostart`）。そのときは一息に建てる
+
+
+## 儀式を通らずに来たとき（`--autostart`）。一息に建てて動かす
+func _start_world() -> void:
+	if started:
+		return
+	_close_setup()
 	_make_land()
 	world.birth = 1.0
-	_spawn_villagers()
+	_people_in()
+	for v in world.villagers:
+		v.visible = true
 	SimClock.paused = false
 	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 
@@ -367,6 +487,7 @@ func _setup_ui() -> void:
 
 
 func _process(_delta: float) -> void:
+	_burn_along()
 	# 神の紙の層は、位置だけ世界に合わせる（色は受けない）
 	if god_layer != null:
 		god_layer.transform = get_canvas_transform()

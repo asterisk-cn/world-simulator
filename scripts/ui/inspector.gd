@@ -29,6 +29,7 @@ var _have: HFlowContainer
 var _have_sig := ""
 var _have_ready := false
 var _now: Label
+var _feel: Label
 var _self_bars := {}     ## param id -> PipBar
 var _pair_bars := {}     ## other_id -> { param id -> PipBar }
 var _summary: Label
@@ -105,6 +106,7 @@ func rebuild() -> void:
 	_have_sig = ""
 	_have_ready = false
 	_now = null
+	_feel = null
 	_summary = null
 	_eps_box = null
 	_eps_count = -1
@@ -143,7 +145,16 @@ func _build_now() -> void:
 	# **強さは字の段が担う。** 面で囲って地の色を変えていたが、
 	# 囲いは「紙の上に別の物体が乗っている」ことを言う形で、
 	# ここで言いたいのは「いちばん読んでほしい一言」だった。
-	_now = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
+	# 【AI差し替え口】いまの気持ちの一言（`villager/feeling.gd`）。
+	# **こちらを先に、大きく。** いちばん読んでほしいのは何をしているかではなく、
+	# その人がいまどう感じているか。していることは、その下の小さい行で足りる。
+	# **傾けない。** 傾いた書体を持っていないので、同じ字を歪ませることになる。
+	# 気持ちと行動は、**順番と字の段**で分かれていれば足りる。
+	# AIに繋がっていなければ行ごと出ない（規則で作った嘘を置くより、無いほうがいい）
+	_feel = UIKit.wrapped(_body, "", UIKit.FS_HEAD, UIKit.TEXT)
+	_feel.visible = false
+
+	_now = UIKit.wrapped(_body, "", UIKit.FS_BODY, UIKit.TEXT)
 
 	# 持ち物は絵と名前を対で出す。絵だけだと、神がつけた名前の物が何なのか読めない。
 	UIKit.spacer(_body, UIKit.GAP)
@@ -177,7 +188,7 @@ func _build_personality() -> void:
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
-		"一人につき1つ持つ言葉。0〜100。\n並びは設計図で決めたまま。")
+		"一人につき1つ持つ言葉。0〜50。\n並びは設計図で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
@@ -195,7 +206,7 @@ func _build_self_params() -> void:
 
 func _build_pairs() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
-		"相手ひとりごとに持つ値。−100〜100。\n会ったことのある相手だけが並ぶ。",
+		"相手ひとりごとに持つ値。−50〜50。\n会ったことのある相手だけが並ぶ。",
 		subject.pairs.is_empty())
 
 	if subject.pairs.is_empty():
@@ -278,6 +289,7 @@ func _refresh() -> void:
 
 	if _now != null:
 		_now.text = subject.action_label()
+	_refresh_feeling()
 
 	_refresh_have()
 
@@ -307,6 +319,19 @@ func _refresh() -> void:
 	if _summary != null:
 		_summary.text = subject.memory.recent_summary(2)
 	_refresh_episodes()
+
+
+## 気持ちの一言。**訊くのは神がいま見ている人だけ**——8人ぶんを常に訊くと、
+## 誰も読まない一言のために毎分お金が出ていく。
+## 返ってくるまでは行が無いので、紙は繋がっていないときと同じ形で出る。
+func _refresh_feeling() -> void:
+	if _feel == null:
+		return
+	var line := String(subject.feeling)
+	_feel.visible = line != ""
+	if line != "":
+		_feel.text = line
+	Feeling.ask(subject)
 
 
 ## 品目が変わったときだけ並べ直す。数だけなら札の字を書き換える。

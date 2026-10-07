@@ -71,6 +71,11 @@ const TALK_BEAT := 1.2
 ## 場面が閉じないまま流れる上限。返事が返らないときの歯止めで、尺ではない
 const TALK_MAX := 24.0
 
+## 貼る手のいま。**Jev が選んだ貼る手には文がまだ無い**ので、
+## 板の前に着いてから文面だけを訊き、返るまで板の前で書いている（`Post`）
+var _wrote := false            ## 文面を訊いたか
+var _writing := false          ## 文面が返るのを待っている最中
+
 
 
 
@@ -309,6 +314,8 @@ func _close_act() -> void:
 	_scene = []
 	_scene_wait = false
 	_beat = 0.0
+	_wrote = false
+	_writing = false
 
 
 ## 決まった行動を始める。AIの返事も、規則で選んだぶんも、ここを通る
@@ -321,6 +328,8 @@ func begin(c: Dictionary) -> void:
 	_scene = []
 	_scene_wait = false
 	_beat = 0.0
+	_wrote = false
+	_writing = false
 	_why = ""
 	current_action = c
 	action_phase = "move"
@@ -360,6 +369,8 @@ func _execute(dt: float) -> void:
 		act_timer += dt
 		if _is_talk():
 			_talk_tick(dt)
+			return
+		if _write_tick():
 			return
 		if act_timer >= float(current_action.get("duration", 0.6)):
 			_complete_action()
@@ -407,6 +418,30 @@ func _talk_tick(dt: float) -> void:
 		_take_line(who, to, line)
 	if not Talk.reply(who, to, _scene, got):
 		_seal_scene("")
+
+
+## 貼る手で、文面がまだ無ければ訊く。**返るまでは true**（まだ貼らない）。
+## 会話の1行目と同じく、手を選んだあとで言葉だけを訊く
+func _write_tick() -> bool:
+	if String(current_action.get("kind", "")) != "talk" \
+			or String(current_action.get("target", "")) != "post" \
+			or String(current_action.get("言うこと", "")) != "":
+		return false
+	if not _wrote:
+		_wrote = true
+		var mine: Dictionary = current_action
+		var got := func(text: String) -> void:
+			if not is_instance_valid(self) or not is_same(current_action, mine) \
+					or not _writing:
+				return
+			_writing = false
+			current_action["言うこと"] = text
+		_writing = Post.write(self, got)
+	# 返事が返らないときの歯止め。そのときは書かずに帰る（`_do_post` が空振りにする）
+	if _writing and act_timer < TALK_MAX:
+		return true
+	_writing = false
+	return false
 
 
 ## ひと言が返ってきた。**空は沈黙**で、そこで場面が終わる
@@ -467,7 +502,7 @@ func _complete_action() -> void:
 				"talk":
 					done = obj != null and is_instance_valid(obj) and _do_talk(obj)
 				"post":
-					_do_post()
+					done = _do_post()
 				"read":
 					_do_read_board()
 
@@ -653,25 +688,27 @@ func _do_talk(other) -> bool:
 	return true
 
 
-## 掲示板に貼る。貼るのは、手と一緒に返った本人の「言うこと」。
+## 掲示板に貼る。貼るのは本人の言葉——文章の相手が手を選んだなら手と一緒に
+## 返った「言うこと」、Jev が選んだなら板の前で訊いた文（`_write_tick` / `Post`）。
 ## 【AI差し替え口】何をどう書くかは本人の言葉で、世界は文面を作らない。
-## ただし **Jev が手を選んだときはまだ言葉が無い**（`Brain._read_jev` は「言うこと」を
-## 空で渡す）ので、いまは貼らずに帰る。会話のように1行目を別に訊く口がまだ無い。
-func _do_post() -> void:
+func _do_post() -> bool:
 	var board = world.board
 	if board == null:
-		return
+		return false
 	_last_post_day = SimClock.day
-	# **何を書くかは本人。** 書くことを決めずに来たなら、貼らずに帰る——
+	# **何を書くかは本人。** 書かなかったなら、貼らずに帰る——
 	# 世界が代わりに文面を作ると、そこだけ神でも村人でもない誰かの言葉になる
 	var text := String(current_action.get("言うこと", ""))
 	if text == "":
-		return
+		_miss = "掲示板の前まで来たが、何も書かなかった"
+		return false
 	for e in board.posts:
 		if int(e["author_id"]) == id and String(e["text"]) == text:
-			return
+			_miss = "掲示板に、同じことを書いた紙がもう貼ってあった"
+			return false
 	board.post(id, vname, text)
 	memory.record("掲示板：貼った——%s" % text)
+	return true
 
 
 ## 掲示板を読む。世界がするのは、読んだ紙を帳面に残すところまで。

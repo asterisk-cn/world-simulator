@@ -117,6 +117,18 @@ func set_values(mine: Dictionary) -> void:
 		params.set_v(String(id), float(mine[id]))
 
 
+## 相手ごとの値も、いまどのくらいかで置く。
+## `theirs` は {相手のid: {値のid: 値}}。会ったことのない相手は入れ物から作る
+func set_pair_values(theirs: Dictionary) -> void:
+	for oid in theirs:
+		var pp := pair_to(int(oid))
+		var vals = theirs[oid]
+		if typeof(vals) != TYPE_DICTIONARY:
+			continue
+		for pid in vals:
+			pp.set_v(String(pid), float(vals[pid]))
+
+
 ## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
 ## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
 func stirred() -> void:

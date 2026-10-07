@@ -194,6 +194,11 @@ func _pick(c: Dictionary) -> Dictionary:
 ## 言葉を決めるのは神なので、目盛りのほうが言葉を選んではいけない
 const LEVELS := ["まったくない", "少しある", "半分ほど", "かなりある", "いっぱい"]
 
+## 相手ごとの言葉は**真ん中が「何とも思っていない」**（−50〜50）なので、
+## 目盛りも真ん中から両側へ開く。裏側に何があるかは言わない——
+## 好感の逆は嫌悪だが、負い目の逆は貸しで、それを決めるのは神の言葉のほう
+const PAIR_LEVELS := ["まったく逆", "少し逆", "どちらでもない", "少しある", "いっぱい"]
+
 func _ask_jev(cands: Array) -> bool:
 	if not AI.can_decide() or cands.size() <= 1:
 		return false
@@ -210,6 +215,20 @@ func _ask_jev(cands: Array) -> bool:
 			"instructions": "いまのあなたの「%s」はどのくらいか" % String(d["label"]),
 			"criteria": LEVELS,
 		}
+	# **相手ごとの言葉も同じ一回で訊く。** 別便にすると、手を選んだときの
+	# 自分と、値を答えた自分が食い違う。会ったことのある相手ぶんだけ
+	# （紙の「知っている相手」に並んでいる顔ぶれと同じ）
+	for oid in v.pairs.keys():
+		var other = v.world.villager_by_id(int(oid)) if v.world != null else null
+		if other == null:
+			continue
+		for d in Schema.pair_params():
+			qs["%s の %s" % [String(other.vname), String(d["label"])]] = {
+				"type": "score",
+				"instructions": "いまあなたが %s に対して持っている「%s」はどのくらいか"
+					% [String(other.vname), String(d["label"])],
+				"criteria": PAIR_LEVELS,
+			}
 	_heard = v.memory.episodes.size()
 	_thought_at = SimClock.clock_text()
 	var take := func(ans) -> void:
@@ -249,13 +268,18 @@ func _state(cands: Array) -> String:
 
 ## 型のついた答えを読む。**選んだ手**と、**いまの値**
 func _read_jev(ans: Dictionary, cands: Array) -> void:
-
 	var mine := {}
+	var theirs := {}
 	for key in ans:
 		var a = ans[key]
 		if typeof(a) != TYPE_DICTIONARY:
 			continue
 		if String(a.get("type", "")) == "score":
+			# 「トウ の 好感」は相手ごとの言葉。名前で引いて、その人の欄に入れる
+			var pair := _pair_key(str(key))
+			if not pair.is_empty():
+				_blend_pair(theirs, pair, a)
+				continue
 			# 0〜(段階-1) を、その言葉の幅に写すだけ。読み方は世界が決めない
 			var id := Schema.self_param_by_label(str(key))
 			if id == "":
@@ -275,6 +299,11 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 		v.set_values(mine)
 		if moved != "":
 			EventLog.mind(v.vname, "いま：%s" % moved)
+	if not theirs.is_empty():
+		var seen := _pairs_text(theirs)
+		v.set_pair_values(theirs)
+		if seen != "":
+			EventLog.mind(v.vname, "相手：%s" % seen)
 
 	var pick = ans.get("手", null)
 	if typeof(pick) != TYPE_DICTIONARY:
@@ -294,6 +323,54 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 	# **話している最中なら割り込まない**——会話は2往復で閉じる一つの手
 	if v.action_phase == "think":
 		v.begin(choose())
+
+
+## 「トウ の 好感」を、相手のidと値のidに戻す。相手の名前でないなら空
+func _pair_key(key: String) -> Dictionary:
+	var at := key.find(" の ")
+	if at < 0 or v.world == null:
+		return {}
+	var other = v.world.villager_by_name(key.substr(0, at))
+	if other == null:
+		return {}
+	var pid := Schema.pair_param_by_label(key.substr(at + 3))
+	return {} if pid == "" else {"who": other.id, "param": pid}
+
+
+## 相手ごとの段階を幅に写して、確かなぶんだけ寄せる（自分の言葉と同じやり方）
+func _blend_pair(theirs: Dictionary, pair: Dictionary, a: Dictionary) -> void:
+	var pid := String(pair["param"])
+	var who := int(pair["who"])
+	var t: float = float(a.get("score", 0.0)) / float(PAIR_LEVELS.size() - 1)
+	var to: float = Schema.param_min(pid) \
+		+ (Schema.param_max(pid) - Schema.param_min(pid)) * clampf(t, 0.0, 1.0)
+	var sure := clampf(float(a.get("confidence", 0.5)), 0.0, 1.0)
+	var pp = v.pair_peek(who)
+	var was: float = pp.get_v(pid) if pp != null else 0.0
+	if not theirs.has(who):
+		theirs[who] = {}
+	theirs[who][pid] = was + (to - was) * sure
+
+
+## 相手ごとの値のうち、**目に見えて動いたものだけ**を一行に
+func _pairs_text(theirs: Dictionary) -> String:
+	var out := PackedStringArray()
+	for oid in theirs:
+		var other = v.world.villager_by_id(int(oid)) if v.world != null else null
+		var pp = v.pair_peek(int(oid))
+		if other == null:
+			continue
+		var one := PackedStringArray()
+		for pid in theirs[oid]:
+			var to: float = float(theirs[oid][pid])
+			var was: float = pp.get_v(String(pid)) if pp != null else 0.0
+			if absf(to - was) < 0.5:
+				continue
+			one.append("%s %d（%+d）" % [Schema.param_label(String(pid)),
+				int(round(to)), int(round(to - was))])
+		if one.size() > 0:
+			out.append("%s に %s" % [String(other.vname), " / ".join(one)])
+	return " ／ ".join(out)
 
 
 ## 値の並び。`only_moved` なら、**目に見えて動いたものだけ**——

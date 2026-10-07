@@ -22,48 +22,65 @@ static func _span(defs: Array) -> String:
 	return "（%d〜%d）" % [int(lo), int(hi)]
 
 
-## 今日あったことに載る行数。紙にも問いにも収まるところまで
-const TAIL := 8
+## 前に考えてから増えた行に付ける印。**別枠に分けない**——分けると
+## 今日の流れが二つに割れて、どちらが先に起きたかが紙から読めなくなる
+const NEW := "★"
 
-## **一つの型で埋め尽くさない。** 新しい順に詰めるだけだと、
-## 会話のあいだ8行とも台詞になって、採った・作ったが紙から消えた——
-## 木の実を60個採った日でも、その人の今日がおしゃべりだけに見える。
-## どの型が大事かは言わない（それは判断）。**枠の半分までしか同じ型を入れない**
-## だけで、あとは新しい順。枠が余ったら、こぼれたぶんから新しい順に戻す
-static func _tail(rows: Array) -> PackedStringArray:
-	var cap: int = maxi(TAIL / 2, 1)
-	var n := {}
-	var keep: Array = []
-	var over: Array = []
-	for i in range(rows.size() - 1, -1, -1):
-		var line := String(rows[i])
-		var sp := line.find(" ")
-		var head: String = line.substr(sp + 1).split("：")[0] if sp > 0 else ""
-		if keep.size() < TAIL and int(n.get(head, 0)) < cap:
-			n[head] = int(n.get(head, 0)) + 1
-			keep.append(i)
-		else:
-			over.append(i)
-	for i in over:
-		if keep.size() >= TAIL:
-			break
-		keep.append(i)
-	# **並べ直すのは帳面の順で。** 時刻の字で並べると、日付をまたいだ夜が
-	# 朝より前に来る（この世界の一日は 05:00 に始まって翌 06:00 に終わる）
-	keep.sort()
+
+## 今日あったこと。**間引かない。** 8行に詰めていた頃は、どの行を落とすかを
+## こちらが決めていた（同じ型は半分まで）——それは何が大事かの判断で、
+## 帳面は薄めないという決めごと（DESIGN.md §6）にも外れる。
+## 一日は 60〜70 手ほどなので、全部渡しても紙に収まる
+static func _today(rows: Array, since: int) -> PackedStringArray:
 	var out := PackedStringArray()
-	for i in keep:
-		out.append("・%s" % String(rows[i]))
+	for i in range(rows.size()):
+		out.append("%s%s" % [NEW if since >= 0 and i >= since else "・", String(rows[i])])
+	return out
+
+
+## この世界の言葉。**神が置いた言葉を、全部、名前のまま。**
+## 渡していなかった頃は、AIは自分の値・持ち物・会った相手からしか
+## この世界を知らず、無いもの（小川・ウサギ）を作り、在るもの（まだ会っていない
+## 村人、まだ建っていない建物）は知らなかった。どれをどう使うかは言わない
+static func words(world) -> String:
+	var out := PackedStringArray()
+	out.append("# この世界の言葉")
+	out.append("じぶん：%s" % "・".join(_labels(Schema.self_params())))
+	out.append("あいて：%s" % "・".join(_labels(Schema.pair_params())))
+	var items := PackedStringArray()
+	for item in Schema.all_items():
+		items.append(Schema.item_label(String(item)))
+	out.append("もちもの：%s" % "・".join(items))
+	var builds := PackedStringArray()
+	for b in Schema.buildings:
+		builds.append(String(b["label"]))
+	out.append("たてもの：%s" % "・".join(builds))
+	var names := PackedStringArray()
+	if world != null:
+		for v in world.villagers:
+			if is_instance_valid(v):
+				names.append(String(v.vname))
+	out.append("村人：%s" % "・".join(names))
+	return "\n".join(out)
+
+
+static func _labels(defs: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	for d in defs:
+		out.append(String(d["label"]))
 	return out
 
 
 ## その人の姿を言葉にする。**神が付けた名前のまま**渡す——言い換えると、
 ## 神がこの世界に置いた言葉ではないものが村人の口から出る。
-## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す
-## `skip_tail` は**呼ぶ側が別に見せるぶん**。判断の問いは「前に考えてから
-## 起きたこと」を自分で並べるので、そのぶんをここで出すと**同じ行を二度渡す**ことになる
-static func of(v, skip_tail: int = 0) -> String:
+## 何を訊くか（気持ちか、次の手か）は呼ぶ側が後ろに足す。
+## **初めはこの世界の言葉**（`words`）——どの問いも同じ言葉の上で答える。
+## `since` は前に考えたときの帳面の位置。そこから先の行に印が付く（判断の問いだけ。
+## 気持ちや会話の問いには「前に考えた」が無いので -1 のまま）
+static func of(v, since: int = -1) -> String:
 	var out := PackedStringArray()
+	out.append(words(v.world))
+	out.append("")
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
 	out.append("性格：%s" % v.personality.quirk)
@@ -125,13 +142,14 @@ static func of(v, skip_tail: int = 0) -> String:
 		out.append("# 今感じていること")
 		out.append(String(v.feeling))
 
-	if v.memory.episodes.size() > skip_tail:
-		var upto: int = maxi(v.memory.episodes.size() - skip_tail, 0)
-		var tail := _tail(v.memory.episodes.slice(0, upto))
-		if tail.size() > 0:
-			out.append("")
+	var rows: Array = v.memory.episodes
+	if not rows.is_empty():
+		out.append("")
+		if since >= 0 and since < rows.size():
+			out.append("# 今日あったこと（%s は前に考えてから増えたこと）" % NEW)
+		else:
 			out.append("# 今日あったこと")
-			out.append_array(tail)
+		out.append_array(_today(rows, since))
 
 	var past := String(v.memory.recent_summary(2))
 	if past != "":

@@ -230,6 +230,9 @@ func _ask_jev(cands: Array) -> bool:
 					% [String(other.vname), String(d["label"])],
 				"criteria": PAIR_LEVELS,
 			}
+	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
+	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
+	var said := _state(asked)
 	_heard = v.memory.episodes.size()
 	_thought_at = SimClock.clock_text()
 	var take := func(ans) -> void:
@@ -239,7 +242,7 @@ func _ask_jev(cands: Array) -> bool:
 		if typeof(ans) != TYPE_DICTIONARY:
 			return
 		_read_jev(ans, asked)
-	v.asking = AI.decide(_state(asked), qs, take, v.id)
+	v.asking = AI.decide(said, qs, take, v.id)
 	return v.asking
 
 
@@ -252,18 +255,22 @@ func _criteria(cands: Array) -> Dictionary:
 
 
 ## 姿と、身に起きたこと。文章の問いと同じものを、地の文で渡す
-func _state(cands: Array) -> String:
-	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+func _state(_cands: Array) -> String:
+	return _seen()
+
+
+## 姿と、前に考えた時刻。**身に起きたことは今日あったことの中に印で**
+## （`Inner.of` の `since`）——別枠にしていた頃は、前に考える前の行が
+## 8行に間引かれ、後の行は全部載って、一日の流れが二つに割れていた
+func _seen() -> String:
 	var out := PackedStringArray()
-	out.append(Inner.of(v, since.size()))
+	out.append(Inner.of(v, _heard if _thought_at != "" else -1))
+	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
+	# それは世界が知っている事実。読んで何が動くかは本人が決める
+	# （秒では尺度にならないので、世界の時計で渡す）
 	if _thought_at != "":
 		out.append("")
 		out.append("# 前に考えたのは %s（いまは %s）" % [_thought_at, SimClock.clock_text()])
-	if not since.is_empty():
-		out.append("")
-		out.append("# 前に考えてから、あなたの身に起きたこと")
-		for e in since:
-			out.append("・%s" % String(e))
 	return "\n".join(out)
 
 
@@ -395,6 +402,8 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
 	var asked := cands
+	# 紙を作ってから位置を進める（`_ask_jev` と同じ）
+	var said := _prompt(asked, quick)
 	if not quick:
 		_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
 		_thought_at = SimClock.clock_text()
@@ -413,7 +422,7 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 		# 届いた判断はその場面が終わるまで待つ
 		if v.action_phase == "think":
 			v.begin(choose())
-	v.asking = AI.ask(_prompt(asked, quick), _system(quick), take,
+	v.asking = AI.ask(said, _system(quick), take,
 		OUT_QUICK if quick else OUT, true, v.id)
 	return v.asking
 
@@ -565,19 +574,20 @@ static func _system(quick: bool = false) -> String:
 返さずに立ち去るなら、別の手を選ぶ。それも答えのうち。
 説明も理由も書かない。""" % [NAME_MAX, WORDS_MAX]
 	return """あなたは、ある村に住む一人の人間です。
-渡された姿と「身に起きたこと」「いまできること」を読んで、
-**起きたことで自分の中がどう動いたか**と、**この先することを順に**答えます。
+渡された姿と「いまできること」を読んで、
+**前に考えてから起きたこと**（今日あったことの %s の行）**で自分の中がどう動いたか**と、
+**この先することを順に**答えます。
 
 返すのは JSON の物1つ。入れるのは次の4つだけ。
 
 「動いた」——起きたことで**自分の中**がどう動いたか。**平らな1段**。
-  鍵は「あなたの中にあるもの」に出ている言葉、値は**増えた／減ったぶんの数**
+  鍵は「この世界の言葉」の「じぶん」に出ている言葉、値は**増えた／減ったぶんの数**
   （いまの値ではない）。動かない言葉は書かない。何も動かないなら空でよい。
 
 「相手が動いた」——**相手への見え方**が動いたときだけ。**2段**。
-  外の鍵は相手の名前、その中の鍵は「知っている相手」に出ている言葉、値は増減の数。
+  外の鍵は相手の名前、その中の鍵は「この世界の言葉」の「あいて」に出ている言葉、値は増減の数。
 
-「思ったこと」——身に起きたことのどれかについて、そう思ったという一言。
+「思ったこと」——%s の行のどれかについて、そう思ったという一言。
   貼り紙を読んだ、言われた、空振りした——受け取りかたがあるときだけ。%d字以内。
   無ければ書かない。
 
@@ -594,7 +604,7 @@ static func _system(quick: bool = false) -> String:
                  「何か伝えたい」「お知らせを貼ろう」のような、
                  これからすることの説明を書かない
 
-説明も理由も書かない。""" % [WORDS_MAX, NAME_MAX, WORDS_MAX]
+説明も理由も書かない。""" % [Inner.NEW, Inner.NEW, WORDS_MAX, NAME_MAX, WORDS_MAX]
 
 
 ## 言うことの長さ。長い口上は、世界の上の吹き出しにも記録にも収まらない
@@ -602,23 +612,10 @@ const WORDS_MAX := 40
 
 
 func _prompt(cands: Array, quick: bool = false) -> String:
-	# **前に訊いてから、身に起きたこと。** これで自分の中がどう動いたかを答える。
-	# 同じ行を姿の「今日あったこと」にも出すと**二度渡す**ことになるので、
-	# そのぶんは姿から抜いてもらう（`Inner.of` の `skip_tail`）
-	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+	# **前に訊いてから、身に起きたこと**は今日あったことに印で載る。
+	# これで自分の中がどう動いたかを答える
 	var out := PackedStringArray()
-	out.append(Inner.of(v, since.size()))
-	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
-	# それは世界が知っている事実。読んで何が動くかは本人が決める
-	# （秒では尺度にならないので、世界の時計で渡す）
-	if _thought_at != "":
-		out.append("")
-		out.append("# 前に考えたのは %s（いまは %s）" % [_thought_at, SimClock.clock_text()])
-	if not since.is_empty():
-		out.append("")
-		out.append("# 前に考えてから、あなたの身に起きたこと")
-		for e in since:
-			out.append("・%s" % String(e))
+	out.append(_seen())
 	out.append("")
 	out.append("# いまできること")
 	for i in range(cands.size()):

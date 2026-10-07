@@ -58,6 +58,9 @@ static func system() -> String:
 
 static func prompt(v, day: int) -> String:
 	var out := PackedStringArray()
+	# 姿は `Inner` を使わないが、**言葉は同じものを初めに**（どの問いも同じ言葉の上で答える）
+	out.append(Inner.words(v.world))
+	out.append("")
 	out.append("# あなた")
 	out.append("名前：%s" % v.vname)
 	out.append("性格：%s" % v.personality.quirk)

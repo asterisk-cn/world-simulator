@@ -51,13 +51,13 @@ const BEHAVIORS := {
 
 ## 型ごとに選べる対象のうち、世界に元からあるもの。
 ##   duration … かかる時間。**ゆっくり**——見ている人が目で追える速さに揃えてある
-##   reach    … その場で行うのに必要な近さ（マス）。
-##              -1 は「目的地まで移動してから行う」動作。
-##              0以上なら、いま届く範囲になければそもそも選択肢に出ない。
-##              遠ければ先に「動く」必要がある。
+##   reach    … どこまで近づいてから行うか（マス）。歩きは手の中に畳んであり、
+##              この近さに入ったところで足を止める。相手が人なら追う。
+##              -1 は「その場所まで行ってから行う」（ぶらぶらの行き先）。
+##              物・建物は 1.6、人・掲示板は 2.2
 const TARGETS := {
 	# **「動く」に行き先は無い。** 話す・使う・作るは歩きを手の中に畳んでいる
-	# （`reach: -1` の動作は目的地まで行ってから行う）ので、
+	# （相手の間合いまで歩いてから行う）ので、
 	# 「◯◯のところへ向かう」を別に並べると、同じ一手を二度訊くことになる。
 	# 実際それが候補の過半を占め、選ばれた手の 74% が「向かう」で、
 	# 着いた先で何かをするところまで繋がらなかった。
@@ -85,7 +85,7 @@ const BUILD_SEC := 5.0
 const GO_SEC := 0.8
 
 const USE_WAYS := {
-	"world": {"duration": 2.8, "reach": -1.0},    # そこに在るものへ行って使う
+	"world": {"duration": 2.8, "reach": 1.6},     # そこに在るもののそばで使う
 	"hand": {"duration": 1.6, "reach": 999.0},    # 手の中のものを使う
 	"building": {"duration": 8.0, "reach": 1.6},  # 建物のそばで使う
 }
@@ -594,7 +594,7 @@ func targets_of(kind: String) -> Dictionary:
 					continue
 				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, 999.0)
 			for b in buildings:
-				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, -1.0)
+				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, 1.6)
 		"move":
 			# 建物への行き先も並べない。建っているものは「使う」で行ける
 			out = TARGETS["move"].duplicate(true)

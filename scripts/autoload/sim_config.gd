@@ -3,7 +3,6 @@ extends Node
 ##
 ## 【前提】判断はAIが行う。
 ## ここにあるのは物理と時間だけで、キャラクターの判断に関わる係数は一つもない。
-## 記憶まわりは【要検討】で、扱いが決まるまでの暫定値。
 
 signal param_changed(key: String, value: float)
 
@@ -15,10 +14,7 @@ signal param_changed(key: String, value: float)
 const PARAM_DEF := {
 	"day_length_sec": [180.0, 30.0, 330.0, "1日の長さ", 30.0],
 	"night_starts_at": [20.0, 14.0, 24.0, "夜になる時刻", 1.0],
-	"decision_interval": [1.0, 0.2, 2.2, "考え直す間合い", 0.2],
 	"move_speed": [1.0, 0.5, 5.5, "歩く速さ", 0.5],
-
-	"summaries_kept": [5.0, 1.0, 11.0, "覚えていられる日数", 1.0],
 }
 
 
@@ -30,19 +26,14 @@ func step_of(key: String) -> float:
 
 
 ## 数字だけだと何の単位か分からない。世界の側の言い方で見せる。
-## 開始前（設計図の「世界」）と進行中（オプション）で同じ言い方にする。
 func text_of(v: float, key: String) -> String:
 	match key:
 		"day_length_sec":
 			return "%d秒" % int(v)
 		"night_starts_at":
 			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
-		"decision_interval":
-			return "%.1f秒" % v
 		"move_speed":
 			return "%.1f歩/秒" % v
-		"summaries_kept":
-			return "%d日" % int(v)
 	return "%d" % int(round(v))
 
 var params := {}

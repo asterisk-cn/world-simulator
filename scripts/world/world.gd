@@ -351,9 +351,10 @@ func building_at(c: Vector2i) -> Structure:
 
 ## その建物のうち、いちばん近いもの。
 ## 同じものが何軒建つかは誰も決めていないので、「村のその1つ」を指す言い方はしない。
-func nearest_building(def_id: String, from_cell: Vector2) -> Structure:
+func nearest_building(def_id: String, from_cell: Vector2,
+		max_dist: float = INF) -> Structure:
 	var best: Structure = null
-	var best_d := INF
+	var best_d := max_dist
 	for s in structures:
 		if s.def_id != def_id:
 			continue

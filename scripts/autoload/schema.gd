@@ -114,15 +114,14 @@ const MAX_VILLAGERS := 12
 const DEFAULT_VILLAGERS := 8
 
 
-## 世界に元からある持ち物。世界に在るそれを「使う」と手に入る。
-const ITEMS := {
-	"food": "木の実",
-	"wood": "木",
-	"stone": "石",
-}
-
-## 元からある持ち物の姿。世界に在るときと手の中にあるときで同じ絵になる。
-const ITEM_ART := {"food": "berry", "wood": "tree", "stone": "rock"}
+## 島に在る持ち物と、その姿。世界に在るそれを「使う」と手に入る。
+##
+## **定義は他のもちものと同じ一覧にある**（`recipes`）ので、名前を変えるのも消すのも同じ手で済む。
+## ここが持つのは「どれが島に生えるか」と、その姿だけ。
+## - 名前を変えれば、島の茂みから採れるものの名前も変わる（姿は茂みのまま）
+## - 消せば、島にも生えない。世界に無い物は生まれない
+## 姿は選べない——茂みが壺の絵で手に入ったら、世界の上の姿と手の中の姿が食い違う
+const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
 
 # ---------------------------------------------------------------------------
 # 姿
@@ -176,7 +175,10 @@ func _ready() -> void:
 
 func _default_recipes() -> void:
 	recipes = [
-		{"id": "tool", "label": "道具", "art": "tool"},
+		{"id": "food", "label": "木の実", "art": "berry"},
+		{"id": "wood", "label": "木", "art": "tree"},
+		{"id": "stone", "label": "石", "art": "rock"},
+		{"id": "tool", "label": "ハンマー", "art": "tool"},
 	]
 
 
@@ -205,11 +207,25 @@ func is_building(id: String) -> bool:
 	return building_def(id) != null
 
 
-## 元からある持ち物と、つくりかたで作れるものを合わせた一覧
+## もちものの一覧。島に在るものも、作るものも同じ一覧にある
 func all_items() -> Array:
-	var out: Array = ITEMS.keys()
+	var out: Array = []
 	for r in recipes:
 		out.append(String(r["id"]))
+	return out
+
+
+## 島に在るもちものか。消されていれば、島にも生えない
+func is_world_item(id: String) -> bool:
+	return WORLD_ARTS.has(id) and recipe_def(id) != null
+
+
+## 島に在るもちもののうち、いま定義に残っているもの
+func world_items() -> Array:
+	var out: Array = []
+	for id in WORLD_ARTS:
+		if recipe_def(String(id)) != null:
+			out.append(String(id))
 	return out
 
 
@@ -232,16 +248,14 @@ func _by_label(defs: Array, label: String) -> String:
 
 
 func item_label(id: String) -> String:
-	if ITEMS.has(id):
-		return String(ITEMS[id])
 	var r = recipe_def(id)
 	return id if r == null else String(r["label"])
 
 
-## 持ち物の姿。元からある物は決まっていて、作るものは神が選んだ姿になる。
+## 持ち物の姿。島に在る物は決まっていて、作るものは神が選んだ姿になる。
 func item_art(id: String) -> String:
-	if ITEM_ART.has(id):
-		return String(ITEM_ART[id])
+	if WORLD_ARTS.has(id):
+		return String(WORLD_ARTS[id])
 	var r = recipe_def(id)
 	if r != null:
 		return String(r["art"])
@@ -275,7 +289,7 @@ func add_recipe() -> Dictionary:
 	for r in recipes:
 		taken.append(String(r["id"]))
 	var r2 := {"id": _unique_id("r", taken), "label": "新しいもの",
-		"art": CRAFT_ARTS[recipes.size() % CRAFT_ARTS.size()]}
+		"art": CRAFT_ARTS[(recipes.size() - world_items().size()) % CRAFT_ARTS.size()]}
 	recipes.append(r2)
 	recipes_changed.emit()
 	return r2
@@ -322,8 +336,10 @@ func rename_building(id: String, label: String) -> void:
 		buildings_changed.emit()
 
 
-## 姿を選ぶ。押すたびに、用意された姿を順に送る。
+## 姿を選ぶ。押すたびに、用意された姿を順に送る。島に在るものの姿は動かない
 func cycle_art(d: Dictionary, arts: Array) -> void:
+	if WORLD_ARTS.has(String(d["id"])):
+		return
 	var i := arts.find(String(d["art"]))
 	d["art"] = String(arts[(i + 1) % arts.size()])
 	recipes_changed.emit()
@@ -412,37 +428,40 @@ func next_color(from: Color) -> Color:
 ## 言葉の色。**語ごとに色を持たせるのはやめた。**
 ##
 ## 束（カテゴリ）を消したので、色を割り当てる順番そのものが無くなった。
-## 順番で色相を回しても、じぶんの9語を暖色に閉じれば色相差が小さすぎて見分けられず、
+## 順番で色相を回しても、じぶんの言葉を暖色に閉じれば色相差が小さすぎて見分けられず、
 ## 閉じなければあいての色と混ざる。そして**色は人のもの**——
 ## 村人の色が世界でもUIでも識別子なので、語からも色を出すと競う。
 ##
 ## 語が何であるかは常に隣に字で書いてある。色は「どちらの話か」だけを言う。
 const SCOPE_COLORS := {
-	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## じぶん。土の色。「どれだけ」の話
-	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## あいての正の側。「どちらへ」の話
+	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## じぶん。土の色
+	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## あいて。青緑
 }
 
-## あいての負の側。好感の裏の嫌悪、敬意の裏の侮り。
+## 負の側の赤。**幅が負から始まるときだけ使う**——いまはどのスコープも 0〜100 なので出ない。
+## 幅を −50〜50 にしていた頃の、裏（好感の裏の嫌悪）を塗る色。
 ## **積み木（`PipBar`）と n×n の表（`matrix_panel`）で同じ赤を使う。**
 ## 表は色しか持たないので向きを色で言うしかなく、そこだけ赤で、
 ## インスペクタの積み木は1色、では同じものを2つの言い方で見せることになる。
-const PAIR_NEG := Color(0.74, 0.26, 0.22)
+const NEG := Color(0.74, 0.26, 0.22)
 
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
 ##
-## じぶんは「どれだけ」の話なので 0〜50。空腹が負になることはない。
-## あいては「どちらへ」の話なので −50〜50。真ん中が何とも思っていないところで、
-## 好感の裏には嫌悪があり、敬意の裏には侮りがある。
+## **どちらも「どれだけ」の話で 0〜100。** 値は5件法の答え（`Brain.LEVELS`）を
+## 0 / 25 / 50 / 75 / 100 に写したもので、0 は「まったくそう思わない」＝感じていない。
+##
+## −50〜50 にして負を「裏」（空腹の裏の満腹、好感の裏の嫌悪）にしていたが、
+## 5件法の「そう思わない」は「感じていない」であって裏ではない。
+## 両側に開く目盛りは「その逆」を言わせる言い回しが要り、5件法なら見慣れた文言で済む。
+## 裏を失うかわりに、目盛りと幅の読み方が一致する。
 ## 幅を1本ずつ決めさせても、読み方が増えるだけで世界の見え方は変わらなかった。
 ##
-## **50 きざみ。** 100 では1日で 8 まで来た人と 60 まで来た人が並んで、
-## どこが「満ちた」のか読めなかった。10 に落とすと逆で、**1日で半数が上限に
-## 張り付いた**（幅だけ 1/10 にして、動かす量は ±1〜2 のままだったため）。
-## 50 はその中間で、積み木10粒に対して **1粒＝5**。
+## 100 で「どこが満ちたのか読めなかった」のは、増減を申告させていた頃の話。
+## いまは段階を写すだけなので、幅の大きさは目盛りの呼び名でしかない。積み木10粒で **1粒＝10**。
 const SCOPE_RANGE := {
-	SCOPE_SELF: [0.0, 50.0],
-	SCOPE_PAIR: [-50.0, 50.0],
+	SCOPE_SELF: [0.0, 100.0],
+	SCOPE_PAIR: [0.0, 100.0],
 }
 
 
@@ -457,13 +476,8 @@ func make_param(id: String, label: String, scope: String) -> Dictionary:
 func _default_parameters() -> void:
 	parameters = [
 		make_param("hunger", "空腹", SCOPE_SELF),
-		make_param("sleep", "睡眠", SCOPE_SELF),
 		make_param("safety", "不安", SCOPE_SELF),
-		make_param("home", "居住", SCOPE_SELF),
-		make_param("boredom", "退屈", SCOPE_SELF),
-		make_param("stagnation", "停滞", SCOPE_SELF),
 		make_param("loneliness", "孤独", SCOPE_SELF),
-		make_param("crowding", "過密", SCOPE_SELF),
 		make_param("unfairness", "不公平", SCOPE_SELF),
 
 		make_param("affinity", "好感", SCOPE_PAIR),
@@ -563,7 +577,7 @@ func remove_param(id: String) -> void:
 ## 型ごとに選べる対象。
 ##   使う … 世界にある物と持ち物（同じもの）＋ 建物
 ##          そこに在るのを使うのか手の中のを使うのかは、候補を作るときに分かれる
-##   作る … つくりかたにあるもの（持てるもの / 建てるもの）
+##   作る … つくりかたにあるもの（持てるもの / 建てるもの）。島に在るものは採るだけで、作らない
 ##   動く … 建てられるものぶんだけ行き先が増える（同じものが何軒あっても、いちばん近いところへ）。
 ##          「自分のところ」は元からある行き先で、自分が建てたもののうち近いところ
 func targets_of(kind: String) -> Dictionary:
@@ -576,6 +590,8 @@ func targets_of(kind: String) -> Dictionary:
 				out[String(b["id"])] = _target(String(b["label"]))
 		"make":
 			for r in recipes:
+				if is_world_item(String(r["id"])):
+					continue
 				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, 999.0)
 			for b in buildings:
 				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, 1.6)

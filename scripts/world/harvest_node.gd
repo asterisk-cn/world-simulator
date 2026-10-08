@@ -1,14 +1,15 @@
 class_name HarvestNode
 extends Node2D
-## 世界に元から在る物。木の実・木・石。使うと、そのまま同じ名前の持ち物になる。
+## 世界に元から在る物。茂み・木・岩。使うと、そのまま同じ名前の持ち物になる。
 ##
 ## 何を寄越すかはプログラムが知っている（それが何であるかを知っている数少ない物）。
+## **名前は持たない。** 神がもちものの名前を変えれば、採れるものの名前も変わる
+## （`Schema.WORLD_ARTS`）。消されたものは島に生えない。
 ## **いくつ寄越すかは持っていない。世界の物は尽きない。**
 ## 摘み尽くさないことも判断なので、そこは本人（AI）に残す。
 
 enum Kind { BERRY, TREE, ROCK }
 
-const KIND_NAME := {Kind.BERRY: "木の実", Kind.TREE: "木", Kind.ROCK: "石"}
 const KIND_ITEM := {Kind.BERRY: "food", Kind.TREE: "wood", Kind.ROCK: "stone"}
 
 ## 持ち物からその資源へ。世界に生っている木の実と、手の中の木の実は同じもので、

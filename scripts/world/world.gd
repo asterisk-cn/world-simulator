@@ -20,7 +20,7 @@ var structures: Array = []
 var villagers: Array = []
 var board: BulletinBoard
 
-## 建物は通り抜けられない（持ち主だけは中を通れる）。建物どうしの間は必ず空いているのでそこを通る。
+## 建物は誰も通り抜けられない（持ち主も）。建物どうしの間は必ず空いているのでそこを通る。
 var astar := AStarGrid2D.new()
 
 # ---------------------------------------------------------------------------
@@ -88,7 +88,18 @@ func _ready() -> void:
 	_scatter_resources()
 	_place_board()
 	_setup_astar()
+	Schema.recipes_changed.connect(_prune_harvests)
 	queue_redraw()
+
+
+## 消されたもちものは、下見の島からも抜く。始めるときは島ごと作り直すが、
+## 消した茂みが下見に残っていると、消えていないように見える
+func _prune_harvests() -> void:
+	for h in harvests.duplicate():
+		if not Schema.is_world_item(h.item_key()):
+			harvests.erase(h)
+			entities.remove_child(h)
+			h.queue_free()
 
 
 ## 世界を作り直す。村を終えて言葉のところへ戻るときに呼ばれる。
@@ -179,6 +190,9 @@ func _is_village_core(c: Vector2i) -> bool:
 
 
 func _add_harvest(kind: int, cell: Vector2i) -> void:
+	# 消されたもちものは生えない。世界に無い物は生まれない
+	if not Schema.is_world_item(String(HarvestNode.KIND_ITEM[kind])):
+		return
 	var h := HarvestNode.new()
 	h.setup(kind, cell)
 	entities.add_child(h)
@@ -224,23 +238,14 @@ func is_blocked(c: Vector2i) -> bool:
 	return in_bounds(c) and astar.is_point_solid(c)
 
 
-## from から to までの経路。建物は通り抜けられないが、**自分のものの中は通れる**。
-func find_path(from_cell: Vector2, to_cell: Vector2, own_id: int = -1) -> PackedVector2Array:
+## from から to までの経路。建物は**誰も**通り抜けられない。
+## 自分のものの中だけ通れるようにしていたが、それは持ち主に世界が道を開けることで、
+## 所有を事実ではなく権利として扱っていた（DESIGN.md §3）。使うのはそばからで足りる
+func find_path(from_cell: Vector2, to_cell: Vector2) -> PackedVector2Array:
 	var a := Vector2i(roundi(from_cell.x), roundi(from_cell.y))
 	var b := Vector2i(roundi(to_cell.x), roundi(to_cell.y))
 	if not in_bounds(a) or not in_bounds(b):
 		return PackedVector2Array([from_cell])
-
-	# 自分のものは一時的に通れるようにする（中に入るため）
-	var opened: Array = []
-	if own_id >= 0:
-		for s in structures:
-			if s.owner_id != own_id:
-				continue
-			for c in s.footprint():
-				if in_bounds(c) and astar.is_point_solid(c):
-					astar.set_point_solid(c, false)
-					opened.append(c)
 
 	if astar.is_point_solid(a):
 		a = _nearest_open(a)
@@ -250,9 +255,6 @@ func find_path(from_cell: Vector2, to_cell: Vector2, own_id: int = -1) -> Packed
 		b = _nearest_open(b)
 
 	var pts := astar.get_point_path(a, b)
-
-	for c in opened:
-		astar.set_point_solid(c, true)
 
 	if pts.is_empty():
 		return PackedVector2Array([from_cell])
@@ -277,8 +279,8 @@ func _nearest_open(c: Vector2i) -> Vector2i:
 ## 建物のまわりで空いているマス
 func free_cell_around(at: Vector2i) -> Vector2i:
 	var ring := [
-		Vector2i(2, 0), Vector2i(2, 1), Vector2i(-1, 0), Vector2i(-1, 1),
-		Vector2i(0, 2), Vector2i(1, 2), Vector2i(0, -1), Vector2i(1, -1),
+		Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1),
 	]
 	for d in ring:
 		var c: Vector2i = at + d
@@ -297,7 +299,7 @@ func free_cell_around(at: Vector2i) -> Vector2i:
 				break
 		if not taken:
 			return c
-	return at + Vector2i(2, 1)
+	return at + Vector2i(1, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -425,13 +427,11 @@ func find_build_cell(near: Vector2, builder_id: int = -1) -> Vector2i:
 
 ## 敷地に他の村人が立っていないか
 func _villager_on(c: Vector2i, ignore_id: int) -> bool:
-	for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
-		var cc: Vector2i = c + d
-		for v in villagers:
-			if v.id == ignore_id:
-				continue
-			if Vector2i(roundi(v.cell.x), roundi(v.cell.y)) == cc:
-				return true
+	for v in villagers:
+		if v.id == ignore_id:
+			continue
+		if Vector2i(roundi(v.cell.x), roundi(v.cell.y)) == c:
+			return true
 	return false
 
 
@@ -444,17 +444,13 @@ func _can_build_at(c: Vector2i) -> bool:
 		for oc in s.footprint():
 			if maxi(absi(oc.x - c.x), absi(oc.y - c.y)) < BUILD_SPACING:
 				return false
-	for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
-		var cc: Vector2i = c + d
-		if not in_bounds(cc):
+	if not in_bounds(c) or building_at(c) != null:
+		return false
+	if board and board.cell == c:
+		return false
+	for h in harvests:
+		if h.cell == c:
 			return false
-		if building_at(cc) != null:
-			return false
-		if board and board.cell == cc:
-			return false
-		for h in harvests:
-			if h.cell == cc:
-				return false
 	return true
 
 

@@ -193,12 +193,16 @@ func _pick(c: Dictionary) -> Dictionary:
 ## 空腹や不安には合っても、過密・不公平・居住には日本語として噛み合わず、
 ## 1日測って**その3つだけ最大0のまま**だった（答えられない問いには0が返る）。
 ## 言葉を決めるのは神なので、目盛りのほうが言葉を選んではいけない
-const LEVELS := ["まったくない", "少しある", "半分ほど", "かなりある", "いっぱい"]
-
-## 相手ごとの言葉は**真ん中が「何とも思っていない」**（−50〜50）なので、
-## 目盛りも真ん中から両側へ開く。裏側に何があるかは言わない——
-## 好感の逆は嫌悪だが、負い目の逆は貸しで、それを決めるのは神の言葉のほう
-const PAIR_LEVELS := ["まったく逆", "少し逆", "どちらでもない", "少しある", "いっぱい"]
+##
+## **よくある5件法にする。** じぶんの言葉も相手ごとの言葉も幅は 0〜100 で、
+## 「まったくそう思わない」が 0（感じていない）。目盛りは1本で済む。
+## 5件法は「文にどのくらい当てはまるか」なので、問いも言い切りの文で立てる。
+##
+## 両側に開く目盛り（−50〜50）では、裏を言うのに「その逆」のような言い回しが要った。
+## 5件法を −50〜50 に写すと「そう思わない」が裏になり、空腹を感じていない人が
+## 満腹側に記録された（30秒で空腹の97%が負）。幅のほうを 0〜100 にして揃えた
+const LEVELS := ["まったくそう思わない", "あまりそう思わない", "どちらともいえない",
+	"ややそう思う", "とてもそう思う"]
 
 func _ask_jev(cands: Array) -> bool:
 	if not AI.can_decide() or cands.size() <= 1:
@@ -213,7 +217,7 @@ func _ask_jev(cands: Array) -> bool:
 	for d in Schema.self_params():
 		qs[String(d["label"])] = {
 			"type": "score",
-			"instructions": "いまのあなたの「%s」はどのくらいか" % String(d["label"]),
+			"instructions": "いま、あなたは「%s」を感じている" % String(d["label"]),
 			"criteria": LEVELS,
 		}
 	# **相手ごとの言葉も同じ一回で訊く。** 別便にすると、手を選んだときの
@@ -226,9 +230,9 @@ func _ask_jev(cands: Array) -> bool:
 		for d in Schema.pair_params():
 			qs["%s の %s" % [String(other.vname), String(d["label"])]] = {
 				"type": "score",
-				"instructions": "いまあなたが %s に対して持っている「%s」はどのくらいか"
+				"instructions": "いま、あなたは %s に「%s」を持っている"
 					% [String(other.vname), String(d["label"])],
-				"criteria": PAIR_LEVELS,
+				"criteria": LEVELS,
 			}
 	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
 	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
@@ -264,7 +268,7 @@ func _state(_cands: Array) -> String:
 ## 8行に間引かれ、後の行は全部載って、一日の流れが二つに割れていた
 func _seen() -> String:
 	var out := PackedStringArray()
-	out.append(Inner.of(v, _heard if _thought_at != "" else -1))
+	out.append(Inner.of(v, _heard if _thought_at != "" else -1, true))
 	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
 	# それは世界が知っている事実。読んで何が動くかは本人が決める
 	# （秒では尺度にならないので、世界の時計で渡す）
@@ -349,7 +353,7 @@ func _pair_key(key: String) -> Dictionary:
 func _blend_pair(theirs: Dictionary, pair: Dictionary, a: Dictionary) -> void:
 	var pid := String(pair["param"])
 	var who := int(pair["who"])
-	var t: float = float(a.get("score", 0.0)) / float(PAIR_LEVELS.size() - 1)
+	var t: float = float(a.get("score", 0.0)) / float(LEVELS.size() - 1)
 	var to: float = Schema.param_min(pid) \
 		+ (Schema.param_max(pid) - Schema.param_min(pid)) * clampf(t, 0.0, 1.0)
 	var sure := clampf(float(a.get("confidence", 0.5)), 0.0, 1.0)

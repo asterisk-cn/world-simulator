@@ -322,7 +322,7 @@ func begin(c: Dictionary) -> void:
 	act_timer = 0.0
 	# 建物は通り抜けられないので、間の空きを通って回り込む
 	_aim = current_action.get("target_cell", cell)
-	_path = world.find_path(cell, _aim, id)
+	_path = world.find_path(cell, _aim)
 	_path_i = 0
 
 
@@ -386,7 +386,7 @@ func _follow() -> void:
 	if _aim.distance_to(who.cell) <= 0.5:
 		return
 	_aim = who.cell
-	_path = world.find_path(cell, who.cell, id)
+	_path = world.find_path(cell, who.cell)
 	_path_i = 0
 
 

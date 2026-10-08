@@ -965,7 +965,7 @@ func _talk(target: String) -> Array:
 			for o in v.world.neighbors_within(v.cell, Rules.SIGHT, v.id):
 				out.append(_pack("talk", target, o.cell, o, way))
 		"post":
-			if board == null or int(v._last_post_day) == SimClock.day:
+			if board == null:
 				return out
 			out.append(_pack("talk", target, Vector2(board.cell), board, way))
 		"read":

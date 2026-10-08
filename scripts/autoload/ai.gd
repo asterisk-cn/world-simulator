@@ -141,7 +141,7 @@ var _jev_key := ""
 var _queue: Array = []   ## [{system, prompt, max, json, on_done} または {jev, state, questions}]
 var _lanes: Array = []   ## [{http, job}]
 
-## 選べるもの。[{name, local, model, url}]。最後は必ず「AIを使わない」
+## 選べるもの。[{name, local, model, url}]。デバッグビルドでは、最後に「AIを使わない」
 var _choices: Array = []
 var _here := 0
 ## この機械の中に何が入っているかを訊くための口（`_lanes` は塞がっているので別に持つ）
@@ -268,7 +268,7 @@ func _on_tags(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) 
 
 
 ## 一覧を組む。この機械に入っているものと、鍵があるなら預け先のものを並べる。
-## 最後の「使わない」は検証用——穴のままの世界を見るためのもの
+## 最後の「使わない」は検証用——穴のままの世界を見るためのもの（デバッグビルドだけ）
 func _build_choices(local_names: Array) -> void:
 	var out: Array = []
 	if _key != "":
@@ -280,7 +280,9 @@ func _build_choices(local_names: Array) -> void:
 			continue
 		out.append({"name": String(n), "local": true, "model": String(n),
 			"url": OLLAMA_URL})
-	out.append({"name": "使わない（検証用）", "off": true})
+	# 遊ぶ人には要らない。デバッグビルドでだけ並べる
+	if OS.is_debug_build():
+		out.append({"name": "使わない（検証用）", "off": true})
 	_choices = out
 	# いま使っているものが一覧にあれば、そこを指しておく
 	for i in range(out.size()):
@@ -289,7 +291,7 @@ func _build_choices(local_names: Array) -> void:
 				and bool(c["local"]) == local:
 			_here = i
 			return
-	_here = out.size() - 1 if off else 0
+	_here = out.size() - 1 if off and OS.is_debug_build() else 0
 
 
 ## 宛先を決める。この機械の中にモデルが置いてあれば、そちらが勝つ

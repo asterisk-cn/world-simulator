@@ -153,11 +153,11 @@ func stirred() -> void:
 	_brain.think_over()
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
-var decision_timer := 0.0
 
 var _last_post_day := -1
 var _path: PackedVector2Array = PackedVector2Array()
 var _path_i := 0
+var _aim := Vector2.ZERO   ## 道を引いた先。追う相手がここから動いたら引き直す
 var _bubbles: Array = []
 var _brain = null
 var _bob := 0.0
@@ -249,12 +249,9 @@ func _process(delta: float) -> void:
 
 	var dt := delta * SimClock.speed
 
-	decision_timer -= dt
-	if action_phase == "idle" or decision_timer <= 0.0:
-		if action_phase == "idle" \
-				and float(Time.get_ticks_msec()) / 1000.0 >= think_again_at:
-			_decide()
-		decision_timer = SimConfig.p("decision_interval")
+	if action_phase == "idle" \
+			and float(Time.get_ticks_msec()) / 1000.0 >= think_again_at:
+		_decide()
 
 	_execute(dt)
 
@@ -296,16 +293,6 @@ func _is_talk() -> bool:
 		and String(current_action.get("target", "")) == "talk"
 
 
-## 話しかけた相手が、間合いから出たか
-func _talk_gone() -> bool:
-	var who = current_action.get("obj", null)
-	if who == null or not is_instance_valid(who):
-		return true
-	var way = Schema.target_def("talk", "talk")
-	var reach: float = float(way["reach"]) if way != null else 2.2
-	return cell.distance_to(who.cell) > reach
-
-
 func _close_act() -> void:
 	action_phase = "idle"
 	current_action = {}
@@ -335,7 +322,8 @@ func begin(c: Dictionary) -> void:
 	action_phase = "move"
 	act_timer = 0.0
 	# 建物は通り抜けられないので、間の空きを通って回り込む
-	_path = world.find_path(cell, current_action.get("target_cell", cell), id)
+	_aim = current_action.get("target_cell", cell)
+	_path = world.find_path(cell, _aim, id)
 	_path_i = 0
 
 
@@ -347,8 +335,15 @@ func _execute(dt: float) -> void:
 		return
 
 	if action_phase == "move":
+		_follow()
+		# **間合いに入ったら止まる。** 物の上や人の真上まで歩かない
+		var near := float(current_action.get("reach", -1.0))
+		var goal: Vector2 = current_action.get("target_cell", cell)
 		var step := SimConfig.p("move_speed") * dt
 		while step > 0.0:
+			if near >= 0.0 and cell.distance_to(goal) <= near:
+				action_phase = "act"
+				break
 			if _path_i >= _path.size():
 				action_phase = "act"
 				break
@@ -377,8 +372,27 @@ func _execute(dt: float) -> void:
 			_close_act()
 
 
+## 向かう相手が人なら、**いま居るところへ向け直す。** 歩き始めた時の場所へ行っても、
+## もうそこには居ない。見えなくなったら追うのをやめて、その場で手を閉じる
+## （`_do_talk` が見失ったと書く）
+func _follow() -> void:
+	var who = current_action.get("obj", null)
+	if who == null or not is_instance_valid(who) or not (who is Villager):
+		return
+	if cell.distance_to(who.cell) > Rules.SIGHT:
+		_path = PackedVector2Array()
+		return
+	# 止まるかどうかは**いまの居場所**で測る。道を引き直すのは半マス動いたときだけ
+	current_action["target_cell"] = who.cell
+	if _aim.distance_to(who.cell) <= 0.5:
+		return
+	_aim = who.cell
+	_path = world.find_path(cell, who.cell, id)
+	_path_i = 0
+
+
 ## 会話の場面を回す。**この手のあいだに始まって終わる**——
-## 相手の手は止めないので、相手が歩き去ればそこで閉じる。
+## 相手の手は止めないので、相手は歩きながら返すこともある（離れても閉じない）。
 ## 訊いているあいだ本人は立っているが、それは話しているあいだであって
 ## 「考えている」ではない（頭の粒は出さない）
 func _talk_tick(dt: float) -> void:
@@ -397,9 +411,10 @@ func _talk_tick(dt: float) -> void:
 		if act_timer >= TALK_MAX:
 			_seal_scene("返事は返ってこなかった")
 		return
-	if other == null or not is_instance_valid(other) or _talk_gone():
-		_seal_scene("%s はもう間合いに居なかった"
-			% (other.vname if other != null and is_instance_valid(other) else "相手"))
+	# **始まった会話は、離れても続く。** 言葉は声の届く範囲で運ばれるのではなく、
+	# 一度向き合った二人のあいだで続いている。閉じるのは相手が世界から消えたときだけ
+	if other == null or not is_instance_valid(other):
+		_seal_scene("相手はもう居なかった")
 		return
 	_beat -= dt
 	if _beat > 0.0:
@@ -654,11 +669,15 @@ func _do_use(target: String, obj) -> bool:
 ## 【AI差し替え口】何を話すかは本人の言葉（手と一緒に返る「言うこと」、場面の続きは
 ## `villager/talk.gd`）。相手をどう思うようになったかは、次の問いで相手ごとの値として
 ## 本人が答える（`Brain._read_jev`）。
-## 行ってみたら居なかった、は空振り。**歩きを手の中に畳んだぶん、
-## 着く頃には相手が動いていることがある**（世界の間合いは規則として残っている）
+## 追っても届かなかった、は空振り。**歩くあいだ相手も歩いている**ので、
+## 見えなくなるまで離れられたり、道が無かったりすれば届かない
+## （世界の間合いは規則として残っている）
 func _do_talk(other) -> bool:
 	var way = Schema.target_def("talk", "talk")
 	var reach: float = float(way["reach"]) if way != null else 2.2
+	if cell.distance_to(other.cell) > Rules.SIGHT:
+		_miss = "%s を追ったが、見失った" % other.vname
+		return false
 	if cell.distance_to(other.cell) > reach:
 		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false

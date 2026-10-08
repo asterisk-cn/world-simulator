@@ -141,12 +141,18 @@ func _build_top_bar() -> void:
 		"board": UIKit.toggle_button(row, "掲示板", "貼り紙を落とす", _toggle_board, 74),
 		"matrix": UIKit.toggle_button(row, "関係", "誰が誰をどう見ているか", _toggle_matrix, 62),
 		"rules": UIKit.toggle_button(row, "言葉", "この世界の言葉", _toggle_rules, 62),
-		"debug": UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）", _toggle_debug, 88),
 		# 世界の中の話ではないので、見る窓のあとに置く
 		"option": UIKit.toggle_button(row, "オプション", "この世界を終える", _toggle_option, 102),
 	}
+	# デバッグは作る人の道具なので、デバッグビルドでだけ出す。
 	# 神の窓と同格に見せない。これは世界の外側の道具。
-	(_win_btns["debug"] as Button).modulate = Color(1, 1, 1, 0.55)
+	if OS.is_debug_build():
+		var dbg := UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）",
+			_toggle_debug, 88)
+		# オプションは最後に置きたいので、その前へ差し込む
+		row.move_child(dbg, (_win_btns["option"] as Button).get_index())
+		dbg.modulate = Color(1, 1, 1, 0.55)
+		_win_btns["debug"] = dbg
 
 	# 札はどれも帯の高さに揃える（`toggle_button` は紙の段 ROW_H で作る）
 	for b in [_pause_btn] + _speed_btns + _win_btns.values():

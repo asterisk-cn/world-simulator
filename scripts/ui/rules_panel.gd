@@ -507,7 +507,7 @@ func _del_villager(hid: String) -> void:
 func _detail() -> void:
 	var body := UIKit.fold_heading(_body, "詳細",
 		"世界そのものの目盛り。\nつまみは10段で、積み木の切れ目がそのまま値になる。\n"
-		+ "始まったあとはオプションから触る。",
+		+ "始まったら変えられない。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
 	_index.remember("詳細", body.get_meta("head_row"))
 	_who(body)

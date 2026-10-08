@@ -823,7 +823,7 @@ static func pole_slider(parent: Node, left: String, right: String, value: float,
 ## 読み取り専用の値表示。積み木を並べて見せる。
 static func bar_row(parent: Node, name_text: String, value: float,
 		vmin: float, vmax: float, col: Color, idle: bool = false,
-		neg: Color = Schema.PAIR_NEG) -> PipBar:
+		neg: Color = Schema.NEG) -> PipBar:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", GAP)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL

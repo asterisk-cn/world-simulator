@@ -32,7 +32,6 @@ var _now: Label
 var _feel: Label
 var _self_bars := {}     ## param id -> PipBar
 var _pair_bars := {}     ## other_id -> { param id -> PipBar }
-var _summary: Label
 var _eps_box: VBoxContainer
 var _eps_count := -1
 var _known_pairs := -1
@@ -107,7 +106,6 @@ func rebuild() -> void:
 	_have_ready = false
 	_now = null
 	_feel = null
-	_summary = null
 	_eps_box = null
 	_eps_count = -1
 
@@ -188,7 +186,7 @@ func _build_personality() -> void:
 ## 名前を1字ぶん下げただけの行では、値の行と同じ強さの注記に見えてしまう。
 func _build_self_params() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_SELF]),
-		"一人につき1つ持つ言葉。0〜50。\n並びは設計図で決めたまま。")
+		"一人につき1つ持つ言葉。0〜100。\n並びは設計図で決めたまま。")
 	if Schema.self_params().is_empty():
 		_body.add_child(UIKit.label("定義されていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
@@ -206,7 +204,7 @@ func _build_self_params() -> void:
 
 func _build_pairs() -> void:
 	_index.chapter(_body, String(Schema.SCOPE_LABEL[Schema.SCOPE_PAIR]),
-		"相手ひとりごとに持つ値。−50〜50。\n会ったことのある相手だけが並ぶ。",
+		"相手ひとりごとに持つ値。0〜100。\n会ったことのある相手だけが並ぶ。",
 		subject.pairs.is_empty())
 
 	if subject.pairs.is_empty():
@@ -269,8 +267,7 @@ func _build_pairs() -> void:
 
 func _build_memory() -> void:
 	_index.chapter(_body, "記憶",
-		"夜になると、その日の出来事が1行に畳まれる。\n覚えていられる日数は「この世界の言葉」の世界で決める。")
-	_summary = UIKit.note(_body, "")
+		"夜になると、本人がその日の出来事を読んで、覚えていることを書き直す。\n覚えていることは紙には出ない。")
 
 	_body.add_child(UIKit.label("今日の出来事", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 	_eps_box = VBoxContainer.new()
@@ -316,8 +313,6 @@ func _refresh() -> void:
 				bar.setup(pp.get_v(String(pid)),
 					float(d["min"]), float(d["max"]), Schema.param_color(String(pid)))
 
-	if _summary != null:
-		_summary.text = subject.memory.recent_summary(2)
 	_refresh_episodes()
 
 

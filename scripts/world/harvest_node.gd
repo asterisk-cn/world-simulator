@@ -2,12 +2,17 @@ class_name HarvestNode
 extends Node2D
 ## 世界に元から在る場所。茂み・木・岩。
 ##
-## **何が手に入るかは、この場所は持っていない。** 手に入る物のほうが
+## **ここで手に入るものは、場所ではなく物のほうが持っている。** 手に入る物が
 ## 「どこで手に入るか」を指している（`Schema.place_of`）——岩で石も鉄も手に入るなら、
 ## 石と鉄の手に入れかたが岩を指しているだけ。
+## **名前も持たない。** 神がもちものの名前を変えれば、採れるものの名前も変わる
+## （`Schema.WORLD_ARTS`）。消されたものは島に生えない。
 ## **いくつ寄越すかも持っていない。世界の物は尽きない。**
 
 enum Kind { BERRY, TREE, ROCK }
+
+## この場所が生えるもとの持ち物。それが消されていれば、島に生えない
+const KIND_ITEM := {Kind.BERRY: "food", Kind.TREE: "wood", Kind.ROCK: "stone"}
 
 ## 手に入れかたの場所の名前（`Schema.WORLD_PLACES`）から、その場所の姿へ
 const PLACE_KIND := {"bush": Kind.BERRY, "tree": Kind.TREE, "rock": Kind.ROCK}
@@ -21,6 +26,10 @@ func setup(p_kind: int, p_cell: Vector2i) -> void:
 	cell = p_cell
 	position = Iso.cell_to_world(Vector2(cell))
 	z_index = 0
+
+
+func item_key() -> String:
+	return KIND_ITEM[kind]
 
 
 func _draw() -> void:

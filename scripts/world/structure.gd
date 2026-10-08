@@ -1,6 +1,6 @@
 class_name Structure
 extends Node2D
-## 建てられたもの。2x2 の敷地を占め、通り抜けられない（持ち主だけは中を通れる）。
+## 建てられたもの。1マスを占め、誰も通り抜けられない（持ち主も）。
 ##
 ## 何が建てられるかは神が「つくりかた」で決める（`Schema.buildings`）。
 ## 定義が持つのは名前と姿だけで、姿はあらかじめ用意した中から選ばれる。
@@ -65,9 +65,9 @@ func label() -> String:
 	return Schema.building_label(def_id)
 
 
-## 敷地
+## 敷地。村人や木と同じ1マス
 func footprint() -> Array:
-	return [cell, cell + Vector2i(1, 0), cell + Vector2i(0, 1), cell + Vector2i(1, 1)]
+	return [cell]
 
 
 func contains_cell(c: Vector2i) -> bool:
@@ -76,8 +76,12 @@ func contains_cell(c: Vector2i) -> bool:
 
 ## 使うために近づく先。敷地の真ん中。
 func center_cell() -> Vector2:
-	return Vector2(cell) + Vector2(0.5, 0.5)
+	return Vector2(cell)
 
+
+## 姿の縮尺。絵は 2x2 の敷地に合わせて描いてあるので、1マスに収まるよう縮める。
+## 寸法を1つずつ書き直すより、比を1か所で持つほうが姿どうしの釣り合いが崩れない
+const ART_SCALE := 0.6
 
 
 func _draw() -> void:
@@ -91,6 +95,7 @@ func _draw() -> void:
 	var center := Iso.cell_to_world(center_cell()) - position
 
 	# 壁の上に屋根を積む。村人と同じ角丸ブロック。
+	draw_set_transform(center * (1.0 - ART_SCALE), 0.0, Vector2.ONE * ART_SCALE)
 	match Schema.building_art(def_id):
 		"house":
 			Iso.draw_block(self, 44.0, 22.0, 24.0, WALL, center, 6.0)
@@ -133,6 +138,8 @@ func _draw() -> void:
 			Iso.draw_block(self, 40.0, 20.0, 22.0, WALL, center, 6.0)
 			Iso.draw_block(self, 46.0, 23.0, 12.0, tint, center + Vector2(0, -22.0), 6.0)
 
+	draw_set_transform(Vector2.ZERO)
+
 	# 選んでいるときは、村人と同じ形の輪を敷地に敷く
 	if selected:
 		for c in footprint():
@@ -168,7 +175,7 @@ func _window(center: Vector2) -> void:
 ## 名前を出す。世界の上の文字は村人の名札と同じ書き方に揃える。
 func _name_plate(center: Vector2) -> void:
 	var font: Font = SimConfig.ui_font if SimConfig.ui_font != null else ThemeDB.fallback_font
-	var top: float = float(TOP.get(Schema.building_art(def_id), 30.0))
+	var top: float = float(TOP.get(Schema.building_art(def_id), 30.0)) * ART_SCALE
 	var at := center + Vector2(-60, -top - 22.0)
 	draw_string_outline(font, at, label(), HORIZONTAL_ALIGNMENT_CENTER, 120, 12, 4,
 		Color(0.05, 0.06, 0.09, 0.75))

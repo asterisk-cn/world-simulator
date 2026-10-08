@@ -11,7 +11,7 @@ extends RefCounted
 ##
 ## ただし次の2つは一覧に含まれない。どちらもその人の言葉と判断だから。
 ##   - 持ち物がどう動くか（`_how_much`）——手の中のものをいくつ使うか
-##     （手に入れる・建てるときに何がいくつ減るかは、神が決めた手に入れかたにある）
+##     （手に入れる・建てるときに何がいくつ減るかは、Jev が組んだ手に入れかたにある）
 ##   - それを何と呼ぶか（`_name_act`）——名前の定義は世界のどこにも無い
 
 var v = null  ## Villager（循環参照を避けるため型注釈なし）
@@ -138,7 +138,7 @@ func forget_before(dropped: int) -> void:
 	_heard = maxi(_heard - dropped, 0)
 
 
-## 話している最中に訊く（返事が届いた／相手が去った／待ちきる直前）。
+## 話している最中に訊く（返事が届いた／待ちきる直前）。
 ## つもりは白紙にしない——いまの手は続いていて、これはその**次**の手を訊く問い
 func think_next() -> void:
 	if v.asking:
@@ -194,12 +194,16 @@ func _pick(c: Dictionary) -> Dictionary:
 ## 空腹や不安には合っても、過密・不公平・居住には日本語として噛み合わず、
 ## 1日測って**その3つだけ最大0のまま**だった（答えられない問いには0が返る）。
 ## 言葉を決めるのは神なので、目盛りのほうが言葉を選んではいけない
-const LEVELS := ["まったくない", "少しある", "半分ほど", "かなりある", "いっぱい"]
-
-## 相手ごとの言葉は**真ん中が「何とも思っていない」**（−50〜50）なので、
-## 目盛りも真ん中から両側へ開く。裏側に何があるかは言わない——
-## 好感の逆は嫌悪だが、負い目の逆は貸しで、それを決めるのは神の言葉のほう
-const PAIR_LEVELS := ["まったく逆", "少し逆", "どちらでもない", "少しある", "いっぱい"]
+##
+## **よくある5件法にする。** じぶんの言葉も相手ごとの言葉も幅は 0〜100 で、
+## 「まったくそう思わない」が 0（感じていない）。目盛りは1本で済む。
+## 5件法は「文にどのくらい当てはまるか」なので、問いも言い切りの文で立てる。
+##
+## 両側に開く目盛り（−50〜50）では、裏を言うのに「その逆」のような言い回しが要った。
+## 5件法を −50〜50 に写すと「そう思わない」が裏になり、空腹を感じていない人が
+## 満腹側に記録された（30秒で空腹の97%が負）。幅のほうを 0〜100 にして揃えた
+const LEVELS := ["まったくそう思わない", "あまりそう思わない", "どちらともいえない",
+	"ややそう思う", "とてもそう思う"]
 
 func _ask_jev(cands: Array) -> bool:
 	if not AI.can_decide() or cands.size() <= 1:
@@ -214,7 +218,7 @@ func _ask_jev(cands: Array) -> bool:
 	for d in Schema.self_params():
 		qs[String(d["label"])] = {
 			"type": "score",
-			"instructions": "いまのあなたの「%s」はどのくらいか" % String(d["label"]),
+			"instructions": "いま、あなたは「%s」を感じている" % String(d["label"]),
 			"criteria": LEVELS,
 		}
 	# **相手ごとの言葉も同じ一回で訊く。** 別便にすると、手を選んだときの
@@ -227,10 +231,13 @@ func _ask_jev(cands: Array) -> bool:
 		for d in Schema.pair_params():
 			qs["%s の %s" % [String(other.vname), String(d["label"])]] = {
 				"type": "score",
-				"instructions": "いまあなたが %s に対して持っている「%s」はどのくらいか"
+				"instructions": "いま、あなたは %s に「%s」を持っている"
 					% [String(other.vname), String(d["label"])],
-				"criteria": PAIR_LEVELS,
+				"criteria": LEVELS,
 			}
+	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
+	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
+	var said := _state(asked)
 	_heard = v.memory.episodes.size()
 	_thought_at = SimClock.clock_text()
 	var take := func(ans) -> void:
@@ -240,7 +247,7 @@ func _ask_jev(cands: Array) -> bool:
 		if typeof(ans) != TYPE_DICTIONARY:
 			return
 		_read_jev(ans, asked)
-	v.asking = AI.decide(_state(asked), qs, take, v.id)
+	v.asking = AI.decide(said, qs, take, v.id)
 	return v.asking
 
 
@@ -253,18 +260,22 @@ func _criteria(cands: Array) -> Dictionary:
 
 
 ## 姿と、身に起きたこと。文章の問いと同じものを、地の文で渡す
-func _state(cands: Array) -> String:
-	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+func _state(_cands: Array) -> String:
+	return _seen()
+
+
+## 姿と、前に考えた時刻。**身に起きたことは今日あったことの中に印で**
+## （`Inner.of` の `since`）——別枠にしていた頃は、前に考える前の行が
+## 8行に間引かれ、後の行は全部載って、一日の流れが二つに割れていた
+func _seen() -> String:
 	var out := PackedStringArray()
-	out.append(Inner.of(v, since.size()))
+	out.append(Inner.of(v, _heard if _thought_at != "" else -1, true))
+	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
+	# それは世界が知っている事実。読んで何が動くかは本人が決める
+	# （秒では尺度にならないので、世界の時計で渡す）
 	if _thought_at != "":
 		out.append("")
 		out.append("# 前に考えたのは %s（いまは %s）" % [_thought_at, SimClock.clock_text()])
-	if not since.is_empty():
-		out.append("")
-		out.append("# 前に考えてから、あなたの身に起きたこと")
-		for e in since:
-			out.append("・%s" % String(e))
 	return "\n".join(out)
 
 
@@ -343,7 +354,7 @@ func _pair_key(key: String) -> Dictionary:
 func _blend_pair(theirs: Dictionary, pair: Dictionary, a: Dictionary) -> void:
 	var pid := String(pair["param"])
 	var who := int(pair["who"])
-	var t: float = float(a.get("score", 0.0)) / float(PAIR_LEVELS.size() - 1)
+	var t: float = float(a.get("score", 0.0)) / float(LEVELS.size() - 1)
 	var to: float = Schema.param_min(pid) \
 		+ (Schema.param_max(pid) - Schema.param_min(pid)) * clampf(t, 0.0, 1.0)
 	var sure := clampf(float(a.get("confidence", 0.5)), 0.0, 1.0)
@@ -396,6 +407,8 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
 	var asked := cands
+	# 紙を作ってから位置を進める（`_ask_jev` と同じ）
+	var said := _prompt(asked, quick)
 	if not quick:
 		_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
 		_thought_at = SimClock.clock_text()
@@ -414,7 +427,7 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 		# 届いた判断はその場面が終わるまで待つ
 		if v.action_phase == "think":
 			v.begin(choose())
-	v.asking = AI.ask(_prompt(asked, quick), _system(quick), take,
+	v.asking = AI.ask(said, _system(quick), take,
 		OUT_QUICK if quick else OUT, true, v.id)
 	return v.asking
 
@@ -566,19 +579,20 @@ static func _system(quick: bool = false) -> String:
 返さずに立ち去るなら、別の手を選ぶ。それも答えのうち。
 説明も理由も書かない。""" % [NAME_MAX, WORDS_MAX]
 	return """あなたは、ある村に住む一人の人間です。
-渡された姿と「身に起きたこと」「いまできること」を読んで、
-**起きたことで自分の中がどう動いたか**と、**この先することを順に**答えます。
+渡された姿と「いまできること」を読んで、
+**前に考えてから起きたこと**（今日あったことの %s の行）**で自分の中がどう動いたか**と、
+**この先することを順に**答えます。
 
 返すのは JSON の物1つ。入れるのは次の4つだけ。
 
 「動いた」——起きたことで**自分の中**がどう動いたか。**平らな1段**。
-  鍵は「あなたの中にあるもの」に出ている言葉、値は**増えた／減ったぶんの数**
+  鍵は「この世界の言葉」の「じぶん」に出ている言葉、値は**増えた／減ったぶんの数**
   （いまの値ではない）。動かない言葉は書かない。何も動かないなら空でよい。
 
 「相手が動いた」——**相手への見え方**が動いたときだけ。**2段**。
-  外の鍵は相手の名前、その中の鍵は「知っている相手」に出ている言葉、値は増減の数。
+  外の鍵は相手の名前、その中の鍵は「この世界の言葉」の「あいて」に出ている言葉、値は増減の数。
 
-「思ったこと」——身に起きたことのどれかについて、そう思ったという一言。
+「思ったこと」——%s の行のどれかについて、そう思ったという一言。
   貼り紙を読んだ、言われた、空振りした——受け取りかたがあるときだけ。%d字以内。
   無ければ書かない。
 
@@ -596,7 +610,7 @@ static func _system(quick: bool = false) -> String:
                  「何か伝えたい」「お知らせを貼ろう」のような、
                  これからすることの説明を書かない
 
-説明も理由も書かない。""" % [WORDS_MAX, NAME_MAX, WORDS_MAX]
+説明も理由も書かない。""" % [Inner.NEW, Inner.NEW, WORDS_MAX, NAME_MAX, WORDS_MAX]
 
 
 ## 言うことの長さ。長い口上は、世界の上の吹き出しにも記録にも収まらない
@@ -604,23 +618,10 @@ const WORDS_MAX := 40
 
 
 func _prompt(cands: Array, quick: bool = false) -> String:
-	# **前に訊いてから、身に起きたこと。** これで自分の中がどう動いたかを答える。
-	# 同じ行を姿の「今日あったこと」にも出すと**二度渡す**ことになるので、
-	# そのぶんは姿から抜いてもらう（`Inner.of` の `skip_tail`）
-	var since: Array = v.memory.episodes.slice(mini(_heard, v.memory.episodes.size()))
+	# **前に訊いてから、身に起きたこと**は今日あったことに印で載る。
+	# これで自分の中がどう動いたかを答える
 	var out := PackedStringArray()
-	out.append(Inner.of(v, since.size()))
-	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
-	# それは世界が知っている事実。読んで何が動くかは本人が決める
-	# （秒では尺度にならないので、世界の時計で渡す）
-	if _thought_at != "":
-		out.append("")
-		out.append("# 前に考えたのは %s（いまは %s）" % [_thought_at, SimClock.clock_text()])
-	if not since.is_empty():
-		out.append("")
-		out.append("# 前に考えてから、あなたの身に起きたこと")
-		for e in since:
-			out.append("・%s" % String(e))
+	out.append(_seen())
 	out.append("")
 	out.append("# いまできること")
 	for i in range(cands.size()):
@@ -649,7 +650,7 @@ func _at(c: Dictionary) -> String:
 	if where == "building":
 		return "（建物 %s）" % xy
 	if String(c["kind"]) == "make":
-		# **何が減るかも添える。** 数は神が決めているので、選ぶ前に分かっていていい
+		# **何が減るかも添える。** 数は世界の手に入れかたにあるので、選ぶ前に分かっていていい
 		var target := String(c["target"])
 		var parts: Array = []
 		if Schema.inputs_text(target) != "":
@@ -699,7 +700,7 @@ func feasible() -> Array:
 func _decide_how(c: Dictionary) -> void:
 	var kind := String(c["kind"])
 	if kind == "make":
-		# **手に入れる・建てるときの数は神が決めている**（手に入れかた、`Schema.make_move`）
+		# **手に入れる・建てるときの数は世界の手に入れかたにある**（Jev が組む）（手に入れかた、`Schema.make_move`）
 		c["move"] = Schema.make_move(String(c["target"]))
 	elif kind == "use":
 		# **使うぶんは本人の答え**（つもりに添えてある）。
@@ -719,7 +720,7 @@ func _decide_how(c: Dictionary) -> void:
 ##   空 … 何も動かない（教会に入る）
 ##
 ## **使うだけでは何も手に入らない。** 手に入るのは「手に入れる」の手で、
-## 何がどこで手に入るかは神が決めた手に入れかたに書いてある（井戸で水、のように）。
+## 何がどこで手に入るかは手に入れかた（Jev が組む）に書いてある（井戸で水、のように）。
 ## いまは判断がないので、手の中のものを1つ使うだけ。
 ##
 ## プログラムはこの答えを、世界が許すところまで実際に動かす（`Villager._apply`）。
@@ -813,6 +814,7 @@ func _pack(kind: String, target: String, target_cell: Vector2, obj,
 		"kind": kind, "target": target,
 		"target_cell": target_cell, "obj": obj,
 		"label": "", "duration": float(way["duration"]),
+		"reach": float(way.get("reach", -1.0)),
 	}
 
 
@@ -857,8 +859,7 @@ func _use(target: String) -> Array:
 	if Schema.is_building(target):
 		var s = _building_for(target)
 		if s != null:
-			# **歩きは手の中**。遠いからと候補から外すと、
-			# 「向かう」と「使う」で2回訊くことになる（`_reach_cell`）
+			# **歩きは手の中**。見えていれば、遠くても歩いてから使う
 			out.append(_use_pack(target, s.center_cell(), s, "building"))
 		return out
 
@@ -913,7 +914,7 @@ func _can_pay(target: String) -> bool:
 ## 手に入れる場所の実体。世界の場所（茂み・木・岩）は**見える範囲だけ**——
 ## 22マス先の木を目指して歩くと、着く頃には他人が採っている。そして見えないものを
 ## 知っているのは、集合知を持っていることになる。建物は同じものが何軒あっても、
-## いちばん近いところを指す（建物への手はどれも遠くても立つ、`_use` と同じ）
+## いちばん近いところを指す（`_building_for`。見える範囲だけ）
 func _place_obj(place: String):
 	if Schema.WORLD_PLACES.has(place):
 		return v.world.nearest_harvest(v.cell, HarvestNode.PLACE_KIND[place], Rules.SIGHT)
@@ -921,10 +922,12 @@ func _place_obj(place: String):
 
 
 ## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。
+## **見える範囲だけ。** 島の反対側に建った物を知っているのは、集合知になる
+## （掲示板だけは村の真ん中に在ると誰もが知っているので、見えなくても立つ）
 func _building_for(def_id: String):
 	if def_id == "":
 		return null
-	return v.world.nearest_building(def_id, v.cell)
+	return v.world.nearest_building(def_id, v.cell, Rules.SIGHT)
 
 
 func _talk(target: String) -> Array:
@@ -939,7 +942,7 @@ func _talk(target: String) -> Array:
 			for o in v.world.neighbors_within(v.cell, Rules.SIGHT, v.id):
 				out.append(_pack("talk", target, o.cell, o, way))
 		"post":
-			if board == null or int(v._last_post_day) == SimClock.day:
+			if board == null:
 				return out
 			out.append(_pack("talk", target, Vector2(board.cell), board, way))
 		"read":

@@ -54,7 +54,7 @@ func _process(delta: float) -> void:
 ## 検証用。全員の手を埋める。
 func _give_materials() -> void:
 	for v in world.villagers:
-		for item in Schema.ITEMS:
+		for item in Schema.world_items():
 			v.add_item(String(item), GIVEN)
 	EventLog.notable("神が全員に持ち物を配った")
 

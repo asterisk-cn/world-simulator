@@ -1,15 +1,17 @@
 class_name Memory
 extends RefCounted
-## 記憶。夜になると生の履歴が要約に畳まれる。
+## 記憶。夜になると、その日の帳面が本人の文章に畳まれる。
 ##
-## **持ち主は三者。** その日の帳面は世界、覚えていることは本人（夜に畳む、
-## `villager/recall.gd`）、器の大きさは神（`覚えていられる日数`）。DESIGN.md §6。
+## **持ち主は二者。** その日の帳面は世界、覚えていることは本人
+## （夜ごとに書き直す、`villager/recall.gd`）。DESIGN.md §6。
 
 ## 移動はその日を語る材料にならない。どこへ歩いたかではなく、何をしたかを残す。
 const NOT_A_DEED := "移動"
 
 var episodes: Array = []      ## 今日の生の出来事（文字列）
-var summaries: Array = []     ## 過去の日ごとの要約
+## 覚えていること。**100字以内の文章1つ**で、夜ごとに本人が書き直す。
+## 器は字数で、日数ではない——何日前のことを残すかも本人が決める
+var story := ""
 ## どの紙が目に入ったか。**世界の事実**（可視性の一部）なので、ここが持つ。
 ## どう受け取ったかは本人の話で、読んだことが出来事として次の問いに渡る
 var read_posts := {}          ## post_id -> {"day": int}
@@ -51,23 +53,36 @@ func has_read_post(post_id: int) -> bool:
 	return read_posts.has(post_id)
 
 
+## 覚えていることの上限。読むのは本人だけ（判断・会話・夜の問いに出る）
+const STORY_MAX := 100
+
+
 ## 【AI差し替え口】その日を畳むのは本人（`villager/recall.gd`）。
 ## **繋がっていないときだけ**、ここの集計が穴を埋める。
 func nightly_compress(owner_name: String, day: int) -> String:
-	var summary := tally(owner_name, day)
-	remember(summary)
+	var line := tally(owner_name, day)
+	append_tally(line)
 	fold(episodes.size())
-	return summary
+	return line
 
 
-## 覚えておく一行を足す。覚えていられる日数を超えたぶんは、古いほうから落ちる
-func remember(line: String) -> void:
+## 本人が書き直した文章で、覚えていることを置き換える
+func rewrite(text: String) -> void:
+	if text == "":
+		return
+	story = text.substr(0, STORY_MAX)
+
+
+## 書き直す者が居ないときの穴埋め。数えた一行を後ろに足し、
+## 溢れたぶんは**古い行から**落とす（行の途中では切らない）
+func append_tally(line: String) -> void:
 	if line == "":
 		return
-	summaries.append(line)
-	var keep := int(SimConfig.p("summaries_kept"))
-	while summaries.size() > keep:
-		summaries.pop_front()
+	var lines := Array(story.split("\n", false))
+	lines.append(line)
+	while lines.size() > 1 and "\n".join(lines).length() > STORY_MAX:
+		lines.pop_front()
+	story = "\n".join(lines).substr(0, STORY_MAX)
 
 
 ## その日の帳面を閉じる。**畳んだあとは生の出来事を持たない**——
@@ -115,9 +130,3 @@ func _summarize(owner_name: String, day: int) -> String:
 			busiest = k
 	# 出来事そのものは「今日の出来事」に並ぶので、要約は一行に留める
 	return "%d日目：%s は %s が多い一日だった（%d件）" % [day, owner_name, busiest, deeds]
-
-
-func recent_summary(n: int = 2) -> String:
-	if summaries.is_empty():
-		return "（覚えている過去はない）"
-	return "\n".join(summaries.slice(maxi(0, summaries.size() - n)))

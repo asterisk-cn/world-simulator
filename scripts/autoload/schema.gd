@@ -51,13 +51,13 @@ const BEHAVIORS := {
 
 ## 型ごとに選べる対象のうち、世界に元からあるもの。
 ##   duration … かかる時間。**ゆっくり**——見ている人が目で追える速さに揃えてある
-##   reach    … その場で行うのに必要な近さ（マス）。
-##              -1 は「目的地まで移動してから行う」動作。
-##              0以上なら、いま届く範囲になければそもそも選択肢に出ない。
-##              遠ければ先に「動く」必要がある。
+##   reach    … どこまで近づいてから行うか（マス）。歩きは手の中に畳んであり、
+##              この近さに入ったところで足を止める。相手が人なら追う。
+##              -1 は「その場所まで行ってから行う」（ぶらぶらの行き先）。
+##              物・建物は 1.6、人・掲示板は 2.2
 const TARGETS := {
 	# **「動く」に行き先は無い。** 話す・使う・作るは歩きを手の中に畳んでいる
-	# （`reach: -1` の動作は目的地まで行ってから行う）ので、
+	# （相手の間合いまで歩いてから行う）ので、
 	# 「◯◯のところへ向かう」を別に並べると、同じ一手を二度訊くことになる。
 	# 実際それが候補の過半を占め、選ばれた手の 74% が「向かう」で、
 	# 着いた先で何かをするところまで繋がらなかった。
@@ -113,22 +113,23 @@ const MAX_VILLAGERS := 12
 const DEFAULT_VILLAGERS := 8
 
 
-## 世界に元からある持ち物。茂み・木・岩へ行くと、材料なしで手に入る。
-## 手に入れかたは他のもちものと同じ形で `recipes` に並ぶ（`_default_recipes`）。
-## 名前は神が書ける。姿は世界の側のもの（茂み・木・岩の絵）なので変えられず、消せない。
-const ITEMS := {
-	"food": "木の実",
-	"wood": "木",
-	"stone": "石",
-}
-
-## 元からある持ち物の姿。世界に在るときと手の中にあるときで同じ絵になる。
-const ITEM_ART := {"food": "berry", "wood": "tree", "stone": "rock"}
+## 島に在る持ち物と、その姿。茂み・木・岩へ行くと、材料なしで手に入る（技術ツリーの根）。
+##
+## **定義は他のもちものと同じ一覧にある**（`recipes`）ので、名前を変えるのも消すのも同じ手で済む。
+## ここが持つのは「どれが島に生えるか」と、その姿だけ。
+## - 名前を変えれば、島の茂みから採れるものの名前も変わる（姿は茂みのまま）
+## - 消せば、島にも生えない。世界に無い物は生まれない
+## 姿は選べない——茂みが壺の絵で手に入ったら、世界の上の姿と手の中の姿が食い違う
+const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
 
 ## 世界に元から在る場所。何かを手に入れる場所として選べる（建物も選べる）。
+## 茂み・木・岩は、それが生える持ち物（`PLACE_ITEM`）が消されていれば島に無い
 ## 何が採れるかは場所ではなく、手に入るもののほうに書く——
 ## 岩から石も鉄も採れるなら、それは石と鉄の手に入れかたが岩を指しているだけ
 const WORLD_PLACES := {"bush": "茂み", "tree": "木", "rock": "岩"}
+
+## 世界の場所が、どの持ち物から生えるか（`HarvestNode.KIND_ITEM` と同じ対応）
+const PLACE_ITEM := {"bush": "food", "tree": "wood", "rock": "stone"}
 
 # ---------------------------------------------------------------------------
 # 姿
@@ -175,7 +176,7 @@ func _ready() -> void:
 #
 # 物ごとに持つのは 名前・姿 と、**手に入れかた**——材料（何をいくつ）と場所の2つだけ。
 #
-#   材料 … 手に入れるときに手の中から減るもの。数も神が決める。
+#   材料 … 手に入れるときに手の中から減るもの。数も決まっている（Jev が答える）。
 #          道具も材料の1つ（減る）。減らない道具という区別は持たない
 #   場所 … そこへ行って行う。世界に元から在る場所（茂み・木・岩）か、建物。
 #          空ならどこでも（手の中で済む）
@@ -197,17 +198,11 @@ func _ready() -> void:
 
 func _default_recipes() -> void:
 	recipes = [
-		_base("food", "bush"),
-		_base("wood", "tree"),
-		_base("stone", "rock"),
-		{"id": "tool", "label": "道具", "art": "tool", "inputs": {}, "place": ""},
+		{"id": "food", "label": "木の実", "art": "berry", "inputs": {}, "place": "bush"},
+		{"id": "wood", "label": "木", "art": "tree", "inputs": {}, "place": "tree"},
+		{"id": "stone", "label": "石", "art": "rock", "inputs": {}, "place": "rock"},
+		{"id": "tool", "label": "ハンマー", "art": "tool", "inputs": {}, "place": ""},
 	]
-
-
-## 世界に元からある持ち物。姿は世界のもので、消せない（`base`）
-func _base(id: String, place: String) -> Dictionary:
-	return {"id": id, "label": String(ITEMS[id]), "art": String(ITEM_ART[id]),
-		"inputs": {}, "place": place, "base": true}
 
 
 ## 家も、ただの「建てるもの」の1つ。建てた人のものになるが、何軒建つかは決まっていない。
@@ -241,13 +236,7 @@ func thing_def(id: String) -> Variant:
 	return r if r != null else building_def(id)
 
 
-## 世界に元からある持ち物か（姿を神が変えられず、消せない）
-func is_base(id: String) -> bool:
-	var r = recipe_def(id)
-	return r != null and bool(r.get("base", false))
-
-
-## 手に入る物の一覧。元からある物も、神が足した物も、同じ形で並ぶ
+## もちものの一覧。島に在るものも、作るものも同じ一覧にある
 func all_items() -> Array:
 	var out: Array = []
 	for r in recipes:
@@ -273,6 +262,13 @@ func place_label(place: String) -> String:
 	if WORLD_PLACES.has(place):
 		return String(WORLD_PLACES[place])
 	return building_label(place)
+
+
+## その場所がいまの世界に在るか。茂み・木・岩はもとの持ち物が消されていれば生えない
+func place_alive(place: String) -> bool:
+	if WORLD_PLACES.has(place):
+		return is_world_item(String(PLACE_ITEM[place]))
+	return building_def(place) != null
 
 
 func set_input(id: String, item: String, n: int) -> void:
@@ -337,7 +333,7 @@ func obtainable(id: String) -> bool:
 
 func _obtainable(id: String, seen: Dictionary) -> bool:
 	if WORLD_PLACES.has(id):
-		return true
+		return place_alive(id)
 	if seen.has(id):
 		return false
 	seen[id] = true
@@ -374,7 +370,7 @@ func recipe_text(id: String) -> String:
 	return "　".join(parts)
 
 
-## 手に入れる1回で、持ち物がどう動くか。**数は神が決めている。**
+## 手に入れる1回で、持ち物がどう動くか。**数は手に入れかたにある**（本人は決めない）。
 ## 材料は減り、手に入るものは1つ増える（建つものは持ち物にならない）
 func make_move(id: String) -> Dictionary:
 	var move := {}
@@ -384,6 +380,20 @@ func make_move(id: String) -> Dictionary:
 	if not is_building(id):
 		move[id] = 1
 	return move
+
+
+## 島に在るもちものか。消されていれば、島にも生えない
+func is_world_item(id: String) -> bool:
+	return WORLD_ARTS.has(id) and recipe_def(id) != null
+
+
+## 島に在るもちもののうち、いま定義に残っているもの
+func world_items() -> Array:
+	var out: Array = []
+	for id in WORLD_ARTS:
+		if recipe_def(String(id)) != null:
+			out.append(String(id))
+	return out
 
 
 ## 神が付けた名前から言葉を引く。**AIが答えるのは名前のほう**なので、
@@ -406,18 +416,16 @@ func _by_label(defs: Array, label: String) -> String:
 
 func item_label(id: String) -> String:
 	var r = recipe_def(id)
-	if r != null:
-		return String(r["label"])
-	return String(ITEMS.get(id, id))
+	return id if r == null else String(r["label"])
 
 
-## 持ち物の姿。元からある物は決まっていて、神が足した物は神が選んだ姿になる。
+## 持ち物の姿。島に在る物は決まっていて、作るものは神が選んだ姿になる。
 func item_art(id: String) -> String:
+	if WORLD_ARTS.has(id):
+		return String(WORLD_ARTS[id])
 	var r = recipe_def(id)
 	if r != null:
 		return String(r["art"])
-	if ITEM_ART.has(id):
-		return String(ITEM_ART[id])
 	# 姿の名前をそのまま渡されたとき（世界の物を直に指すとき）はそれを使う
 	return id if ART_LABEL.has(id) else "tool"
 
@@ -449,25 +457,21 @@ func add_recipe() -> Dictionary:
 		taken.append(String(r["id"]))
 	# 手に入れかたは空で生まれる。世界が始まるときに Jev が組み込む（`TechTree`）
 	var r2 := {"id": _unique_id("r", taken), "label": "新しいもの",
-		"art": CRAFT_ARTS[recipes.size() % CRAFT_ARTS.size()],
+		"art": CRAFT_ARTS[(recipes.size() - world_items().size()) % CRAFT_ARTS.size()],
 		"inputs": {}, "place": ""}
 	recipes.append(r2)
 	recipes_changed.emit()
 	return r2
 
 
+## 消しても、他の物の手に入れかたは直さない。木は始めるときに、
+## そのとき在る物だけから組み直す（`TechTree`）ので、消えた物を指す枝は残らない
 func remove_recipe(id: String) -> void:
-	if is_base(id):
-		return  # 世界に元からある物は消せない
 	for i in range(recipes.size()):
 		if String(recipes[i]["id"]) == id:
 			recipes.remove_at(i)
 			break
-	# 消した物を材料に指していたところから外す（指す先の無い枝を残さない）
-	for d in recipes + buildings:
-		(d.get("inputs", {}) as Dictionary).erase(id)
 	recipes_changed.emit()
-	buildings_changed.emit()
 
 
 func rename_recipe(id: String, label: String) -> void:
@@ -494,12 +498,7 @@ func remove_building(id: String) -> void:
 		if String(buildings[i]["id"]) == id:
 			buildings.remove_at(i)
 			break
-	# その建物で手に入れていた物は、場所を失う（どこでも、に戻る）
-	for r in recipes:
-		if String(r.get("place", "")) == id:
-			r["place"] = ""
 	buildings_changed.emit()
-	recipes_changed.emit()
 
 
 func rename_building(id: String, label: String) -> void:
@@ -509,9 +508,9 @@ func rename_building(id: String, label: String) -> void:
 		buildings_changed.emit()
 
 
-## 姿を選ぶ。押すたびに、用意された姿を順に送る。
+## 姿を選ぶ。押すたびに、用意された姿を順に送る。島に在るものの姿は動かない
 func cycle_art(d: Dictionary, arts: Array) -> void:
-	if bool(d.get("base", false)):
+	if WORLD_ARTS.has(String(d["id"])):
 		return
 	var i := arts.find(String(d["art"]))
 	d["art"] = String(arts[(i + 1) % arts.size()])
@@ -601,37 +600,40 @@ func next_color(from: Color) -> Color:
 ## 言葉の色。**語ごとに色を持たせるのはやめた。**
 ##
 ## 束（カテゴリ）を消したので、色を割り当てる順番そのものが無くなった。
-## 順番で色相を回しても、じぶんの9語を暖色に閉じれば色相差が小さすぎて見分けられず、
+## 順番で色相を回しても、じぶんの言葉を暖色に閉じれば色相差が小さすぎて見分けられず、
 ## 閉じなければあいての色と混ざる。そして**色は人のもの**——
 ## 村人の色が世界でもUIでも識別子なので、語からも色を出すと競う。
 ##
 ## 語が何であるかは常に隣に字で書いてある。色は「どちらの話か」だけを言う。
 const SCOPE_COLORS := {
-	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## じぶん。土の色。「どれだけ」の話
-	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## あいての正の側。「どちらへ」の話
+	SCOPE_SELF: Color(0.55, 0.42, 0.26),  ## じぶん。土の色
+	SCOPE_PAIR: Color(0.30, 0.55, 0.52),  ## あいて。青緑
 }
 
-## あいての負の側。好感の裏の嫌悪、敬意の裏の侮り。
+## 負の側の赤。**幅が負から始まるときだけ使う**——いまはどのスコープも 0〜100 なので出ない。
+## 幅を −50〜50 にしていた頃の、裏（好感の裏の嫌悪）を塗る色。
 ## **積み木（`PipBar`）と n×n の表（`matrix_panel`）で同じ赤を使う。**
 ## 表は色しか持たないので向きを色で言うしかなく、そこだけ赤で、
 ## インスペクタの積み木は1色、では同じものを2つの言い方で見せることになる。
-const PAIR_NEG := Color(0.74, 0.26, 0.22)
+const NEG := Color(0.74, 0.26, 0.22)
 
 
 ## とりうる幅は神が決めるものではなく、スコープから決まる。
 ##
-## じぶんは「どれだけ」の話なので 0〜50。空腹が負になることはない。
-## あいては「どちらへ」の話なので −50〜50。真ん中が何とも思っていないところで、
-## 好感の裏には嫌悪があり、敬意の裏には侮りがある。
+## **どちらも「どれだけ」の話で 0〜100。** 値は5件法の答え（`Brain.LEVELS`）を
+## 0 / 25 / 50 / 75 / 100 に写したもので、0 は「まったくそう思わない」＝感じていない。
+##
+## −50〜50 にして負を「裏」（空腹の裏の満腹、好感の裏の嫌悪）にしていたが、
+## 5件法の「そう思わない」は「感じていない」であって裏ではない。
+## 両側に開く目盛りは「その逆」を言わせる言い回しが要り、5件法なら見慣れた文言で済む。
+## 裏を失うかわりに、目盛りと幅の読み方が一致する。
 ## 幅を1本ずつ決めさせても、読み方が増えるだけで世界の見え方は変わらなかった。
 ##
-## **50 きざみ。** 100 では1日で 8 まで来た人と 60 まで来た人が並んで、
-## どこが「満ちた」のか読めなかった。10 に落とすと逆で、**1日で半数が上限に
-## 張り付いた**（幅だけ 1/10 にして、動かす量は ±1〜2 のままだったため）。
-## 50 はその中間で、積み木10粒に対して **1粒＝5**。
+## 100 で「どこが満ちたのか読めなかった」のは、増減を申告させていた頃の話。
+## いまは段階を写すだけなので、幅の大きさは目盛りの呼び名でしかない。積み木10粒で **1粒＝10**。
 const SCOPE_RANGE := {
-	SCOPE_SELF: [0.0, 50.0],
-	SCOPE_PAIR: [-50.0, 50.0],
+	SCOPE_SELF: [0.0, 100.0],
+	SCOPE_PAIR: [0.0, 100.0],
 }
 
 
@@ -646,13 +648,8 @@ func make_param(id: String, label: String, scope: String) -> Dictionary:
 func _default_parameters() -> void:
 	parameters = [
 		make_param("hunger", "空腹", SCOPE_SELF),
-		make_param("sleep", "睡眠", SCOPE_SELF),
 		make_param("safety", "不安", SCOPE_SELF),
-		make_param("home", "居住", SCOPE_SELF),
-		make_param("boredom", "退屈", SCOPE_SELF),
-		make_param("stagnation", "停滞", SCOPE_SELF),
 		make_param("loneliness", "孤独", SCOPE_SELF),
-		make_param("crowding", "過密", SCOPE_SELF),
 		make_param("unfairness", "不公平", SCOPE_SELF),
 
 		make_param("affinity", "好感", SCOPE_PAIR),
@@ -767,7 +764,7 @@ func targets_of(kind: String) -> Dictionary:
 			for r in recipes:
 				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, -1.0)
 			for b in buildings:
-				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, -1.0)
+				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, 1.6)
 		"move":
 			# 建物への行き先も並べない。建っているものは「使う」で行ける
 			out = TARGETS["move"].duplicate(true)

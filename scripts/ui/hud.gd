@@ -7,9 +7,9 @@ signal jump_requested(target: String)
 ## この世界を終えて、言葉のところへ戻る。
 signal end_requested
 
-## 神が紙を放った。画面上のどこから飛び出すかを添える。
-## `sheet` は**書いていた紙そのもの**。飛ばす側が子に付けて運ぶ（`paper_fly.gd`）
-signal god_posted(from_screen: Vector2, text: String, sheet: Control)
+## 神が紙を手放した。`sheet` は**書いていた紙そのもの**で、
+## 画面の上の、書いていた場所に置いてある。焼く側が預かる（`main._on_god_posted`）
+signal god_posted(text: String, sheet: Control)
 
 var world = null
 
@@ -20,8 +20,6 @@ var _board_list: VBoxContainer
 var _board_panel: PanelContainer
 var _write_btn: Button
 
-## 紙が飛び出す元。「神のお告げ」を押した場所を覚えておく
-var _write_from := Vector2.ZERO
 var _top_bar: PanelContainer
 var _pause_btn: Button
 var _speed_btns: Array = []
@@ -141,12 +139,18 @@ func _build_top_bar() -> void:
 		"board": UIKit.toggle_button(row, "掲示板", "貼り紙を落とす", _toggle_board, 74),
 		"matrix": UIKit.toggle_button(row, "関係", "誰が誰をどう見ているか", _toggle_matrix, 62),
 		"rules": UIKit.toggle_button(row, "言葉", "この世界の言葉", _toggle_rules, 62),
-		"debug": UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）", _toggle_debug, 88),
 		# 世界の中の話ではないので、見る窓のあとに置く
 		"option": UIKit.toggle_button(row, "オプション", "この世界を終える", _toggle_option, 102),
 	}
+	# デバッグは作る人の道具なので、デバッグビルドでだけ出す。
 	# 神の窓と同格に見せない。これは世界の外側の道具。
-	(_win_btns["debug"] as Button).modulate = Color(1, 1, 1, 0.55)
+	if OS.is_debug_build():
+		var dbg := UIKit.toggle_button(row, "デバッグ", "世界の外から手を入れる（開発用）",
+			_toggle_debug, 88)
+		# オプションは最後に置きたいので、その前へ差し込む
+		row.move_child(dbg, (_win_btns["option"] as Button).get_index())
+		dbg.modulate = Color(1, 1, 1, 0.55)
+		_win_btns["debug"] = dbg
 
 	# 札はどれも帯の高さに揃える（`toggle_button` は紙の段 ROW_H で作る）
 	for b in [_pause_btn] + _speed_btns + _win_btns.values():
@@ -402,9 +406,6 @@ func _paper_style(by_god: bool) -> StyleBoxFlat:
 func _open_write() -> void:
 	if world == null or world.board == null:
 		return
-	# 紙が飛び出す元は、**書いた紙のあった場所**——画面の真ん中。
-	# 行き先と重なることがあるが、軌跡の側で読ませる（`paper_fly.gd`）。
-	_write_from = get_viewport().get_visible_rect().size * 0.5
 	var pop = preload("res://scripts/ui/write_popup.gd").new()
 	# 差出人不明になることは窓の「?」が言っている。欄に書き添えると2回言うことになる
 	pop.setup("神のお告げ", [{"label": "", "text": ""}], "貼る", true)
@@ -413,23 +414,23 @@ func _open_write() -> void:
 
 
 ## 押した瞬間に貼られると、神が紙を落とした感じにならない。
-## 紙を世界へ放って、板に着いたところで貼られる（main が受ける）。
+## 書いた紙が下から焼けて、焼け切ったところで板に現れる（main が受ける）。
 func _submit_post(values: PackedStringArray) -> void:
 	if world == null or world.board == null or values.is_empty():
 		return
 	var text := String(values[0]).strip_edges()
 	if text == "":
 		return
-	# **書いていた紙を取り上げてから窓を閉じる。** 別の紙を描いて飛ばすと、
-	# 決めた瞬間にフォームが消えて別の形の紙が現れる（`write_popup.take_sheet`）
+	# **書いていた紙を取り上げてから窓を閉じる。** 別の紙を描いて焼くと、
+	# 決めた瞬間にフォームが消えて別の紙が現れる（`write_popup.take_sheet`）
 	var sheet: Control = null
 	for c in get_children():
 		if c is WritePopup:
 			sheet = (c as WritePopup).take_sheet()
 			break
-	# 窓を閉じて、紙が板に着くところを世界の上で見せる
+	# 窓を閉じて、紙が焼けて板に現れるところを世界の上で見せる
 	_show_only(null)
-	god_posted.emit(_write_from, text, sheet)
+	god_posted.emit(text, sheet)
 
 
 func _refresh_board() -> void:

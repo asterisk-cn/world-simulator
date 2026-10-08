@@ -32,8 +32,8 @@ const WORD_W := 200
 
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
-	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。\n「どれだけ」の話なので 0〜50。",
-	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。\n「どちらへ」の話なので −50〜50。\n真ん中が何とも思っていないところ。",
+	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。0〜100。\n0 が何も感じていないところ。",
+	Schema.SCOPE_PAIR: "相手ひとりごとに1つ持つ言葉。0〜100。\n0 が何とも思っていないところ。",
 }
 
 var world = null
@@ -209,7 +209,8 @@ func _rebuild() -> void:
 	_params_of(Schema.SCOPE_PAIR)
 
 	_chapter("もちもの",
-		"手に持てるもの。名前と姿を決める。",
+		"手に持てるもの。名前と姿を決める。\n"
+		+ "茂み・木・岩の姿のものは島に在って、採れる。消せば島にも生えない。",
 		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
@@ -332,8 +333,6 @@ func _things(defs: Array, arts: Array, add_text: String,
 
 		# 姿は先頭の欄へ。ことばの点と同じ欄なので、名前の左端が揃う
 		var label_text := String(def["label"])
-		# 世界に元からある物（木の実・木・石）は、姿が世界のもので、消せない。名前は書ける
-		var base := bool(def.get("base", false))
 		var row := UIKit.list_row(rows, _art_picker(def, arts))
 		# 姿は絵が語っているので、名前の横に姿の名を添えない
 		row.add_child(UIKit.read_only(label_text))
@@ -345,7 +344,7 @@ func _things(defs: Array, arts: Array, add_text: String,
 		var mid := Control.new()
 		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(mid)
-		if _can_delete() and not base:
+		if _can_delete():
 			UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 				func() -> void: on_del.call(did), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
@@ -360,7 +359,8 @@ func _art_picker(def: Dictionary, arts: Array) -> Control:
 	var art := String(def["art"])
 	var tint: Color = (Schema.building_color(String(def["id"]))
 		if Schema.is_building(String(def["id"])) else ItemIcon.NO_TINT)
-	if not editable or bool(def.get("base", false)):
+	# 島に在るものの姿は選べない（世界の上の姿と手の中の姿を揃える）
+	if not editable or Schema.WORLD_ARTS.has(String(def["id"])):
 		var seen := ItemIcon.of_art(art, 20)
 		seen.accent = tint
 		seen.tooltip_text = String(Schema.ART_LABEL.get(art, ""))
@@ -519,7 +519,7 @@ func _del_villager(hid: String) -> void:
 func _detail() -> void:
 	var body := UIKit.fold_heading(_body, "詳細",
 		"世界そのものの目盛り。\nつまみは10段で、積み木の切れ目がそのまま値になる。\n"
-		+ "始まったあとはオプションから触る。",
+		+ "始まったら変えられない。",
 		_detail_open, func(on: bool) -> void: _detail_open = on)
 	_index.remember("詳細", body.get_meta("head_row"))
 	_who(body)

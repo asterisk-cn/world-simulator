@@ -5,7 +5,8 @@ class_name TechTree
 ## 神には見せず、**世界が始まるときに Jev が1回で答える**。同じ設計図でも、
 ## 始めるたびにツリーは変わる。神が後から物を足しても、次に始めるときに組み込まれる。
 ##
-## 木の実・木・石は根なので訊かない（茂み・木・岩で、材料なし）。
+## 木の実・木・石（島に在るもの、`Schema.WORLD_ARTS`）は根なので訊かない
+## （茂み・木・岩で、材料なし）。神が消した根は、島にも木にも無い。
 ##
 ## **世界が見るのは今と同じ規則だけ**（`Schema.set_input` / `set_place`）。
 ##   輪になる答え … 成り立たないので、その枝だけ落ちる（先に答えた枝が残る）
@@ -72,17 +73,21 @@ static func grow(on_done: Callable) -> bool:
 static func _things() -> Array:
 	var out: Array = []
 	for r in Schema.recipes:
-		if not bool(r.get("base", false)):
+		if not Schema.is_world_item(String(r["id"])):
 			out.append(String(r["id"]))
 	for b in Schema.buildings:
 		out.append(String(b["id"]))
 	return out
 
 
-## 場所の候補。どこでも ＋ 茂み・木・岩 ＋ 建物
+## 場所の候補。どこでも ＋ 茂み・木・岩 ＋ 建物。
+## **島に生えていない場所は並べない**——木の実が消された世界で茂みを選ばれると、
+## そこで手に入る物は手に入らなくなる
 static func _places() -> Array:
 	var out: Array = [""]
-	out.append_array(Schema.WORLD_PLACES.keys())
+	for p in Schema.WORLD_PLACES:
+		if Schema.place_alive(String(p)):
+			out.append(String(p))
 	for b in Schema.buildings:
 		out.append(String(b["id"]))
 	return out
@@ -110,7 +115,7 @@ static func _state(things: Array) -> String:
 	out.append("")
 	out.append("# 元から手に入る物")
 	for r in Schema.recipes:
-		if bool(r.get("base", false)):
+		if Schema.is_world_item(String(r["id"])):
 			out.append("・%s … %sで、材料なしで手に入る" % [String(r["label"]),
 				Schema.place_label(String(r["place"]))])
 	out.append("")

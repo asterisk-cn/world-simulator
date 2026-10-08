@@ -208,10 +208,36 @@ func _ask_jev(cands: Array) -> bool:
 	if not AI.can_decide() or cands.size() <= 1:
 		return false
 	var asked := cands
+	var qs := jev_questions(asked)
+	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
+	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
+	var said := _state(asked)
+	_heard = v.memory.episodes.size()
+	_thought_at = SimClock.clock_text()
+	var take := func(ans) -> void:
+		if not is_instance_valid(v):
+			return
+		v.asking = false
+		if typeof(ans) != TYPE_DICTIONARY:
+			return
+		_read_jev(ans, asked)
+	v.asking = AI.decide(said, qs, take, v.id)
+	return v.asking
+
+
+## Jev への問いの形。**ベンチ（`JevBench`）も同じものを投げる**ので、
+## 訊くこと（`_ask_jev`）と分けてある——ここを変えれば両方が変わる
+func jev_questions(asked: Array) -> Dictionary:
+	return jev_questions_for(_criteria(asked))
+
+
+## 手の一覧を、もう文にしたもので（`{"1": "木を使う（そこに在る 12, 5）", …}`）。
+## ベンチの決めたシナリオは、世界の手ではなく文で一覧を持つ
+func jev_questions_for(criteria: Dictionary) -> Dictionary:
 	var qs := {"手": {
 		"type": "choice",
 		"instructions": "次にすることを1つ選ぶ",
-		"criteria": _criteria(asked),
+		"criteria": criteria,
 	}}
 	# 自分の中の言葉は、いまどのくらいかを段階で
 	for d in Schema.self_params():
@@ -234,20 +260,7 @@ func _ask_jev(cands: Array) -> bool:
 					% [String(other.vname), String(d["label"])],
 				"criteria": LEVELS,
 			}
-	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
-	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
-	var said := _state(asked)
-	_heard = v.memory.episodes.size()
-	_thought_at = SimClock.clock_text()
-	var take := func(ans) -> void:
-		if not is_instance_valid(v):
-			return
-		v.asking = false
-		if typeof(ans) != TYPE_DICTIONARY:
-			return
-		_read_jev(ans, asked)
-	v.asking = AI.decide(said, qs, take, v.id)
-	return v.asking
+	return qs
 
 
 ## 候補を Jev の形に。**番号は世界のもの**（答えもこの番号で返る）
@@ -280,6 +293,7 @@ func _seen() -> String:
 
 ## 型のついた答えを読む。**選んだ手**と、**いまの値**
 func _read_jev(ans: Dictionary, cands: Array) -> void:
+	var before: Dictionary = v.params.values.duplicate()
 	var mine := {}
 	var theirs := {}
 	for key in ans:
@@ -316,6 +330,10 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 		v.set_pair_values(theirs)
 		if seen != "":
 			EventLog.mind(v.vname, "相手：%s" % seen)
+
+	# 検証用。答えと、それで値がどう動いたかを数える（`--jev-bench`）
+	if JevBench.active:
+		JevBench.heard(v, ans, cands, before)
 
 	var pick = ans.get("手", null)
 	if typeof(pick) != TYPE_DICTIONARY:

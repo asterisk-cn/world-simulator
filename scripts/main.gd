@@ -436,18 +436,20 @@ func _setup_ui() -> void:
 	rules.offset_right = 560
 	rules.offset_top = -380
 	rules.offset_bottom = 380
-	var dbg = preload("res://scripts/ui/debug_panel.gd").new()
-	dbg.world = world
-	dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	dbg.offset_left = 12
-	dbg.offset_right = 452
-	dbg.offset_top = 88
-	# 丈は中身が決める。枠を先に決めると、下に用のない余白が残る
-	dbg.offset_bottom = 88
-	dbg.closed.connect(hud.close_panels)
-	dbg.visible = false
-	hud.add_child(dbg)
-	hud.debug_panel = dbg
+	# デバッグは作る人の道具。遊ぶ人のビルドには出さない（上部の札も同じ）
+	if OS.is_debug_build():
+		var dbg = preload("res://scripts/ui/debug_panel.gd").new()
+		dbg.world = world
+		dbg.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		dbg.offset_left = 12
+		dbg.offset_right = 452
+		dbg.offset_top = 88
+		# 丈は中身が決める。枠を先に決めると、下に用のない余白が残る
+		dbg.offset_bottom = 88
+		dbg.closed.connect(hud.close_panels)
+		dbg.visible = false
+		hud.add_child(dbg)
+		hud.debug_panel = dbg
 
 	var opt = preload("res://scripts/ui/option_panel.gd").new()
 	opt.set_anchors_preset(Control.PRESET_TOP_LEFT)

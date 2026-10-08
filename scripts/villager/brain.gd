@@ -137,7 +137,7 @@ func forget_before(dropped: int) -> void:
 	_heard = maxi(_heard - dropped, 0)
 
 
-## 話している最中に訊く（返事が届いた／相手が去った／待ちきる直前）。
+## 話している最中に訊く（返事が届いた／待ちきる直前）。
 ## つもりは白紙にしない——いまの手は続いていて、これはその**次**の手を訊く問い
 func think_next() -> void:
 	if v.asking:
@@ -856,6 +856,7 @@ func _pack(kind: String, target: String, target_cell: Vector2, obj,
 		"kind": kind, "target": target,
 		"target_cell": target_cell, "obj": obj,
 		"label": "", "duration": float(way["duration"]),
+		"reach": float(way.get("reach", -1.0)),
 	}
 
 
@@ -903,8 +904,7 @@ func _use(target: String) -> Array:
 	if Schema.is_building(target):
 		var s = _building_for(target)
 		if s != null:
-			# **歩きは手の中**。遠いからと候補から外すと、
-			# 「向かう」と「使う」で2回訊くことになる（`_reach_cell`）
+			# **歩きは手の中**。見えていれば、遠くても歩いてから使う
 			out.append(_use_pack(target, s.center_cell(), s, "building"))
 		return out
 
@@ -948,10 +948,12 @@ func _make(target: String):
 
 
 ## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。
+## **見える範囲だけ。** 島の反対側に建った物を知っているのは、集合知になる
+## （掲示板だけは村の真ん中に在ると誰もが知っているので、見えなくても立つ）
 func _building_for(def_id: String):
 	if def_id == "":
 		return null
-	return v.world.nearest_building(def_id, v.cell)
+	return v.world.nearest_building(def_id, v.cell, Rules.SIGHT)
 
 
 func _talk(target: String) -> Array:

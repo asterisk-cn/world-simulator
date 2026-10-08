@@ -3,7 +3,6 @@ extends Node
 ##
 ## 【前提】判断はAIが行う。
 ## ここにあるのは物理と時間だけで、キャラクターの判断に関わる係数は一つもない。
-## 記憶まわりは【要検討】で、扱いが決まるまでの暫定値。
 
 signal param_changed(key: String, value: float)
 
@@ -16,8 +15,6 @@ const PARAM_DEF := {
 	"day_length_sec": [180.0, 30.0, 330.0, "1日の長さ", 30.0],
 	"night_starts_at": [20.0, 14.0, 24.0, "夜になる時刻", 1.0],
 	"move_speed": [1.0, 0.5, 5.5, "歩く速さ", 0.5],
-
-	"summaries_kept": [5.0, 1.0, 11.0, "覚えていられる日数", 1.0],
 }
 
 
@@ -37,8 +34,6 @@ func text_of(v: float, key: String) -> String:
 			return "%02d:%02d" % [int(v), int(fmod(v * 60.0, 60.0))]
 		"move_speed":
 			return "%.1f歩/秒" % v
-		"summaries_kept":
-			return "%d日" % int(v)
 	return "%d" % int(round(v))
 
 var params := {}

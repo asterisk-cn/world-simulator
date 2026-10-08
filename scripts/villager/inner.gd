@@ -133,11 +133,10 @@ static func of(v, skip_tail: int = 0) -> String:
 			out.append("# 今日あったこと")
 			out.append_array(tail)
 
-	var past := String(v.memory.recent_summary(2))
-	if past != "":
+	if String(v.memory.story) != "":
 		out.append("")
 		out.append("# 覚えていること")
-		out.append(past)
+		out.append(String(v.memory.story))
 
 	# 行き先は座標で渡している（`Brain._at`）ので、**起点もここに要る**。
 	# 遠いか近いかを刻むのは世界の仕事ではない——引き算は読む側がやる

@@ -32,7 +32,6 @@ var _now: Label
 var _feel: Label
 var _self_bars := {}     ## param id -> PipBar
 var _pair_bars := {}     ## other_id -> { param id -> PipBar }
-var _summary: Label
 var _eps_box: VBoxContainer
 var _eps_count := -1
 var _known_pairs := -1
@@ -107,7 +106,6 @@ func rebuild() -> void:
 	_have_ready = false
 	_now = null
 	_feel = null
-	_summary = null
 	_eps_box = null
 	_eps_count = -1
 
@@ -269,8 +267,7 @@ func _build_pairs() -> void:
 
 func _build_memory() -> void:
 	_index.chapter(_body, "記憶",
-		"夜になると、その日の出来事が1行に畳まれる。\n覚えていられる日数は「この世界の言葉」の世界で決める。")
-	_summary = UIKit.note(_body, "")
+		"夜になると、本人がその日の出来事を読んで、覚えていることを書き直す。\n覚えていることは紙には出ない。")
 
 	_body.add_child(UIKit.label("今日の出来事", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 	_eps_box = VBoxContainer.new()
@@ -316,8 +313,6 @@ func _refresh() -> void:
 				bar.setup(pp.get_v(String(pid)),
 					float(d["min"]), float(d["max"]), Schema.param_color(String(pid)))
 
-	if _summary != null:
-		_summary.text = subject.memory.recent_summary(2)
 	_refresh_episodes()
 
 

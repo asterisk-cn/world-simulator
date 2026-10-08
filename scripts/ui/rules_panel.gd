@@ -148,7 +148,18 @@ func set_editable(on: bool) -> void:
 
 
 func _on_start() -> void:
+	_mode_label.text = ""
 	started.emit()
+
+
+## 始められなかったことを、手の行に言う（消すものを選んでいる、と同じ場所・同じ色）
+func say_error(text: String) -> void:
+	_mode_label.text = text
+
+
+## 世界の支度（技術ツリー）を待っているあいだは、二度押せない
+func set_waiting(on: bool) -> void:
+	_start_btn.disabled = on
 
 
 func _close() -> void:
@@ -198,15 +209,13 @@ func _rebuild() -> void:
 	_params_of(Schema.SCOPE_PAIR)
 
 	_chapter("もちもの",
-		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
-		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。",
+		"手に持てるもの。名前と姿を決める。",
 		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
 	_chapter("たてもの",
 		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
-		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
-		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。",
+		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。",
 		Schema.buildings.is_empty())
 	_things(Schema.buildings, Schema.BUILDING_ARTS, "＋ たてものを増やす",
 		_add_building, _del_building, _rename_building)
@@ -303,8 +312,9 @@ func _write(title: String, fields: Array, on_done: Callable) -> void:
 # ---------------------------------------------------------------------------
 # もちもの / たてもの
 #
-# 定義が持つのは 名前 と 姿 だけ。材料の欄はない。
-# 何をどれだけ使うかは、作る人が自分の持ち物を見て決める（DESIGN.md §1）。
+# 神が書くのは 名前 と 姿 だけ。
+# **手に入れかた（材料と場所）は神に見せない。** それは世界の側の定義
+# （`Schema` の技術ツリー）で、設計図には出さない。
 # ---------------------------------------------------------------------------
 
 ## もちもの／たてもの、どちらも「名前と姿」だけなので同じ形で並べる
@@ -322,6 +332,8 @@ func _things(defs: Array, arts: Array, add_text: String,
 
 		# 姿は先頭の欄へ。ことばの点と同じ欄なので、名前の左端が揃う
 		var label_text := String(def["label"])
+		# 世界に元からある物（木の実・木・石）は、姿が世界のもので、消せない。名前は書ける
+		var base := bool(def.get("base", false))
 		var row := UIKit.list_row(rows, _art_picker(def, arts))
 		# 姿は絵が語っているので、名前の横に姿の名を添えない
 		row.add_child(UIKit.read_only(label_text))
@@ -333,7 +345,7 @@ func _things(defs: Array, arts: Array, add_text: String,
 		var mid := Control.new()
 		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(mid)
-		if _can_delete():
+		if _can_delete() and not base:
 			UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 				func() -> void: on_del.call(did), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
@@ -348,7 +360,7 @@ func _art_picker(def: Dictionary, arts: Array) -> Control:
 	var art := String(def["art"])
 	var tint: Color = (Schema.building_color(String(def["id"]))
 		if Schema.is_building(String(def["id"])) else ItemIcon.NO_TINT)
-	if not editable:
+	if not editable or bool(def.get("base", false)):
 		var seen := ItemIcon.of_art(art, 20)
 		seen.accent = tint
 		seen.tooltip_text = String(Schema.ART_LABEL.get(art, ""))

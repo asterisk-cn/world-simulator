@@ -1,19 +1,16 @@
 class_name HarvestNode
 extends Node2D
-## 世界に元から在る物。木の実・木・石。使うと、そのまま同じ名前の持ち物になる。
+## 世界に元から在る場所。茂み・木・岩。
 ##
-## 何を寄越すかはプログラムが知っている（それが何であるかを知っている数少ない物）。
-## **いくつ寄越すかは持っていない。世界の物は尽きない。**
-## 摘み尽くさないことも判断なので、そこは本人（AI）に残す。
+## **何が手に入るかは、この場所は持っていない。** 手に入る物のほうが
+## 「どこで手に入るか」を指している（`Schema.place_of`）——岩で石も鉄も手に入るなら、
+## 石と鉄の手に入れかたが岩を指しているだけ。
+## **いくつ寄越すかも持っていない。世界の物は尽きない。**
 
 enum Kind { BERRY, TREE, ROCK }
 
-const KIND_NAME := {Kind.BERRY: "木の実", Kind.TREE: "木", Kind.ROCK: "石"}
-const KIND_ITEM := {Kind.BERRY: "food", Kind.TREE: "wood", Kind.ROCK: "stone"}
-
-## 持ち物からその資源へ。世界に生っている木の実と、手の中の木の実は同じもので、
-## 「使う」の対象としても同じ一つに見える（違うのはどこに在るかだけ）。
-const KIND_OF_ITEM := {"food": Kind.BERRY, "wood": Kind.TREE, "stone": Kind.ROCK}
+## 手に入れかたの場所の名前（`Schema.WORLD_PLACES`）から、その場所の姿へ
+const PLACE_KIND := {"bush": Kind.BERRY, "tree": Kind.TREE, "rock": Kind.ROCK}
 
 var kind: int = Kind.BERRY
 var cell: Vector2i = Vector2i.ZERO
@@ -24,10 +21,6 @@ func setup(p_kind: int, p_cell: Vector2i) -> void:
 	cell = p_cell
 	position = Iso.cell_to_world(Vector2(cell))
 	z_index = 0
-
-
-func item_key() -> String:
-	return KIND_ITEM[kind]
 
 
 func _draw() -> void:

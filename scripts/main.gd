@@ -62,15 +62,42 @@ func _ready() -> void:
 	# ヘッドレス観察用。既定の定義のまま即座に始める（儀式は飛ばす）
 	if OS.get_cmdline_user_args().has("--autostart"):
 		wake = 1.0
-		_start_world.call_deferred()
+		_autostart.call_deferred()
 
 
 
-## 「この世界を始める」を押してから、実際に時間が動き出すまでの一拍。
+## 「この世界を始める」を押した。**まず技術ツリーを Jev に組ませる。**
+##
+## 村人の最初の考えは「いま何が手に入るか」の一覧を読むので、
+## 木が先に組み上がっていないと考えはじめられない。だから儀式と重ねず、先に訊く
+## （Jev の往復は 0.5秒ほど）。**Jev が使えなければ始めない**——
+## 手に入れかたの無い世界は、根の3つしか手に入らない別の世界になる。
+func _begin_ritual() -> void:
+	if started or _starting or _growing:
+		return
+	if not AI.can_decide():
+		rules_panel.say_error("Jev が使えないので、始められない")
+		return
+	_growing = true
+	rules_panel.set_waiting(true)
+	TechTree.grow(func(ok: bool) -> void:
+		_growing = false
+		rules_panel.set_waiting(false)
+		if not ok:
+			rules_panel.say_error("Jev から答えが返らず、始められなかった")
+			return
+		_ritual())
+
+
+## 技術ツリーを訊いている最中
+var _growing := false
+
+
+## 木が組み上がってから、実際に時間が動き出すまでの一拍。
 ##
 ## 確認のダイアログは挟まない（「間違えないか」の話になってしまう）。
 ## 紙に封蝋が押され、青く沈んでいた世界が目を覚ます、それだけを見せる。
-func _begin_ritual() -> void:
+func _ritual() -> void:
 	if started or _starting:
 		return
 	_starting = true
@@ -244,7 +271,19 @@ func _close_setup() -> void:
 	rules_panel.set_editable(false)
 
 
-## 儀式を通らずに来たとき（`--autostart`）。一息に建てて動かす
+## 儀式を通らずに来たとき（`--autostart`）。木を組ませてから、一息に建てて動かす。
+## Jev が使えなければ、儀式のときと同じく始めない
+func _autostart() -> void:
+	var ok := TechTree.grow(func(grown: bool) -> void:
+		if grown:
+			_start_world()
+		else:
+			push_error("Jev から答えが返らず、始められなかった"))
+	if not ok:
+		push_error("Jev が使えないので、始められない")
+
+
+## 儀式を通らずに来たとき。一息に建てて動かす（木はもう組んである）
 func _start_world() -> void:
 	if started:
 		return

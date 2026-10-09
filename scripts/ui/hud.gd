@@ -290,7 +290,10 @@ func _on_log_entry(e: Dictionary) -> void:
 		_log.append_text("[color=#%s]──　%d日目　──[/color]\n"
 			% [Color(0.46, 0.41, 0.34, 0.75).to_html(true), day])
 	var col: Color = e["color"]
-	_log.append_text("[color=#%s]%s[/color]  [color=#%s]%s[/color]\n"
+	# 時刻と本文を2つの列に分ける。会話は一言ずつ改行するので、
+	# 2行目からが時刻の下へ潜ると、誰の言葉かより時刻の列が崩れたのが目に入る
+	_log.append_text(("[table=2][cell padding=0,0,10,0][color=#%s]%s[/color][/cell]"
+		+ "[cell expand=1][color=#%s]%s[/color][/cell][/table]\n")
 		% [Color(0.46, 0.41, 0.34, 0.70).to_html(true), String(e["time"]),
 			col.to_html(false), _link_names(String(e["text"]), e.get("marks", {}))])
 

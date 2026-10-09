@@ -465,26 +465,25 @@ func _take_line(who, to, line: String) -> void:
 		_seal_scene("%s は黙っていた" % (who.vname if is_instance_valid(who) else "相手"))
 		return
 	_scene.append({"who": who.vname, "words": line})
-	# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない
-	who.memory.record("会話：%s に言った——%s" % [to.vname, line])
-	to.memory.record("会話：%s が言った——%s" % [who.vname, line])
+	who.memory.record("%sに「%s」と言った" % [to.vname, line])
+	to.memory.record("%sに「%s」と言われた" % [who.vname, line])
 	who.say("talk", "talk", TALK_BEAT + 0.6)
 	_beat = TALK_BEAT
 
 
 ## 場面を綴じる。**一往復ずつ離れて並ぶと、神の目に会話として映らない**ので、
-## 場面ぜんぶで1行にする
+## 場面ぜんぶで1件にする（一言ずつ改行）
 func _seal_scene(note: String) -> void:
 	if _scene.size() >= 2:
 		var parts := PackedStringArray()
 		var marks := {}
 		for e in _scene:
-			parts.append("%s——%s" % [String(e["who"]), String(e["words"])])
+			parts.append("%s「%s」" % [String(e["who"]), String(e["words"])])
 		var other = current_action.get("obj", null)
 		marks[vname] = "v:%d" % id
 		if other != null and is_instance_valid(other):
 			marks[other.vname] = "v:%d" % other.id
-		EventLog.social(" ／ ".join(parts), marks)
+		EventLog.social("\n".join(parts), marks)
 	if note != "":
 		memory.record(note)
 		EventLog.mind(vname, note)
@@ -529,7 +528,7 @@ func _complete_action() -> void:
 		# **空振りも身に起きたこと。** 世界は理由まで知っている（居なかった、
 		# 残っていなかった、払えなかった）ので、そこまで書く——
 		# 行動の名前をもう一度書いても、何があったかを言ったことにならない
-		var why: String = _miss if _miss != "" else "%s——できなかった" % action_label()
+		var why: String = _miss if _miss != "" else "%s（できなかった）" % action_label()
 		_miss = ""
 		memory.record(why)
 		EventLog.mind(vname, "空振り：%s" % why)
@@ -697,10 +696,9 @@ func _do_talk(other) -> bool:
 	# （場面が空のまま始まって、最初に口を開くのはこちら）
 	if words == "":
 		return true
-	# **鍵括弧は使わない。** 紙の上の言葉はどれも囲まない——
-	# 囲うと、その一言だけ別の書きもの（引用）になる
-	memory.record("会話：%s に言った——%s" % [other.vname, words])
-	other.memory.record("会話：%s が言った——%s" % [vname, words])
+	# 言葉は鉤括弧で囲む。村の記録・帳面・問いの紙で同じ書き方にする
+	memory.record("%sに「%s」と言った" % [other.vname, words])
+	other.memory.record("%sに「%s」と言われた" % [vname, words])
 	_scene.append({"who": vname, "words": words})
 	say("talk", "talk", TALK_BEAT + 0.6)
 	return true
@@ -724,7 +722,7 @@ func _do_post() -> bool:
 			_miss = "掲示板に、同じことを書いた紙がもう貼ってあった"
 			return false
 	board.post(id, vname, text)
-	memory.record("掲示板：貼った——%s" % text)
+	memory.record("書き込み（%s）を掲示板に貼った" % text)
 	return true
 
 
@@ -742,7 +740,7 @@ func _do_read_board() -> void:
 	for e in unread:
 		memory.mark_post_read(int(e["id"]))
 		# 誰の紙かより、何が書いてあったかが記憶に残る
-		memory.record("掲示板：読んだ（%s）——%s"
+		memory.record("%sの書き込み（%s）を読んだ"
 			% [String(e["author_name"]), String(e["text"])])
 
 

@@ -34,11 +34,12 @@ func post(author_id: int, author_name: String, text: String) -> Dictionary:
 		posts.pop_front()
 	posts_changed.emit()
 	queue_redraw()
+	# **文面は載せない。** 読みたければ掲示板にある。記録は貼ったことだけを言う
 	if author_id == -1:
-		EventLog.notable("掲示板に差出人不明の張り紙が現れた——%s" % text,
+		EventLog.notable("掲示板に差出人不明の張り紙が現れた",
 			{"掲示板": "board"})
 	else:
-		EventLog.social("%s が掲示板に貼った——%s" % [author_name, text],
+		EventLog.social("%s が掲示板に貼った" % author_name,
 			{author_name: "v:%d" % author_id, "掲示板": "board"})
 	return entry
 

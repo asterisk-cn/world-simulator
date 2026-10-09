@@ -139,7 +139,7 @@ static func of(v, since: int = -1, hide_values: bool = false) -> String:
 			hands.append("%s %d" % [Schema.item_label(iid), n])
 	out.append("")
 	out.append("# 持っているもの")
-	out.append(" / ".join(hands) if hands.size() > 0 else "手ぶら")
+	out.append(" / ".join(hands) if hands.size() > 0 else "なし")
 
 	out.append("")
 	out.append("# していること")

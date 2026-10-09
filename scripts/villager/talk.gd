@@ -61,7 +61,7 @@ static func prompt(speaker, other, scene: Array) -> String:
 	out.append("")
 	out.append("# いま %s と話している" % other.vname)
 	for e in scene:
-		out.append("・%s——%s" % [String(e["who"]), String(e["words"])])
+		out.append("・%s「%s」" % [String(e["who"]), String(e["words"])])
 	out.append("")
 	out.append("何と返す？")
 	return "\n".join(out)

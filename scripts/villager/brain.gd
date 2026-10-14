@@ -903,22 +903,20 @@ func _can_pay(target: String) -> bool:
 	return true
 
 
-## 手に入れる場所の実体。世界の場所（茂み・木・岩）は**見える範囲だけ**——
-## 22マス先の木を目指して歩くと、着く頃には他人が採っている。そして見えないものを
-## 知っているのは、集合知を持っていることになる。建物は同じものが何軒あっても、
-## いちばん近いところを指す（`_building_for`。見える範囲だけ）
+## 手に入れる場所の実体。世界の場所（茂み・木・岩）はいちばん近いところを指す。
+## 建物も同じものが何軒あっても、いちばん近いところ（`_building_for`）。
+## 視界の制限は無い——島は狭く、どこからでも見渡せる（#16）
 func _place_obj(place: String):
 	if Schema.WORLD_PLACES.has(place):
-		return v.world.nearest_harvest(v.cell, HarvestNode.PLACE_KIND[place], Rules.SIGHT)
+		return v.world.nearest_harvest(v.cell, HarvestNode.PLACE_KIND[place])
 	return _building_for(place)
 
 
-## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。
-## **見える範囲だけ。** 島の反対側に建った物を知っているのは、集合知になる
+## その建物の実体。同じものが何軒あっても、いちばん近いところを指す
 func _building_for(def_id: String):
 	if def_id == "":
 		return null
-	return v.world.nearest_building(def_id, v.cell, Rules.SIGHT)
+	return v.world.nearest_building(def_id, v.cell)
 
 
 func _talk(target: String) -> Array:
@@ -927,13 +925,13 @@ func _talk(target: String) -> Array:
 	var way := _way("talk", target)
 	match target:
 		"talk":
-			# **見えている人とだけ。** 歩きは手の中に畳んだままで、
-			# 遠ければ歩いてから話す。ただし**見えていない人は候補に立たない**——
-			# 世界の反対側に居る人へ話しかけられるなら、それは集合知になる
-			for o in v.world.neighbors_within(v.cell, Rules.SIGHT, v.id):
+			# **村の誰とでも。** 歩きは手の中に畳んだままで、遠ければ歩いてから話す。
+			# 島は見渡せるので、どこに誰が居るかは分かる（#16）
+			for o in v.world.villagers:
+				if o.id == v.id:
+					continue
 				out.append(_pack("talk", target, o.cell, o, way))
 		"post":
-			# 掲示板は村の真ん中に在ると誰もが知っているので、見えなくても立つ
 			if board == null:
 				return out
 			out.append(_pack("talk", target, Vector2(board.cell), board, way))

@@ -331,14 +331,10 @@ func _execute(dt: float) -> void:
 
 
 ## 向かう相手が人なら、**いま居るところへ向け直す。** 歩き始めた時の場所へ行っても、
-## もうそこには居ない。見えなくなったら追うのをやめて、その場で手を閉じる
-## （`_do_talk` が見失ったと書く）
+## もうそこには居ない
 func _follow() -> void:
 	var who = current_action.get("obj", null)
 	if who == null or not is_instance_valid(who) or not (who is Villager):
-		return
-	if cell.distance_to(who.cell) > Rules.SIGHT:
-		_path = PackedVector2Array()
 		return
 	# 止まるかどうかは**いまの居場所**で測る。道を引き直すのは半マス動いたときだけ
 	current_action["target_cell"] = who.cell
@@ -612,14 +608,11 @@ func _do_use(target: String, obj) -> bool:
 ## 文章の相手に手を訊いたときだけ、手と一緒に返る「言うこと」が1行目になる）。相手をどう思うようになったかは、次の問いで相手ごとの値として
 ## 本人が答える（`Brain._read_jev`）。
 ## 追っても届かなかった、は空振り。**歩くあいだ相手も歩いている**ので、
-## 見えなくなるまで離れられたり、道が無かったりすれば届かない
+## 着いたときに間合いの外へ動いていたり、道が無かったりすれば届かない
 ## （世界の間合いは規則として残っている）
 func _do_talk(other) -> bool:
 	var way = Schema.target_def("talk", "talk")
 	var reach: float = float(way["reach"]) if way != null else 2.2
-	if cell.distance_to(other.cell) > Rules.SIGHT:
-		_miss = "%s を追ったが、見失った" % other.vname
-		return false
 	if cell.distance_to(other.cell) > reach:
 		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false

@@ -208,7 +208,7 @@ func _build_pairs() -> void:
 		subject.pairs.is_empty())
 
 	if subject.pairs.is_empty():
-		_body.add_child(UIKit.label("まだ誰とも会っていない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
+		_body.add_child(UIKit.label("出会いはまだない", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		return
 
 	var first := true
@@ -342,7 +342,7 @@ func _refresh_have() -> void:
 			continue
 		counts[iid] = n
 		sig += iid + "|"
-	# 手ぶらのときの sig は空。組み立て直後と見分けるために、組んだかどうかも持つ
+	# 何も持っていないときの sig は空。組み立て直後と見分けるために、組んだかどうかも持つ
 	if not _have_ready or sig != _have_sig:
 		_have_ready = true
 		_have_sig = sig
@@ -350,7 +350,7 @@ func _refresh_have() -> void:
 			_have.remove_child(c)
 			c.queue_free()
 		if counts.is_empty():
-			_have.add_child(UIKit.label("手ぶら", UIKit.FS_NOTE, UIKit.TEXT_DIM))
+			_have.add_child(UIKit.label("なし", UIKit.FS_NOTE, UIKit.TEXT_DIM))
 		for iid in counts:
 			var chip := UIKit.item_chip(_have, String(iid),
 				Schema.item_label(String(iid)), str(int(counts[iid])))

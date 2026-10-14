@@ -10,7 +10,8 @@ extends RefCounted
 ## 「いまできることの一覧」と自分の文脈が渡り、どれを選ぶかを答える。
 ##
 ## ただし次の2つは一覧に含まれない。どちらもその人の言葉と判断だから。
-##   - 持ち物がどう動くか（`_how_much`）——いくつ取るか、何をどれだけ使うか
+##   - 持ち物がどう動くか（`_how_much`）——手の中のものをいくつ使うか
+##     （手に入れる・建てるときに何がいくつ減るかは、Jev が組んだ手に入れかたにある）
 ##   - それを何と呼ぶか（`_name_act`）——名前の定義は世界のどこにも無い
 
 var v = null  ## Villager（循環参照を避けるため型注釈なし）
@@ -674,7 +675,8 @@ static func _system(quick: bool = false) -> String:
                 相手の名前や物の名前だけでは、していることにならない。
                 世界の言い方はなぞらなくていい
                 （教会へ向かうのを「詣でる」と言うか「行く」と言うかは、あなたが決める）
-    「量」    … 取る・使う・作るときだけ。持ち物の名前ごとに、いくつ
+    「量」    … 手の中のもの・建物を使うときだけ。持ち物の名前ごとに、いくつ。
+                手に入れる・建てるときに減る数は、一覧に書いてあるとおり
     「言うこと」… %d字以内。**そのまま世界に出る言葉**を書く。
                  話すときは相手に言う言葉、貼るときは紙に書く文そのもの。
                  「何か伝えたい」「お知らせを貼ろう」のような、
@@ -719,10 +721,17 @@ func _at(c: Dictionary) -> String:
 	var xy := "%d, %d" % [int(round(t.x)), int(round(t.y))]
 	if where == "building":
 		return "（建物 %s）" % xy
-	if where == "world":
-		return "（そこに在る %s）" % xy
-	if String(c["kind"]) == "make" and Schema.is_building(String(c["target"])):
-		return "（建てる先 %s）" % xy
+	if String(c["kind"]) == "make":
+		# **何が減るかも添える。** 数は世界の手に入れかたにあるので、選ぶ前に分かっていていい
+		var target := String(c["target"])
+		var parts: Array = []
+		if Schema.inputs_text(target) != "":
+			parts.append("%sを使う" % Schema.inputs_text(target))
+		if Schema.is_building(target):
+			parts.append("建てる先 %s" % xy)
+		elif Schema.place_of(target) != "":
+			parts.append("%s %s" % [Schema.place_label(Schema.place_of(target)), xy])
+		return "（%s）" % "、".join(parts)
 	return "（%s）" % xy
 
 
@@ -755,17 +764,19 @@ func feasible() -> Array:
 # 【AI差し替え口】選んだ行動を、どうやるか
 #
 # 選ぶのと同じ一回の判断で答えられるもの。AI版では自分の持ち物と文脈を見て、
-#   持ち物がどう動くか … いくつ取るか、何をどれだけ使うか
+#   持ち物がどう動くか … 手の中のものをいくつ使うか
 #   それをどう呼ぶか   … 教会なら「祈る」「懺悔する」、木の実なら「かじる」
 # を返す。プログラムはその答えを世界に適用するだけで、中身を決めない。
 # ---------------------------------------------------------------------------
 
 func _decide_how(c: Dictionary) -> void:
 	var kind := String(c["kind"])
-	if kind == "use" or kind == "make":
-		# **いくつ動かすかも本人の答え**（つもりに添えてある）。
-		# 無いときだけ、穴を埋めるための出まかせに落ちる
-		# 量が物ごとの数で返っていないときは、穴を埋めるための出まかせに落ちる
+	if kind == "make":
+		# **手に入れる・建てるときの数は世界の手に入れかたにある**（Jev が組む）（手に入れかた、`Schema.make_move`）
+		c["move"] = Schema.make_move(String(c["target"]))
+	elif kind == "use":
+		# **使うぶんは本人の答え**（つもりに添えてある）。
+		# 量が物ごとの数で返っていないときだけ、穴を埋めるための出まかせに落ちる
 		var asked := _asked_how(c)
 		c["move"] = asked if not asked.is_empty() else _how_much(c)
 	# 何をしているのかが、そのまま世界の上と記録と一覧に出る。
@@ -777,66 +788,38 @@ func _decide_how(c: Dictionary) -> void:
 
 ## 【AI差し替え口】この行動で、自分の持ち物がどう動くか。
 ##
-##   正 … 受け取る（そこに在るものを取る / 作ったものを手にする）
-##   負 … 払う（使う / 材料にする）
-##   空 … 何も動かない（教会に入る）、あるいは「できない」という答え
+##   負 … 払う（食べる / 建物に置いていく）
+##   空 … 何も動かない（教会に入る）
 ##
-## AI版では「木を2本と石を1つあれば家になる」「熟れているから3つもいでおく」
-## のような判断がここに入る。**建物から何が受け取れるかもここ。**
-## 井戸と水がこの世界に並んでいるなら、汲めることは名前を読めば分かるので、
-## どこにも設定は要らない。いまは判断がないので、適当な数を言うだけ。
+## **使うだけでは何も手に入らない。** 手に入るのは「手に入れる」の手で、
+## 何がどこで手に入るかは手に入れかた（Jev が組む）に書いてある（井戸で水、のように）。
+## いまは判断がないので、手の中のものを1つ使うだけ。
 ##
 ## プログラムはこの答えを、世界が許すところまで実際に動かす（`Villager._apply`）。
-## 見ているのは「無いものは払えない」「無から物は生まれない」の2つだけ。
+## 見ているのは「無いものは払えない」だけ。
 func _how_much(c: Dictionary) -> Dictionary:
-	var target := String(c["target"])
-	match String(c["kind"]):
-		"use":
-			match String(c.get("where", "hand")):
-				"world":
-					return {target: randi_range(1, 2)}
-				"hand":
-					return {target: -1}
-			# 建物：何が受け取れるかは名前を読まないと分からないので、いまは何も動かさない
-			return {}
-		"make":
-			var move := _spend_from_hand(target)
-			if move.is_empty():
-				return {}
-			if not Schema.is_building(target):
-				move[target] = 1  # 建物は世界の上に建つので、持ち物にはならない
-			return move
+	if String(c.get("where", "hand")) == "hand":
+		return {String(c["target"]): -1}
 	return {}
 
 
 ## 本人が答えた量を、世界の言い方（idと符号）に直す。
 ##
-## **符号はこちらが決める。** 取る・作るは増え、使う・材料は減る——
-## それは量の話ではなく動詞の意味の話で、世界が知っていること（DESIGN.md §3）。
+## **符号はこちらが決める。** 使うは減る——それは量の話ではなく動詞の意味の話で、
+## 世界が知っていること（DESIGN.md §3）。
 ## 本人が答えるのは「何をいくつ」だけ。世界に無い名前は落とす。
 func _asked_how(c: Dictionary) -> Dictionary:
 	var want = c.get("量", {})
 	if typeof(want) != TYPE_DICTIONARY:
 		return {}
-	var target := String(c["target"])
 	var move := {}
 	for label in want:
 		var iid := _item_by_label(str(label))
 		if iid == "":
 			continue
 		var n := absi(int(want[label])) if typeof(want[label]) in [TYPE_INT, TYPE_FLOAT] else 0
-		if n <= 0:
-			continue
-		match String(c["kind"]):
-			"use":
-				# そこに在るものは取る、手の中のものは減る
-				move[iid] = n if String(c.get("where", "hand")) == "world" else -n
-			"make":
-				# 作るものは増え、それ以外は材料として減る
-				move[iid] = n if iid == target else -n
-	if String(c["kind"]) == "make" and not Schema.is_building(target) \
-			and not move.has(target):
-		move[target] = 1
+		if n > 0:
+			move[iid] = -n
 	return move
 
 
@@ -846,24 +829,6 @@ func _item_by_label(label: String) -> String:
 		if Schema.item_label(String(item)) == want:
 			return String(item)
 	return ""
-
-
-## 手持ちから払うぶんを見繕う。判断ではなく、穴を埋めるための出まかせ。
-func _spend_from_hand(product: String) -> Dictionary:
-	var cost := {}
-	for item in v.inventory:
-		var iid := String(item)
-		if iid == product or v.item_count(iid) <= 0:
-			continue
-		var n := randi_range(0, mini(v.item_count(iid), 3))
-		if n > 0:
-			cost[iid] = -n
-	if cost.is_empty():
-		var held := _held_but(product)
-		if held.is_empty():
-			return {}
-		cost[held.pick_random()] = -1
-	return cost
 
 
 ## 【AI差し替え口】いま自分がしていることを、なんと呼ぶか。
@@ -884,22 +849,14 @@ func _name_act(c: Dictionary) -> String:
 		"use":
 			return "%sを使う" % thing
 		"make":
+			# 採るのも作るのも「手に入れる」。材料が空か、場所が要るかの違いしかない
 			return "%sを%s" % [thing, "建てる" if Schema.is_building(String(c["target"]))
-				else "作る"]
+				else "手に入れる"]
 		"talk":
 			if String(c["target"]) == "talk":
 				return "%sと話す" % other_name
 			return thing
 	return thing
-
-
-## 手持ちのうち、それ自身を除いたもの
-func _held_but(product: String) -> Array:
-	var out: Array = []
-	for item in v.inventory:
-		if String(item) != product and v.item_count(String(item)) > 0:
-			out.append(String(item))
-	return out
 
 
 # ---------------------------------------------------------------------------
@@ -967,11 +924,8 @@ func _move(target: String) -> Array:
 	return out
 
 
-## 使えるものは3通りある。同じ木の実でも、そこに生っているのと手の中にあるのとでは、
-## 行く必要があるかと、世界の側で何が増えて何が減るかが違う。
-##
-## 候補には**どこに在るか**を添える。同じ「木の実を使う」が2つ並ぶとき、
-## それを見分けるのは名前ではなく、そこに在るのか手の中にあるのかのほうだから。
+## 使えるのは、手の中のものと建物。そこに在るものから手に入れるのは
+## 「手に入れる」の手（`_make`）で、使うでは何も増えない。
 func _use(target: String) -> Array:
 	var out: Array = []
 	if Schema.is_building(target):
@@ -980,16 +934,6 @@ func _use(target: String) -> Array:
 			# **歩きは手の中**。見えていれば、遠くても歩いてから使う
 			out.append(_use_pack(target, s.center_cell(), s, "building"))
 		return out
-
-	# そこに在るもの（採るのはこれ）
-	var kind: int = HarvestNode.KIND_OF_ITEM.get(target, -1)
-	if kind >= 0:
-		# **見える範囲だけ。** 22マス先の木を目指して歩くと、着く頃には
-		# 他人が採っている（空振りの出どころ）。そして見えないものを
-		# 知っているのは、集合知を持っていることになる
-		var h = v.world.nearest_harvest(v.cell, kind, Rules.SIGHT)
-		if h != null:
-			out.append(_use_pack(target, Vector2(h.cell), h, "world"))
 
 	# 手の中のもの
 	if v.item_count(target) > 0:
@@ -1003,21 +947,50 @@ func _use_pack(target: String, at: Vector2, obj, where: String) -> Dictionary:
 	return c
 
 
-## 何か持っていれば作れる。何を使うかは本人が決めるので、材料は見ない。
+## 手に入れかたのとおりに手に入れられるか。材料が数だけ手にあって、
+## 場所が見えるところにあれば候補に立つ。
 ## 建つものに数の枠はない。見るのは置ける場所が空いているかだけ。
 func _make(target: String):
 	var way = Schema.target_def("make", target)
-	if way == null or _held_but(target).is_empty():
+	if way == null or not _can_pay(target):
 		return null
 	if not Schema.is_building(target):
-		# 持てるものは手の中で完結するので移動はしない
-		return _pack("make", target, v.cell, null, way)
+		var place := Schema.place_of(target)
+		if place == "":
+			# 場所の要らない物は手の中で完結するので移動はしない
+			return _pack("make", target, v.cell, null, way)
+		var at = _place_obj(place)
+		if at == null:
+			return null
+		var cell: Vector2 = at.center_cell() if at is Structure else Vector2(at.cell)
+		return _pack("make", target, cell, at, way)
 	var c: Vector2i = v.world.find_build_cell(v.cell, v.id)
 	if c.x < 0:
 		return null
 	var out := _pack("make", target, Vector2(c), null, way)
 	out["build_cell"] = c
 	return out
+
+
+## 材料が数だけ手にあるか。**材料も場所も無い物は手に入らない**（無から物は生まれない）
+func _can_pay(target: String) -> bool:
+	var inputs := Schema.inputs_of(target)
+	if inputs.is_empty() and (Schema.place_of(target) == "" or Schema.is_building(target)):
+		return false
+	for x in inputs:
+		if v.item_count(String(x)) < int(inputs[x]):
+			return false
+	return true
+
+
+## 手に入れる場所の実体。世界の場所（茂み・木・岩）は**見える範囲だけ**——
+## 22マス先の木を目指して歩くと、着く頃には他人が採っている。そして見えないものを
+## 知っているのは、集合知を持っていることになる。建物は同じものが何軒あっても、
+## いちばん近いところを指す（`_building_for`。見える範囲だけ）
+func _place_obj(place: String):
+	if Schema.WORLD_PLACES.has(place):
+		return v.world.nearest_harvest(v.cell, HarvestNode.PLACE_KIND[place], Rules.SIGHT)
+	return _building_for(place)
 
 
 ## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。

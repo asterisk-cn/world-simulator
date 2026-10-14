@@ -6,8 +6,8 @@ class_name Feeling
 ## 世界が知っているのは何が起きたかだけで、それをどう感じているかはAIの担当
 ## （DESIGN.md §2）。だから仕様もここをAI生成としている。
 ##
-## 訊くのは**神がいま見ている村人だけ**。8人ぶんを常に訊くと、
-## 誰も読まない一言のために毎分お金が出ていく。
+## **全員に、ひとりでに訊く**（`Villager._process` から毎フレーム呼ばれ、`COOL` ごとに1回）。
+## 神が見ている人にだけ訊いていた頃は、誰も見ていない村では一言が一度も生まれなかった。
 ##
 ## 繋がっていなければ何も起きない（`AI.available()` が false）。
 ## 紙は一言の行が無いまま出る——嘘の一言を規則で埋めるより、無いほうがいい。
@@ -31,14 +31,12 @@ const MAX_OUT := 200
 static func ask(v) -> void:
 	if v == null or not is_instance_valid(v) or not AI.available():
 		return
-	var act := String(v.action_label())
 	var now := float(Time.get_ticks_msec()) / 1000.0
 	# **していることが同じでも訊き直す。** 同じ手を続けているあいだに
 	# 気持ちが動かないのは、身体の話であって心の話ではない
 	if now - v.feeling_at < COOL:
 		return
 	v.feeling_at = now
-	v.feeling_for = act
 	# 返るまでに選び直されている／死んでいることがあるので、本人か確かめる
 	var id: int = v.id
 	var take := func(text: String) -> void:

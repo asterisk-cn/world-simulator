@@ -105,7 +105,6 @@ var _clip: Control = null
 ## ここに分けないと焦げが紙の裏に隠れる
 var _ink: Control = null
 
-var _sheet: Control = null
 var _full := 0.0      ## 焼ける前の紙の丈
 var _seed := 0.0
 
@@ -130,7 +129,6 @@ func _init() -> void:
 ## 紙を預かる。以降この節点が紙の置き場になるので、
 ## 位置ぎめ（`main._show_setup`）はこちらに向ける
 func hold(sheet: Control) -> void:
-	_sheet = sheet
 	if sheet.get_parent() != null:
 		sheet.get_parent().remove_child(sheet)
 	sheet.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

@@ -31,7 +31,6 @@ var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決�
 ## 世界が知っているのは何が起きたかだけなので、どう感じているかはAIが答える。
 ## 繋がっていなければ空のまま——紙にはその行が出ない。
 var feeling := ""
-var feeling_for := ""   ## その一言を作ったときの `action_label()`
 var feeling_at := 0.0   ## 最後に訊いた実時間。同じ人に訊き直す間隔の底
 
 var current_action := {}
@@ -42,16 +41,6 @@ var think_again_at := 0.0
 
 ## 空振りの理由。**世界が見たこと**を、そのまま帳面に書くために持つ
 var _miss := ""
-
-## 立ち止まりの正体を分けて測る（検証用）。
-## `think` に入る道は2つ——出来事に呼ばれた（話しかけられた）と、
-## つもりが尽きて時機で訊いた。どちらがどれだけ止めているかで、直す場所が変わる
-static var think_event := 0.0
-static var think_timing := 0.0
-## 手が見込みより早く閉じた回数（話す手が返事で閉じる、など）
-static var act_early := 0
-static var act_full := 0
-var _why := ""
 
 
 ## 話す手のいま。会話は**2往復で1つの場面**で、この手のあいだに閉じる
@@ -134,24 +123,7 @@ func set_pair_values(theirs: Dictionary) -> void:
 			pp.set_v(String(pid), float(vals[pid]))
 
 
-## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
-## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
-func stirred() -> void:
-	if _brain == null:
-		return
-	_brain.forget_plan()
-	_why = "出来事"
-	# **止まるのは歩いているときだけ。** 「居合わせる」とは歩き去らないことで、
-	# 採りかけの手を落とすことではない。手を動かしている最中なら続けたまま、
-	# つもりだけ白紙にして訊く——考える2秒が手の中に入る
-	if action_phase == "move":
-		current_action = {}
-		action_phase = "idle"
-	think_again_at = 0.0
-	# **その場で訊く。** 手の終わりまで待つと、話しかけられた人は必ず
-	# 一往復ぶん立ち止まる（会話は頻度が高いので、そこが待ちの主な出どころになる）
-	_brain.think_over()
-var action_phase := "idle"  ## "move" | "act"
+var action_phase := "idle"  ## "idle" | "think" | "move" | "act"
 var act_timer := 0.0
 
 var _path: PackedVector2Array = PackedVector2Array()
@@ -214,13 +186,6 @@ func add_item(item: String, n: int) -> void:
 	inventory[item] = maxi(0, item_count(item) + n)
 
 
-func carried() -> int:
-	var t := 0
-	for k in inventory:
-		t += int(inventory[k])
-	return t
-
-
 # ---------------------------------------------------------------------------
 # メインループ
 # ---------------------------------------------------------------------------
@@ -230,11 +195,6 @@ func _process(delta: float) -> void:
 	# 考え込んでいても、息をしていない人は置物に見える。
 	# ここだけは世界の時間ではなく本当の時間で動く
 	_bob += delta * (3.0 if SimClock.paused or action_phase == "think" else 6.0)
-	if action_phase == "think":
-		if _why == "出来事":
-			think_event += delta
-		else:
-			think_timing += delta
 	if SimClock.paused or action_phase == "think":
 		queue_redraw()
 	if SimClock.paused:
@@ -316,7 +276,6 @@ func begin(c: Dictionary) -> void:
 	_beat = 0.0
 	_wrote = false
 	_writing = false
-	_why = ""
 	current_action = c
 	action_phase = "move"
 	act_timer = 0.0
@@ -493,8 +452,8 @@ func _seal_scene(note: String) -> void:
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
 ## その結果パラメータがどう動くかはここには書かれていない（AIの担当）。
 ##
-## 作る／建てる／使う は、本人が決めたこと（何を払うか・そこで何をするか）を
-## `current_action` から受け取って適用するだけ。決めているのは Brain のほう。
+## 手に入れる・建てるは、手に入れかた（`Schema.inputs_of`）のとおりに払う。
+## 使うは、`current_action` に乗った持ち物の動き（本人の答え、`Brain._decide_how`）を適用するだけ。
 func _complete_action() -> void:
 	var kind := String(current_action.get("kind", "move"))
 	var target := String(current_action.get("target", ""))
@@ -502,10 +461,6 @@ func _complete_action() -> void:
 	var done := true
 
 	match kind:
-		"move":
-			if (target == "toward" or target == "away") and obj != null \
-					and is_instance_valid(obj):
-				memory.record("移動：%s" % action_label())
 		"use":
 			done = _do_use(target, obj)
 		"make":
@@ -519,7 +474,7 @@ func _complete_action() -> void:
 				"read":
 					_do_read_board()
 
-	# 使うのは空振りすることがあり（採り尽くされていた）、
+	# 使うのは空振りすることがあり（手に無かった・建物が無くなっていた）、
 	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
 	if done:
 		say(kind, target)
@@ -573,13 +528,10 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 		var n := int(moved[iid])
 		if n <= 0:
 			continue
-		if iid == target:
-			# 1つ手に入れたことは、行動の名前（〜を手に入れる）がもう言っている
-			if n > 1:
-				got.append("%dつ手に入れた" % n)
-		else:
-			# 名前が違うもの（井戸から水）は、何を手にしたのかを言う
-			got.append("%sを%dつ手に入れた" % [Schema.item_label(iid), n])
+		# 1つ手に入れたことは、行動の名前（〜を手に入れる）がもう言っている。
+		# 増えるのは手に入れた物そのものだけ（`Schema.make_move`）
+		if n > 1:
+			got.append("%dつ手に入れた" % n)
 
 	var parts: Array = []
 	if not paid.is_empty():
@@ -656,8 +608,8 @@ func _do_use(target: String, obj) -> bool:
 
 
 ## 会話。言った言葉を双方の帳面に残す。
-## 【AI差し替え口】何を話すかは本人の言葉（手と一緒に返る「言うこと」、場面の続きは
-## `villager/talk.gd`）。相手をどう思うようになったかは、次の問いで相手ごとの値として
+## 【AI差し替え口】何を話すかは本人の言葉（1行目も場面の続きも `villager/talk.gd` が訊く。
+## 文章の相手に手を訊いたときだけ、手と一緒に返る「言うこと」が1行目になる）。相手をどう思うようになったかは、次の問いで相手ごとの値として
 ## 本人が答える（`Brain._read_jev`）。
 ## 追っても届かなかった、は空振り。**歩くあいだ相手も歩いている**ので、
 ## 見えなくなるまで離れられたり、道が無かったりすれば届かない
@@ -671,8 +623,8 @@ func _do_talk(other) -> bool:
 	if cell.distance_to(other.cell) > reach:
 		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false
-	# **何を言うかは本人が手を選んだときに決めている。**
-	# 世界が運ぶのは言葉そのものだけ。ここから先の往復は `Talk` が訊く
+	# 手と一緒に「言うこと」が返っていればそれが1行目（文章の相手に訊いたとき）。
+	# 無ければ `Talk` が1行目から訊く。世界が運ぶのは言葉そのものだけ
 	var words := String(current_action.get("言うこと", ""))
 	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
 	pair_to(other.id)

@@ -3,7 +3,7 @@ extends Node
 ##
 ## この作品の一線は「世界で何が起きたかはプログラム、それをどう受け取るかはAI」
 ## （DESIGN.md §2）。ここはその後ろ半分を運ぶだけの管で、判断は何も持たない。
-## 何を訊くかは呼ぶ側（`villager/brain.gd`・`villager/feeling.gd`）が組む。
+## 何を訊くかは呼ぶ側が組む（`villager/` の brain・feeling・talk・post・recall と `world/tech_tree.gd`）。
 ##
 ## **繋がっていなくても世界は動く。** 鍵が無ければ `available()` が false になり、
 ## 呼び側は自分で決めるか、何も出さないかを選ぶ。時間も村人も止めない——
@@ -67,7 +67,7 @@ const REASONING := ""
 ## この機械の中のモデルへの「考えるな」。**これが効かないと使い物にならない。**
 ## qwen3 は既定で考えるうえ、思考は `content` ではなく別の欄（`reasoning`）に出る。
 ## つまり枠 200 を思考で使い切って、**中身は空のまま 200 が返る**
-## （こちらでは失敗として扱われ、村人は自分で決めてしまう）。
+## （こちらでは失敗として扱われる）。
 ## 試したうち効いたのはこれだけ——`/no_think` も `think: false` も無視された。
 ## 欲しいのは番号1つと短い呼び名なので、考えてもらう必要がない
 const LOCAL_REASONING := "none"
@@ -92,8 +92,8 @@ const LANES_LOCAL := 4 ## この機械の中に同時に投げる数
 ## こちらが訊きすぎただけなのに村人のせいにすることだった
 
 ## 待たせる時間の上限。
-## 外は速いので短くていい。**この機械の中は長く待つ**——3手ぶんの答えは長く、
-## 4本が同時に流れるので、15秒では全部時間切れになった（実測：1件も通らない）。
+## 外は速いので短くていい。**この機械の中は長く待つ**——4本が同時に流れるので、
+## 15秒では全部時間切れになった（実測：1件も通らない。3手ぶんを訊いていた頃）。
 ## 古びた問いは待ち時間ではなく、**一人1枠の置き換え**で捨てる
 const WAIT_OUT := 10.0
 const WAIT_LOCAL := 40.0   ## 検証用。この機械の中は遅いので、切らずに待つ
@@ -117,9 +117,7 @@ var url := OPENAI_URL
 var local := false
 ## 最後に失敗した理由。出すのは検証用（`--echo-log`）だけで、紙には出さない
 var last_error := ""
-## 最後に使った量。**費用の見当を立てるため**だけに持つ（紙には出さない）
-var last_usage := {}
-## 投げた数・失敗した数・捨てた数。同じく見当のため
+## 投げた数・失敗した数・捨てた数。費用の見当を立てるため（紙には出さない）
 var sent := 0
 var failed := 0
 var dropped := 0
@@ -130,11 +128,6 @@ var _down_at := -1.0
 ## 返せた時刻。**いまの速さ**を出すために、直近だけ持つ
 var _answers: Array = []
 const RATE_SPAN := 20.0
-
-## 直近の**往復にかかった秒**。訊く時機を決めるのに使う（`Brain`）
-var _lags: Array = []
-const LAG_KEEP := 8
-const LAG_GUESS := 2.0   ## まだ測れていないときの見当
 
 var _key := ""
 var _jev_key := ""
@@ -211,14 +204,6 @@ func here() -> int:
 func here_name() -> String:
 	var c := choices()
 	return String(c[_here]["name"]) if _here < c.size() else "—"
-
-
-## 次へ送る（**押すたびに次へ**——姿や色と同じ送り方）
-func next_choice() -> void:
-	var c := choices()
-	if c.is_empty():
-		return
-	use(( _here + 1) % c.size())
 
 
 func use(i: int) -> void:
@@ -316,14 +301,10 @@ func _find_where() -> void:
 
 ## 訊く。`on_done` は文字列1つを受ける（失敗したら空文字）。
 ## `want_json` を立てると、返るのが JSON の物1つになる。
-## 返り値は「受け付けたか」——鍵が無い・溢れたときは false
+## 返り値は「受け付けたか」——鍵が無いときは false
 ## `who` はこの問いの主（村人のid）。**同じ主の古い問いは置き換える**
 ## `shape` を渡すと、答えの形をその JSON Schema に縛る（Structured Outputs, strict）。
 ## 文で「一覧に無い名前は使わない」と書いても守られなかったところを、形で縛るための口
-## 検証用：便の種類ごとの往復（急ぎ／普通）
-static var lag_quick: Array = []
-static var lag_full: Array = []
-
 func ask(prompt: String, system_text: String, on_done: Callable,
 		max_out: int = MAX_OUT, want_json: bool = false, who: int = -1,
 		shape: Dictionary = {}) -> bool:
@@ -338,7 +319,6 @@ func ask(prompt: String, system_text: String, on_done: Callable,
 		"on_done": on_done,
 		"who": who,
 		"tries": 0,
-		"quick": max_out <= 200 and want_json,
 	}
 	if who >= 0:
 		for i in range(_queue.size()):
@@ -350,14 +330,6 @@ func ask(prompt: String, system_text: String, on_done: Callable,
 	_queue.append(job)
 	_pump()
 	return true
-
-
-## 鍵を差し替える（遊ぶ側が入れる口。いまは呼ぶ場所が無い）
-func set_key(key: String) -> void:
-	var was := available()
-	_key = key.strip_edges()
-	if was != available():
-		ready_changed.emit(available())
 
 
 ## Jev に訊けるか。文章の相手とは別の鍵なので、片方だけ在ることもある
@@ -438,7 +410,6 @@ func _pump() -> void:
 
 
 func _send(lane: int, job: Dictionary) -> void:
-	job["sent_at"] = _now()
 	_lanes[lane]["job"] = job
 	_lanes[lane]["http"].timeout = WAIT_LOCAL if local else WAIT_OUT
 
@@ -511,9 +482,6 @@ func _on_done(result: int, code: int, _headers: PackedStringArray,
 		else:
 			_fail(lane, why)
 		return
-	var u = got.get("usage", {})
-	if typeof(u) == TYPE_DICTIONARY:
-		last_usage = u
 	_misses = 0
 
 	# 型のついた答えは、そのまま呼び側へ渡す（文章ではないので読み方が違う）
@@ -597,17 +565,6 @@ func rate() -> float:
 	return float(_answers.size()) / span
 
 
-## いま一往復にどれくらいかかっているか。**待ちに並ぶ時間も含む**——
-## 訊く時機を決めるのはこの実測で、モデルの速さの公称ではない
-func lag() -> float:
-	if _lags.is_empty():
-		return LAG_GUESS
-	var sum := 0.0
-	for x in _lags:
-		sum += float(x)
-	return sum / float(_lags.size())
-
-
 func _finish(lane: int, text: String) -> void:
 	_finish_any(lane, text)
 
@@ -618,16 +575,6 @@ func _finish_any(lane: int, got) -> void:
 	_lanes[lane]["job"] = {}
 	if typeof(got) != TYPE_STRING or String(got) != "":
 		_answers.append(_now())
-		var at := float(job.get("sent_at", -1.0))
-		if at > 0.0:
-			var took := _now() - at
-			if bool(job.get("quick", false)):
-				lag_quick.append(took)
-			else:
-				lag_full.append(took)
-			_lags.append(took)
-			while _lags.size() > LAG_KEEP:
-				_lags.pop_front()
 	if not job.is_empty():
 		var cb: Callable = job["on_done"]
 		if cb.is_valid():

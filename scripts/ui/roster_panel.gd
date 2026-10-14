@@ -21,7 +21,6 @@ var _head_row: HBoxContainer
 var _item_count := -1
 var _summary: Label
 var _accum := 0.0
-var _row_count := -1
 
 
 func _ready() -> void:

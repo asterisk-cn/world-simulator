@@ -41,6 +41,8 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	AI.text_off = true
+	# 最初の紙は空なので、シナリオの言葉と持ち物が在る既定の顔ぶれで埋める
+	Schema.load_defaults()
 	_load()
 	if _sc.is_empty():
 		print("[シナリオ] %s にシナリオが無い" % DIR)
@@ -171,7 +173,7 @@ func _build(d: Dictionary, file: String) -> Dictionary:
 		"self": feel, "pairs": others}
 
 
-## 「木を使う（そこに在る 12, 5）」→「木を使う（そこに在る）」。座標だけ落とす
+## 「木を手に入れる（木 12, 5）」→「木を手に入れる（木）」。座標だけ落とす
 static func _key_of(text: String) -> String:
 	var re := RegEx.new()
 	re.compile("\\s*-?\\d+,\\s*-?\\d+")

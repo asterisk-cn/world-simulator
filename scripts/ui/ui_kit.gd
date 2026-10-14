@@ -27,7 +27,6 @@ const HEAD := Color(0.36, 0.26, 0.16)     ## 見出し
 const INK := Color(0.30, 0.22, 0.14, 0.10)   ## 押せるものの下地
 const INK_HOVER := Color(0.30, 0.22, 0.14, 0.18)
 const INK_ACTIVE := Color(0.30, 0.22, 0.14, 0.28)
-const SUNK := Color(0.30, 0.22, 0.14, 0.13)  ## 入力欄のくぼみ
 const ACCENT := Color(0.86, 0.52, 0.18)   ## 神の手が届くところ。ここぞという1か所にだけ
 
 ## 日本語は英字より行が高い。入力欄やボタンをこれより低くすると文字の上下が切れる。
@@ -446,7 +445,7 @@ static func dot(col: Color, square: bool = false, px: int = 12) -> Control:
 
 
 ## 読み取り専用の行の字。罫線の欄と同じだけ字下げする。
-## これが無いと、世界が始まった瞬間に一覧の字が左へ 6px 飛ぶ。
+## これが無いと、世界が始まった瞬間に一覧の字が左へ `FIELD_INSET` ぶん飛ぶ。
 static func read_only(text: String, size: int = FS_BODY, col: Color = TEXT) -> Control:
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", FIELD_INSET)
@@ -868,26 +867,6 @@ static func add_button(parent: Node, text: String, on_press: Callable) -> Button
 	return b
 
 
-## タブの中身を一枚の紙として見せる。札（タブ）と紙が繋がって、
-## めくって切り替えている感じになる。
-static func page_style(pad: int = PAD_S) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = PAGE
-	sb.set_corner_radius_all(8)
-	# 左上はタブが乗る側。角を落として、見出しから紙へ繋げる
-	sb.corner_radius_top_left = 0
-	sb.content_margin_left = pad
-	sb.content_margin_right = pad
-	sb.content_margin_top = pad
-	sb.content_margin_bottom = pad
-	sb.border_color = Color(0.46, 0.33, 0.21, 0.30)
-	sb.set_border_width_all(1)
-	sb.shadow_color = Color(0, 0, 0, 0.10)
-	sb.shadow_size = 3
-	sb.shadow_offset = Vector2(0, 2)
-	return sb
-
-
 ## 一覧の行と行を分ける細い線
 static func hairline(parent: Node) -> void:
 	var l := ColorRect.new()
@@ -1081,23 +1060,6 @@ static func trash_toggle(parent: Node, tip: String) -> Button:
 	return b
 
 
-static func line_edit_row(parent: Node, name_text: String, value: String,
-		on_change: Callable, name_width: int = NAME_W) -> LineEdit:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GAP)
-	parent.add_child(row)
-	var nm := label(name_text, FS_BODY, TEXT)
-	nm.custom_minimum_size = Vector2(name_width, 0)
-	row.add_child(nm)
-	var le := LineEdit.new()
-	le.text = value
-	le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	le.custom_minimum_size = Vector2(92, ROW_H)
-	row.add_child(le)
-	le.text_changed.connect(on_change)
-	return le
-
-
 ## 選択肢のラジオ印は要らないので、項目をアイコンなしのチェック表示にする。
 static func dropdown(keys: Array, labels: Array, current: String) -> OptionButton:
 	var opt := OptionButton.new()
@@ -1114,134 +1076,11 @@ static func dropdown(keys: Array, labels: Array, current: String) -> OptionButto
 	return opt
 
 
-## 世界にある物を選ぶ欄。絵と語と印を1つの罫線に収めて、「🌲 木 ▾」で1語に見せる。
-## 絵が欄の外にあると、左の罫線に付いた飾りに見えてしまう。
-static func icon_dropdown(art: String, keys: Array, labels: Array,
-		current: String) -> Array:
-	var field := PanelContainer.new()
-	field.add_theme_stylebox_override("panel", ruled_style(0.03, 1))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GAP_S)
-	field.add_child(row)
-
-	var icon := ItemIcon.of_art(art, 22)
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(icon)
-
-	var opt := dropdown(keys, labels, current)
-	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# 器がもう罫線なので、中の欄は地のまま
-	opt.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-	opt.add_theme_stylebox_override("hover", flat_ink(INK_HOVER))
-	opt.add_theme_stylebox_override("pressed", flat_ink(INK_ACTIVE))
-	row.add_child(opt)
-	return [field, opt, icon]
-
-
 static func flat_ink(col: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
 	sb.set_corner_radius_all(4)
 	return sb
-
-
-## keys と labels は同じ長さ。選ばれた key が on_change に渡る。
-static func option_row(parent: Node, name_text: String, keys: Array, labels: Array,
-		current: String, on_change: Callable, name_width: int = NAME_W) -> OptionButton:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GAP)
-	parent.add_child(row)
-	var nm := label(name_text, FS_BODY, TEXT)
-	nm.custom_minimum_size = Vector2(name_width, 0)
-	row.add_child(nm)
-	var opt := dropdown(keys, labels, current)
-	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(opt)
-	opt.item_selected.connect(func(i: int) -> void: on_change.call(String(keys[i])))
-	return opt
-
-
-static func check_row(parent: Node, name_text: String, value: bool, on_toggle: Callable) -> CheckBox:
-	var cb := CheckBox.new()
-	cb.text = name_text
-	cb.button_pressed = value
-	parent.add_child(cb)
-	cb.toggled.connect(on_toggle)
-	return cb
-
-
-## 数を増減する丸い判。四角いボタンが並ぶとスピナーに見える。
-static func _round_button(glyph: String) -> Button:
-	var b := Button.new()
-	b.text = glyph
-	b.add_theme_font_size_override("font_size", FS_NOTE)
-	b.custom_minimum_size = Vector2(26, 26)
-	var mk := func(col: Color) -> StyleBoxFlat:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = col
-		sb.set_corner_radius_all(13)
-		sb.content_margin_left = 0
-		sb.content_margin_right = 0
-		sb.content_margin_top = 0
-		sb.content_margin_bottom = 0
-		return sb
-	b.add_theme_stylebox_override("normal", mk.call(INK))
-	b.add_theme_stylebox_override("hover", mk.call(INK_HOVER))
-	b.add_theme_stylebox_override("pressed", mk.call(INK_ACTIVE))
-	return b
-
-
-## ラベル + −/数/+ の行。on_change(new_count) が呼ばれる。
-## item を渡すと、名前の前に世界にあるものの絵が入る。
-static func stepper_row(parent: Node, name_text: String, value: int, vmax: int,
-		on_change: Callable, name_width: int = NAME_W, item: String = "") -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GAP_S)
-	parent.add_child(row)
-	if item != "":
-		row.add_child(ItemIcon.of_item(item, 22))
-	var nm := label(name_text, FS_BODY, TEXT)
-	nm.custom_minimum_size = Vector2(name_width, 0)
-	row.add_child(nm)
-
-	var minus := _round_button("−")
-	row.add_child(minus)
-
-	var val := label(str(value), FS_BODY, TEXT if value > 0 else TEXT_DIM)
-	val.custom_minimum_size = Vector2(24, 0)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	row.add_child(val)
-
-	var plus := _round_button("＋")
-	row.add_child(plus)
-
-	var count := [value]
-	var apply := func(d: int) -> void:
-		count[0] = clampi(count[0] + d, 0, vmax)
-		val.text = str(count[0])
-		val.add_theme_color_override("font_color", TEXT if count[0] > 0 else TEXT_DIM)
-		on_change.call(count[0])
-	minus.pressed.connect(func() -> void: apply.call(-1))
-	plus.pressed.connect(func() -> void: apply.call(1))
-	return row
-
-
-## 折りたたみ。中身を入れる VBoxContainer を返す。
-static func collapsible(parent: Node, title: String, open: bool = false) -> VBoxContainer:
-	var head := Button.new()
-	head.text = ("▼ " if open else "▶ ") + title
-	head.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	head.custom_minimum_size = Vector2(0, ROW_H)
-	parent.add_child(head)
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", HAIR)
-	body.visible = open
-	parent.add_child(body)
-	head.pressed.connect(func() -> void:
-		body.visible = not body.visible
-		head.text = ("▼ " if body.visible else "▶ ") + title
-	)
-	return body
 
 
 ## 間を空ける。h には余白の段（HAIR / GAP_S / GAP / PAD）だけを渡す。

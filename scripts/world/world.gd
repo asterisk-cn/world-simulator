@@ -276,54 +276,9 @@ func _nearest_open(c: Vector2i) -> Vector2i:
 	return c
 
 
-## 建物のまわりで空いているマス
-func free_cell_around(at: Vector2i) -> Vector2i:
-	var ring := [
-		Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1),
-		Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1),
-	]
-	for d in ring:
-		var c: Vector2i = at + d
-		if not in_bounds(c) or is_blocked(c):
-			continue
-		if board != null and board.cell == c:
-			continue
-		var taken := false
-		for s in structures:
-			if s.cell == c:
-				taken = true
-				break
-		for h in harvests:
-			if h.cell == c:
-				taken = true
-				break
-		if not taken:
-			return c
-	return at + Vector2i(1, 0)
-
-
 # ---------------------------------------------------------------------------
 # クエリ（村人の知覚）
 # ---------------------------------------------------------------------------
-
-## その場所を村人の言葉で言う。「(10,14)」のような生の座標は
-## 村人の発話としても神の読み物としても浮くので、掲示板や記録には出さない。
-const COMPASS := ["北", "北東", "東", "南東", "南", "南西", "西", "北西"]
-
-
-func place_name(cell: Vector2i) -> String:
-	var origin := Vector2(GRID_W, GRID_H) * 0.5
-	if board != null:
-		origin = Vector2(board.cell)
-	var d := Vector2(cell) - origin
-	if d.length() < 4.0:
-		return "村の真ん中"
-	# 画面の上が北。セル座標では -x-y の向き。
-	var ang := atan2(d.x + d.y, d.y - d.x)
-	var i := int(round(ang / (TAU / 8.0))) % 8
-	var near := "" if d.length() > 10.0 else "すぐ"
-	return "%s村の%s%s" % [near, COMPASS[(i + 8) % 8], "のはずれ" if d.length() > 10.0 else ""]
-
 
 func in_bounds(c: Vector2i) -> bool:
 	return c.x >= 0 and c.y >= 0 and c.x < GRID_W and c.y < GRID_H
@@ -365,21 +320,6 @@ func nearest_building(def_id: String, from_cell: Vector2,
 	return best
 
 
-## その人のものの中で、いちばん近いもの。「自分のところ」の行き先になる。
-## 何軒持っているかは決まっていないので、「その人の1軒」を指す言い方はしない。
-func nearest_owned(owner_id: int, from_cell: Vector2) -> Structure:
-	var best: Structure = null
-	var best_d := INF
-	for s in structures:
-		if s.owner_id != owner_id:
-			continue
-		var d: float = from_cell.distance_to(s.center_cell())
-		if d < best_d:
-			best_d = d
-			best = s
-	return best
-
-
 ## 名前から引く。**AIが答えるのは名前のほう**なので、世界の側で本人に戻す。
 ## 同じ名前が二人いたら最初の一人（名前は神が付けるので、重複を禁じていない）
 func villager_by_name(name_text: String):
@@ -407,7 +347,7 @@ func neighbors_within(from_cell: Vector2, radius: float, exclude_id: int) -> Arr
 	return out
 
 
-## 建てられる空きマス（村の中心から外へらせん状に探す）。
+## 建てられる空きマス（`near` から外へ、一回りずつ広げて探す）。
 ## 他の村人が立っているマスは避ける（上に建物が建ってしまうので）。
 func find_build_cell(near: Vector2, builder_id: int = -1) -> Vector2i:
 	var start := Vector2i(roundi(near.x), roundi(near.y))
@@ -435,7 +375,7 @@ func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 	return false
 
 
-## 建物どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
+## 建物どうしの間隔（マス）。密着すると間を通れなくなる（建物は誰も通り抜けられない）
 const BUILD_SPACING := 3
 
 

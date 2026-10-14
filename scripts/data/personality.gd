@@ -52,17 +52,3 @@ func set_axis(key: String, x: float) -> void:
 		"sn": sn = x
 		"tf": tf = x
 		"jp": jp = x
-
-
-## 4軸を離散化した MBTI 表記。表示とAIへの受け渡しに使う。
-func mbti() -> String:
-	return "%s%s%s%s" % [
-		"E" if ei >= 0.5 else "I",
-		"N" if sn >= 0.5 else "S",
-		"F" if tf >= 0.5 else "T",
-		"P" if jp >= 0.5 else "J",
-	]
-
-
-func describe() -> String:
-	return "%s・%s" % [mbti(), quirk]

@@ -75,15 +75,14 @@ const TARGETS := {
 	"make": {},
 }
 
-## 「使う」は、それがどこにあるかで間合いと時間が変わる。
-## 何をするか（食べる / 祈る）ではなく、どこにあるかだけで決まる。
-## 手に入れる・建てる・そこへ向かうのにかかる時間。**対象では変えない。**
+## 手に入れる・建てるのにかかる時間。**対象では変えない。**
 ## 何を作るのが大変かをプログラムは知らない——知っているのは神が付けた名前だけで、
 ## 名前から手間は読めない（籠と家で時間が違うはず、と決めるのは世界の越権）。
 const MAKE_SEC := 3.2
 const BUILD_SEC := 5.0
-const GO_SEC := 0.8
 
+## 「使う」は、それがどこにあるかで間合いと時間が変わる。
+## 何をするか（食べる / 祈る）ではなく、どこにあるかだけで決まる。
 const USE_WAYS := {
 	"hand": {"duration": 1.6, "reach": 999.0},    # 手の中のものを使う
 	"building": {"duration": 8.0, "reach": 1.6},  # 建物のそばで使う
@@ -122,7 +121,6 @@ const DEFAULT_VILLAGERS := 8
 const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
 
 ## 世界に元から在る場所。何かを手に入れる場所として選べる（建物も選べる）。
-## 茂み・木・岩は、それが生える持ち物（`PLACE_ITEM`）が消されていれば島に無い
 ## 何が採れるかは場所ではなく、手に入るもののほうに書く——
 ## 岩から石も鉄も採れるなら、それは石と鉄の手に入れかたが岩を指しているだけ
 const WORLD_PLACES := {"bush": "茂み", "tree": "木", "rock": "岩"}
@@ -210,7 +208,7 @@ func _remove_from(list: Array, id: String) -> void:
 #
 # 物ごとに持つのは 名前・姿 と、**手に入れかた**——材料（何をいくつ）と場所の2つだけ。
 #
-#   材料 … 手に入れるときに手の中から減るもの。数も決まっている（Jev が答える）。
+#   材料 … 手に入れるときに手の中から減るもの。数も決まっている（gpt-4o-mini が答える）。
 #          道具も材料の1つ（減る）。減らない道具という区別は持たない
 #   場所 … そこへ行って行う。世界に元から在る場所（茂み・木・岩）か、建物。
 #          空ならどこでも（手の中で済む）
@@ -223,8 +221,8 @@ func _remove_from(list: Array, id: String) -> void:
 # 輪になる指し方（道具の材料に道具が要る、のような）は受け付けない（`can_need`）。
 #
 # **手に入れかたを決めるのは神ではなく Jev。** 神が決めるのは名前と姿だけで、
-# 根（木の実・木・石）以外の手に入れかたは、世界が始まるときに Jev が1回で答える
-# （`world/tech_tree.gd`）。だからここでは空で生まれる。
+# 根（木の実・木・石）以外の手に入れかたは、世界が始まるときと、夜に書き足した物があるとき、
+# 物ごとに Jev が答える（数だけは gpt-4o-mini、`world/tech_tree.gd`）。だからここでは空で生まれる。
 #
 # 【FutureWork】世界に1本のツリーではなく、一人ひとりのAIが自分の作り方を持つ
 # （DESIGN.md §12）。
@@ -303,7 +301,8 @@ func place_label(place: String) -> String:
 	return building_label(place)
 
 
-## その場所がいまの世界に在るか。茂み・木・岩はもとの持ち物が消されていれば生えない
+## その場所がいまの世界に在るか。建物は書かれているものだけ。
+## 茂み・木・岩は、いまは固定なので常に在る（#35 で消せるようになっても、ここで見る）
 func place_alive(place: String) -> bool:
 	if WORLD_PLACES.has(place):
 		return is_world_item(String(PLACE_ITEM[place]))
@@ -503,8 +502,9 @@ func add_recipe() -> Dictionary:
 	return r2
 
 
-## 消しても、他の物の手に入れかたは直さない。木は始めるときに、
-## そのとき在る物だけから組み直す（`TechTree`）ので、消えた物を指す枝は残らない
+## 消せるのは固まっていない物だけ（始める前か、その夜に書き足した物）。
+## 他の物の手に入れかたは直さない。固まっていない物は、まだどの枝にも指されていない
+## （枝は焼いたときに組む、`TechTree`）ので、消えた物を指す枝は残らない
 func remove_recipe(id: String) -> void:
 	_remove_from(recipes, id)
 	recipes_changed.emit()
@@ -732,10 +732,6 @@ func param_def(id: String) -> Variant:
 	return null
 
 
-func has_param(id: String) -> bool:
-	return param_def(id) != null
-
-
 func param_label(id: String) -> String:
 	var d = param_def(id)
 	return id if d == null else String(d["label"])
@@ -747,10 +743,6 @@ func param_color(id: String) -> Color:
 	if d == null:
 		return SCOPE_COLORS[SCOPE_SELF]
 	return SCOPE_COLORS.get(String(d["scope"]), SCOPE_COLORS[SCOPE_SELF])
-
-
-func scope_color(scope: String) -> Color:
-	return SCOPE_COLORS.get(scope, SCOPE_COLORS[SCOPE_SELF])
 
 
 func param_min(id: String) -> float:
@@ -789,8 +781,7 @@ func remove_param(id: String) -> void:
 ## 型ごとに選べる対象。
 ##   使う … 手の中の持ち物 ＋ 建物
 ##   作る … 手に入るもの（持てるもの）と建てるもの。採るのもここ（材料が空なだけ）
-##   動く … 建てられるものぶんだけ行き先が増える（同じものが何軒あっても、いちばん近いところへ）。
-##          「自分のところ」は元からある行き先で、自分が建てたもののうち近いところ
+##   動く … 行き先の無い「適当な場所」だけ（`TARGETS`）
 func targets_of(kind: String) -> Dictionary:
 	var out := {}
 	match kind:
@@ -815,11 +806,6 @@ func targets_of(kind: String) -> Dictionary:
 
 func _target(label: String, duration: float = 1.6, reach: float = 999.0) -> Dictionary:
 	return {"label": label, "duration": duration, "reach": reach}
-
-
-## 「動く」の行き先が建物なら、その建物の id。そうでなければ空。
-func move_building(target: String) -> String:
-	return target.substr(3) if target.begins_with("go:") else ""
 
 
 func target_def(kind: String, target: String) -> Variant:

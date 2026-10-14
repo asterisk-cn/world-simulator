@@ -147,7 +147,7 @@ static func of(v, since: int = -1, hide_values: bool = false) -> String:
 
 	# 【AI差し替え口】本人がいま感じていること（`villager/feeling.gd`）。
 	# **世界の事実ではないが、本人のもの**なので渡す——渡さないと、
-	# 20秒ごとの一言が毎回ゼロから作られて、心が続いているように見えない
+	# 数秒ごとの一言が毎回ゼロから作られて、心が続いているように見えない
 	if String(v.feeling) != "":
 		out.append("")
 		out.append("# 今感じていること")

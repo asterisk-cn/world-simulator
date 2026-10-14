@@ -29,10 +29,6 @@ extends PanelContainer
 signal started
 signal closed
 
-## 名前を書く欄の幅。ことば・もちもの・たてもの で同じにする。
-## 区分ごとに幅が違うと、同じ紙に並んでいるのに別の種類のものに見える。
-const WORD_W := 200
-
 ## スコープの読み方。同じ形の言葉が、何人ぶん持たれるかだけが違う。
 const SCOPE_TIP := {
 	Schema.SCOPE_SELF: "一人につき1つ持つ言葉。0〜100。\n0 が何も感じていないところ。",

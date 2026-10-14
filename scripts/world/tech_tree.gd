@@ -43,10 +43,18 @@ const ANYWHERE := "どこでも（手の中で済む）"
 ##
 ## **物ごとに1回ずつ、全部同時に投げる。** 1回にまとめると問いが100を超え、
 ## 答えが「要らない」側に倒れた。待ち時間は1回ぶんとほぼ変わらない
-static func grow(on_done: Callable) -> bool:
+##
+## `fresh_only` は夜に書き足したとき（DESIGN.md §7）。**まだ固まっていない物だけ**を訊き、
+## 固まった物の枝は組み直さない——村人がもう覚えている作り方が、夜のうちに変わってしまう。
+## 新しい物は固まった物を材料や場所に指せるが、逆は起きないので輪にはならない
+static func grow(on_done: Callable, fresh_only: bool = false) -> bool:
+	var things := _things(fresh_only)
+	# 訊く物が無ければ、Jev が使えなくても組み終えている
+	if things.is_empty():
+		on_done.call(true)
+		return true
 	if not AI.can_decide():
 		return false
-	var things := _things()
 	var places := _places()
 	## 物のid → {"way": "採る"/"作る", "places": [場所…], "inputs": [材料のid…], "want": 種類の数}
 	## 場所も材料も**確率の高い順の並び**のまま持つ。輪になる答えは、木に入れるときに
@@ -280,13 +288,19 @@ static func _pick(a, opts: Array) -> Variant:
 	return opts[n] if n >= 0 and n < opts.size() else null
 
 
-## 訊く物。根（木の実・木・石）を除く、もちものとたてもの全部
-static func _things() -> Array:
+## 訊く物。根（木の実・木・石）を除く、もちものとたてもの全部。
+## `fresh_only` なら、まだ固まっていない物だけ
+static func _things(fresh_only: bool = false) -> Array:
 	var out: Array = []
 	for r in Schema.recipes:
-		if not Schema.is_world_item(String(r["id"])):
-			out.append(String(r["id"]))
+		if Schema.is_world_item(String(r["id"])):
+			continue
+		if fresh_only and Schema.is_fixed(r):
+			continue
+		out.append(String(r["id"]))
 	for b in Schema.buildings:
+		if fresh_only and Schema.is_fixed(b):
+			continue
 		out.append(String(b["id"]))
 	return out
 

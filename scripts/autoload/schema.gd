@@ -115,10 +115,9 @@ const DEFAULT_VILLAGERS := 8
 
 ## 島に在る持ち物と、その姿。茂み・木・岩へ行くと、材料なしで手に入る（技術ツリーの根）。
 ##
-## **定義は他のもちものと同じ一覧にある**（`recipes`）ので、名前を変えるのも消すのも同じ手で済む。
-## ここが持つのは「どれが島に生えるか」と、その姿だけ。
-## - 名前を変えれば、島の茂みから採れるものの名前も変わる（姿は茂みのまま）
-## - 消せば、島にも生えない。世界に無い物は生まれない
+## **いまは固定。** 設計図が空から始まっても、この3つだけは最初から在り、
+## 名前も姿も変えられず、消せない（どう扱うかは #35 で決める）。
+## 定義は他のもちものと同じ一覧（`recipes`）に並ぶ。
 ## 姿は選べない——茂みが壺の絵で手に入ったら、世界の上の姿と手の中の姿が食い違う
 const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
 
@@ -172,6 +171,41 @@ func _ready() -> void:
 
 
 # ---------------------------------------------------------------------------
+# 固まった言葉
+#
+# **書き足せるが、書き直せない。** 世界が動きはじめたら、それまでに書いたものは
+# 村人の記憶と値の前提になる。途中で名前が変わると、覚えていることと辻褄が合わない。
+# だから夜に設計図が戻ってきても、触れるのはその夜に書き足したものだけ。
+# ---------------------------------------------------------------------------
+
+## 書いてあるものを全部固める。紙を焼いた瞬間に呼ぶ
+func fix_all() -> void:
+	for list in [parameters, recipes, buildings, villagers]:
+		for d in list:
+			d["fixed"] = true
+
+
+## 世界を終えたら、また全部書き直せる。島に在るものは固定のまま
+func unfix_all() -> void:
+	for list in [parameters, recipes, buildings, villagers]:
+		for d in list:
+			if not WORLD_ARTS.has(String(d["id"])):
+				d.erase("fixed")
+
+
+func is_fixed(d: Dictionary) -> bool:
+	return bool(d.get("fixed", false))
+
+
+func _remove_from(list: Array, id: String) -> void:
+	for i in range(list.size()):
+		if String(list[i]["id"]) == id:
+			if not is_fixed(list[i]):
+				list.remove_at(i)
+			return
+
+
+# ---------------------------------------------------------------------------
 # 手に入れかた（技術ツリー）
 #
 # 物ごとに持つのは 名前・姿 と、**手に入れかた**——材料（何をいくつ）と場所の2つだけ。
@@ -197,11 +231,16 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 
 func _default_recipes() -> void:
-	recipes = [
-		{"id": "food", "label": "木の実", "art": "berry", "inputs": {}, "place": "bush"},
-		{"id": "wood", "label": "木", "art": "tree", "inputs": {}, "place": "tree"},
-		{"id": "stone", "label": "石", "art": "rock", "inputs": {}, "place": "rock"},
-		{"id": "tool", "label": "ハンマー", "art": "tool", "inputs": {}, "place": ""},
+	recipes = _world_recipes()
+	recipes.append({"id": "tool", "label": "ハンマー", "art": "tool", "inputs": {}, "place": ""})
+
+
+## 島に在るもの（技術ツリーの根）。固定なので、生まれたときから固まっている
+func _world_recipes() -> Array:
+	return [
+		{"id": "food", "label": "木の実", "art": "berry", "inputs": {}, "place": "bush", "fixed": true},
+		{"id": "wood", "label": "木", "art": "tree", "inputs": {}, "place": "tree", "fixed": true},
+		{"id": "stone", "label": "石", "art": "rock", "inputs": {}, "place": "rock", "fixed": true},
 	]
 
 
@@ -382,7 +421,7 @@ func make_move(id: String) -> Dictionary:
 	return move
 
 
-## 島に在るもちものか。消されていれば、島にも生えない
+## 島に在るもちものか
 func is_world_item(id: String) -> bool:
 	return WORLD_ARTS.has(id) and recipe_def(id) != null
 
@@ -467,16 +506,13 @@ func add_recipe() -> Dictionary:
 ## 消しても、他の物の手に入れかたは直さない。木は始めるときに、
 ## そのとき在る物だけから組み直す（`TechTree`）ので、消えた物を指す枝は残らない
 func remove_recipe(id: String) -> void:
-	for i in range(recipes.size()):
-		if String(recipes[i]["id"]) == id:
-			recipes.remove_at(i)
-			break
+	_remove_from(recipes, id)
 	recipes_changed.emit()
 
 
 func rename_recipe(id: String, label: String) -> void:
 	var r = recipe_def(id)
-	if r != null:
+	if r != null and not is_fixed(r):
 		r["label"] = label
 		recipes_changed.emit()
 
@@ -494,23 +530,20 @@ func add_building() -> Dictionary:
 
 
 func remove_building(id: String) -> void:
-	for i in range(buildings.size()):
-		if String(buildings[i]["id"]) == id:
-			buildings.remove_at(i)
-			break
+	_remove_from(buildings, id)
 	buildings_changed.emit()
 
 
 func rename_building(id: String, label: String) -> void:
 	var b = building_def(id)
-	if b != null:
+	if b != null and not is_fixed(b):
 		b["label"] = label
 		buildings_changed.emit()
 
 
-## 姿を選ぶ。押すたびに、用意された姿を順に送る。島に在るものの姿は動かない
+## 姿を選ぶ。押すたびに、用意された姿を順に送る。固まったものの姿は動かない
 func cycle_art(d: Dictionary, arts: Array) -> void:
-	if WORLD_ARTS.has(String(d["id"])):
+	if is_fixed(d):
 		return
 	var i := arts.find(String(d["art"]))
 	d["art"] = String(arts[(i + 1) % arts.size()])
@@ -518,11 +551,26 @@ func cycle_art(d: Dictionary, arts: Array) -> void:
 	buildings_changed.emit()
 
 
+## **最初は何もない。** 言葉も物も人も、神が書き足していく（DESIGN.md §7）。
+## 島に在るもの（木の実・木・石）だけは、いまは固定で最初から在る
 func reset_all() -> void:
+	parameters = []
+	recipes = _world_recipes()
+	buildings = []
+	villagers = []
+	_emit_all()
+
+
+## 書き足すところを飛ばして、既定の顔ぶれで埋める。`--autostart` の観察用
+func load_defaults() -> void:
 	_default_recipes()
 	_default_buildings()
 	_default_parameters()
 	_default_villagers()
+	_emit_all()
+
+
+func _emit_all() -> void:
 	parameters_changed.emit()
 	recipes_changed.emit()
 	buildings_changed.emit()
@@ -567,12 +615,7 @@ func add_villager() -> Dictionary:
 
 
 func remove_villager(id: String) -> void:
-	if villagers.size() <= 1:
-		return  # 誰もいない世界は観察できない
-	for i in range(villagers.size()):
-		if String(villagers[i]["id"]) == id:
-			villagers.remove_at(i)
-			break
+	_remove_from(villagers, id)
 	villagers_changed.emit()
 
 
@@ -732,10 +775,7 @@ func add_param(scope: String, label: String = "新しいことば") -> Dictionar
 
 
 func remove_param(id: String) -> void:
-	for i in range(parameters.size()):
-		if String(parameters[i]["id"]) == id:
-			parameters.remove_at(i)
-			break
+	_remove_from(parameters, id)
 	parameters_changed.emit()
 
 

@@ -25,6 +25,10 @@ var _cam_tween: Tween
 var wake := 0.0
 var _starting := false
 var _ending := false
+## 夜に設計図が戻ってきているか。書き足して「続ける」まで時間は止まる
+var _night := false
+## 火が待つ村人。始めるときは全員、夜は書き足された人だけ
+var _waiting: Array = []
 var _next_id := 1
 
 ## 言葉が決まった後の土地を作ったか。作り直しは一度だけ
@@ -58,7 +62,9 @@ func _ready() -> void:
 	_show_setup(true)
 
 	# ヘッドレス観察用。既定の定義のまま即座に始める（儀式は飛ばす）
+	# 最初の紙は空なので、既定の顔ぶれで埋めてから始める
 	if OS.get_cmdline_user_args().has("--autostart"):
+		Schema.load_defaults()
 		wake = 1.0
 		_autostart.call_deferred()
 	# 確率に従って引くのをやめ、いちばん高いものを取る（比べる用、`Brain.sample`）
@@ -104,7 +110,9 @@ func _cannot_start(why: String) -> void:
 	var note = preload("res://scripts/ui/confirm_popup.gd").new()
 	# 題を赤で「エラー」に。本文は何が起きたかと、次にすること。
 	# **エラーは敬語で。** 世界の外から遊ぶ人に向けた言葉なので、紙の上の平叙とは分ける
-	note.setup("エラー", "この世界を始められませんでした。\n少し待ってから、もう一度お試しください。",
+	# 夜の紙で止まったときは「始める」ではなく「続ける」話
+	note.setup("エラー", "%s。\n少し待ってから、もう一度お試しください。"
+		% ("続けられませんでした" if _night else "この世界を始められませんでした"),
 		"", "閉じる", Color(0.72, 0.30, 0.20))
 	# 設計図と同じ層に置く。テーマは自分で持たせる（CanvasLayer は伝えてくれない）
 	note.theme = SimConfig.ui_theme
@@ -132,6 +140,8 @@ func _ritual() -> void:
 	# **村人は先に置いて、裏で考えさせる。** 紙が燃えて島が崩れるあいだ
 	# （2秒あまり）は、どのみち待ち時間になる。そこへ問いを重ねる
 	_people_in()
+	# 焼いた言葉は固まる。夜に紙が戻ってきても、書き直せるのは書き足したものだけ
+	Schema.fix_all()
 	# 燃えている紙には触れない。**押した瞬間からもう書き換えられない**——
 	# 燃えながら書き足せる紙は、一度きりの創作の器にならない
 	_seal_paper(rules_panel)
@@ -187,12 +197,15 @@ func _burn_along() -> void:
 	if _burn_since < 0.0:
 		_burn_since = Time.get_ticks_msec() / 1000.0
 	var yet: Array = []
-	for v in world.villagers:
+	for v in _waiting:
 		if is_instance_valid(v) and not v.has_thought():
 			yet.append(String(v.vname))
-	# 人がまだ置かれていないあいだは、誰の考えも戻りようがない
-	var all: int = maxi(world.villagers.size(), 1)
+	# 人がまだ置かれていないあいだは、誰の考えも戻りようがない。
+	# 夜に誰も書き足されなければ、待つ人もいない
+	var all: int = maxi(_waiting.size(), 1)
 	var ready := 0.0 if not started else float(all - yet.size()) / float(all)
+	if _night and _waiting.is_empty():
+		ready = 1.0
 	var t := (Time.get_ticks_msec() / 1000.0) - _burn_since
 	var over: bool = t > THINK_WAIT or not AI.available()
 	# 時間のぶん（元の尺）と、考えの戻り具合。**遅いほうが天井**
@@ -217,6 +230,9 @@ func _burn_along() -> void:
 	_burning = false
 	_burn_since = -1.0
 	hud.say_loading("")
+	if _night:
+		_morning_after()
+		return
 	_close_setup()
 	for v in world.villagers:
 		v.visible = true
@@ -254,8 +270,8 @@ func _people_in() -> void:
 	if started:
 		return
 	started = true
-	_spawn_villagers()
-	for v in world.villagers:
+	_waiting = _spawn_villagers()
+	for v in _waiting:
 		v.visible = false
 		v.think_now()
 
@@ -273,12 +289,24 @@ func _place_villagers() -> void:
 		world.villagers[i].position = Iso.cell_to_world(c)
 
 
-## 燃えはじめた紙から手を離させる。見えてはいるが、もう触れない
+## 燃えはじめた紙から手を離させる。見えてはいるが、もう触れない。
+## 紙は夜にまた戻ってくるので、もとの受け方を覚えておく（`_unseal_paper`）
 func _seal_paper(at: Node) -> void:
 	if at is Control:
-		(at as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var ctl := at as Control
+		if not ctl.has_meta("sealed_from"):
+			ctl.set_meta("sealed_from", ctl.mouse_filter)
+		ctl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for c in at.get_children():
 		_seal_paper(c)
+
+
+func _unseal_paper(at: Node) -> void:
+	if at is Control and at.has_meta("sealed_from"):
+		(at as Control).mouse_filter = at.get_meta("sealed_from")
+		at.remove_meta("sealed_from")
+	for c in at.get_children():
+		_unseal_paper(c)
 
 
 ## 紙を片づける。**燃え切ってから**——焼いた紙は、閲覧用の窓として戻ってくる
@@ -289,6 +317,7 @@ func _close_setup() -> void:
 	_show_setup(false)
 	burn_paper.burn = 0.0
 	rules_panel.modulate.a = 1.0
+	_unseal_paper(rules_panel)
 	rules_panel.set_editable(false)
 
 
@@ -312,6 +341,7 @@ func _start_world() -> void:
 	_make_land()
 	world.birth = 1.0
 	_people_in()
+	Schema.fix_all()
 	for v in world.villagers:
 		v.visible = true
 	SimClock.paused = false
@@ -358,7 +388,12 @@ func _reset_world() -> void:
 	started = false
 	_starting = false
 	_ending = false
+	_night = false
+	_burning = false
+	_waiting = []
 	_next_id = 1
+	# 終えた世界の言葉は、また全部書き直せる
+	Schema.unfix_all()
 
 	# **盤面は片づけない。** 始めるときに作り直すので（`_make_land`）、
 	# ここで作り直すのは二度手間。畳んだ村はそのまま後ろに残って、
@@ -373,7 +408,9 @@ func _reset_world() -> void:
 	camera.zoom = Vector2(0.85, 0.85)
 
 	rules_panel.modulate.a = 0.0
+	_unseal_paper(rules_panel)
 	rules_panel.set_editable(true)
+	_closed = false
 	_show_setup(true)
 
 
@@ -410,16 +447,27 @@ func _setup_font() -> void:
 	get_window().theme = SimConfig.ui_theme
 
 
-## 開始前に「ひと」で決めた顔ぶれを、そのまま世界へ置く。
-func _spawn_villagers() -> void:
+## 設計図の「村人」に書いた顔ぶれを、世界へ置く。
+## **まだ固まっていない人だけ**——始めるときは全員、夜は書き足された人だけ。
+## 置いた人を返す
+func _spawn_villagers() -> Array:
 	var center := Vector2(World.GRID_W / 2.0, World.GRID_H / 2.0)
-	var n: int = Schema.villagers.size()
+	var fresh: Array = []
+	for h in Schema.villagers:
+		if not Schema.is_fixed(h):
+			fresh.append(h)
+	var out: Array = []
+	var n: int = fresh.size()
 	for i in range(n):
-		var h: Dictionary = Schema.villagers[i]
+		var h: Dictionary = fresh[i]
 		var a := TAU * float(i) / float(maxi(n, 1))
 		var c := center + Vector2(cos(a), sin(a)) * randf_range(3.0, 6.0)
 		c.x = clampf(c.x, 1.0, World.GRID_W - 2.0)
 		c.y = clampf(c.y, 1.0, World.GRID_H - 2.0)
+		# 夜に来る人は、もう建っているものの上には立たない
+		var ci := Vector2i(roundi(c.x), roundi(c.y))
+		if world.is_blocked(ci):
+			c = Vector2(world._nearest_open(ci))
 
 		var v := Villager.new()
 		v.setup(world, _next_id, String(h["name"]), Color(h["color"]), c)
@@ -430,6 +478,8 @@ func _spawn_villagers() -> void:
 			v.add_item(String(item), int(h["items"][item]))
 		_next_id += 1
 		world.register_villager(v)
+		out.append(v)
+	return out
 
 
 func _setup_camera() -> void:
@@ -531,7 +581,11 @@ func _setup_ui() -> void:
 	burn_paper.hold(rules)
 	hud.rules_panel = rules
 	rules_panel = rules
-	rules.started.connect(_begin_ritual)
+	rules.started.connect(func() -> void:
+		if _night:
+			_night_ritual()
+		else:
+			_begin_ritual())
 	rules.closed.connect(hud.close_panels)
 
 	# CanvasLayer は Control ではないのでテーマが伝わらない。各パネルに直接あてる。
@@ -564,6 +618,84 @@ func _process(_delta: float) -> void:
 func _on_night(_day: int) -> void:
 	for v in world.villagers:
 		v.on_night()
+	_open_night()
+
+
+# ---------------------------------------------------------------------------
+# 夜に書き足す
+#
+# **決める → 見る → 書き足す → 見る** のくり返し（DESIGN.md §7）。
+# 夜になると時間が止まり、設計図が戻ってくる。前の日までに書いたものは固まっていて、
+# 書き足せるのは新しい言葉・物・人だけ。「続ける」で紙が焼け、
+# 書き足した人が村に現れて、時間が動き出す。
+# ---------------------------------------------------------------------------
+
+func _open_night() -> void:
+	if not started or _ending or _night:
+		return
+	_night = true
+	_starting = false
+	SimClock.paused = true
+	hud.close_panels()
+	_select(null)
+	burn_paper.burn = 0.0
+	_unseal_paper(rules_panel)
+	rules_panel.set_editable(true, true)
+	_closed = false
+	rules_panel.modulate.a = 0.0
+	_show_setup(true)
+	create_tween().tween_property(rules_panel, "modulate:a", 1.0, 0.45)
+
+
+## 「続ける」。**まず書き足した物の手に入れかたを Jev に訊く**（始めるときと同じ理由——
+## 村人の考えは「いま何が手に入るか」を読むので、枝が先に要る）。
+## 固まった物の枝は組み直さない（`TechTree.grow` の `fresh_only`）。
+## 書き足した物が無ければ訊かずに進む。Jev が使えなければ、夜の紙のまま止まる
+func _night_ritual() -> void:
+	if not _night or _burning or _starting or _growing:
+		return
+	_growing = true
+	rules_panel.set_waiting(true)
+	var asked := TechTree.grow(func(ok: bool) -> void:
+		_growing = false
+		rules_panel.set_waiting(false)
+		if not ok:
+			_cannot_start("Jev から答えが返らない")
+			return
+		_night_burn(), true)
+	if not asked:
+		_growing = false
+		rules_panel.set_waiting(false)
+		_cannot_start("Jev が使えない")
+
+
+## 枝が組めたら、始める一拍と同じ火で焼く。島は崩さない——同じ世界の続きなので
+func _night_burn() -> void:
+	if not _night or _burning or _starting:
+		return
+	_starting = true
+	_waiting = _spawn_villagers()
+	for v in _waiting:
+		v.visible = false
+		v.think_now()
+	Schema.fix_all()
+	_seal_paper(rules_panel)
+	var tw := create_tween()
+	tw.tween_property(burn_paper, "burn", 0.03, 0.35).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func() -> void: _burning = true)
+
+
+## 夜の紙が焼け切った。書き足された人が現れ、時間が動き出す
+func _morning_after() -> void:
+	_night = false
+	_starting = false
+	_close_setup()
+	for v in _waiting:
+		if is_instance_valid(v):
+			# 村の記録には載せない（記録は建物・貼り紙・会話の4種だけ、#24）
+			v.visible = true
+	_waiting = []
+	SimClock.paused = false
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +703,8 @@ func _on_night(_day: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not started:
+	# 夜の紙が出ているあいだは世界に触れない（Space で時間を動かせてしまう）
+	if not started or _night:
 		return
 	if event is InputEventMouseButton:
 		match event.button_index:

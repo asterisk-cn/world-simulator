@@ -234,6 +234,7 @@ func _finish() -> void:
 	out.append("")
 	out.append("- %d本 × %d回、並びは%s。投げた問い %d件（失敗 %d）"
 		% [_sc.size(), repeat, "固定" if fixed else "毎回混ぜる", AI.sent, AI.failed])
+	out.append("- 手の選び方は%s" % ("確率に従って引く" if Brain.sample else "いちばん高いもの"))
 	out.append("")
 	out.append("| シナリオ | 答え | いちばん多い手 | その割合 | 出た手の種類 | 先頭を選んだ |")
 	out.append("|---|---:|---|---:|---:|---:|")

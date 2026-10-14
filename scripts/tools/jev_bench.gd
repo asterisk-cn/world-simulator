@@ -238,6 +238,7 @@ func _report() -> String:
 		% [secs, speed, world.villagers.size(), _live.size()])
 	out.append("- 投げた問い %d件（失敗 %d・置き換え %d）。文章の相手は%s"
 		% [AI.sent, AI.failed, AI.dropped, "使った" if not AI.text_off else "止めた"])
+	out.append("- 手の選び方は%s" % ("確率に従って引く" if Brain.sample else "いちばん高いもの"))
 	out.append("")
 	out.append("## 行動選択の偏り（動かしているあいだ）")
 	out.append("")

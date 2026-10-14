@@ -61,6 +61,8 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--autostart"):
 		wake = 1.0
 		_start_world.call_deferred()
+	# 確率に従って引くのをやめ、いちばん高いものを取る（比べる用、`Brain.sample`）
+	Brain.sample = not OS.get_cmdline_user_args().has("--jev-argmax")
 	# Jev の答えを数える（`tools/jev_bench.gd`）。`--autostart` と一緒に使う
 	if OS.get_cmdline_user_args().has("--jev-bench"):
 		add_child(JevBench.new(world))

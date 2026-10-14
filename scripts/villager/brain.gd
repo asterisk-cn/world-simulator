@@ -279,8 +279,36 @@ static func jev_probs(ans: Dictionary, lines: Array) -> Array:
 	return out
 
 
-## 答えから選ばれた手。{"i": 番号(0〜), "conf": 確信}
+## **確率に従って引く。** Jev は一つ選ぶだけでなく、どの手にどれだけ傾いているかも返す。
+## いちばん高いもの（`choice`）だけを取ると、何も迫っていない朝の
+## 「話す 0.42・食べる 0.22・作る 0.11…」が、毎回 100% 話すになる——
+## 4割の好みを10割の行動にしているのは、答えではなく読む側だった（#40）。
+## 引いた手も Jev が付けた重みのとおりで、世界が「このくらい散らすはず」と決めてはいない。
+## `--jev-argmax` のときだけ、前のとおりいちばん高いものを取る（比べる用）
+static var sample := true
+
+
+## 答えから選ばれた手。{"i": 番号(0〜), "conf": 確信, "p": 引いた手の確率}
 static func jev_pick(ans: Dictionary, lines: Array) -> Dictionary:
+	var top := _top_pick(ans, lines)
+	if not sample or int(top["i"]) < 0:
+		return top
+	var probs := jev_probs(ans, lines)
+	var sum := 0.0
+	for p in probs:
+		sum += float(p)
+	if sum <= 0.0:
+		return top
+	var r := randf() * sum
+	for i in range(probs.size()):
+		r -= float(probs[i])
+		if r <= 0.0:
+			return {"i": i, "conf": top["conf"], "p": float(probs[i]) / sum}
+	return top
+
+
+## いちばん高いもの
+static func _top_pick(ans: Dictionary, lines: Array) -> Dictionary:
 	var pick = ans.get(ACT_KEY, null)
 	if typeof(pick) != TYPE_DICTIONARY:
 		return {"i": -1, "conf": 0.0}
@@ -370,7 +398,8 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 	c["確信"] = float(got["conf"])
 	var step := _pick(c)
 	step["by"] = "Jev"
-	EventLog.mind(v.vname, "つぎ：%s（確信 %.2f）" % [_name_act(c), c["確信"]])
+	EventLog.mind(v.vname, "つぎ：%s（確率 %.2f・確信 %.2f）"
+		% [_name_act(c), float(got.get("p", 0.0)), c["確信"]])
 	_next = {
 		"kind": String(c["kind"]), "target": String(c["target"]),
 		"obj": c.get("obj", null), "said": "", "量": null, "言うこと": "",

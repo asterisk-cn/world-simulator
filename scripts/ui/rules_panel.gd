@@ -148,13 +148,7 @@ func set_editable(on: bool) -> void:
 
 
 func _on_start() -> void:
-	_mode_label.text = ""
 	started.emit()
-
-
-## 始められなかったことを、手の行に言う（消すものを選んでいる、と同じ場所・同じ色）
-func say_error(text: String) -> void:
-	_mode_label.text = text
 
 
 ## 世界の支度（技術ツリー）を待っているあいだは、二度押せない

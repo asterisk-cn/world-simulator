@@ -117,6 +117,9 @@ static func build_theme(font: Font) -> Theme:
 		th.set_stylebox("focus", t, StyleBoxEmpty.new())
 		th.set_stylebox("disabled", t, flat.call(Color(0.30, 0.22, 0.14, 0.04), 6, 10, 5))
 		th.set_color("font_color", t, TEXT)
+		# フォーカスの字も墨にする。決めないとエンジン既定の白に近い色になり、
+		# 開いた瞬間にボタンへ指を置く一枚（`confirm_popup.gd`）で字が紙に溶けた
+		th.set_color("font_focus_color", t, TEXT)
 		th.set_color("font_hover_color", t, Color(0.10, 0.08, 0.05))
 		th.set_color("font_pressed_color", t, Color(0.10, 0.08, 0.05))
 		th.set_color("font_disabled_color", t, Color(0.30, 0.26, 0.20, 0.4))

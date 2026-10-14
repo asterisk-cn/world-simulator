@@ -74,7 +74,7 @@ func _begin_ritual() -> void:
 	if started or _starting or _growing:
 		return
 	if not AI.can_decide():
-		rules_panel.say_error("Jev が使えないので、始められない")
+		_cannot_start("Jev が使えない")
 		return
 	_growing = true
 	rules_panel.set_waiting(true)
@@ -82,9 +82,25 @@ func _begin_ritual() -> void:
 		_growing = false
 		rules_panel.set_waiting(false)
 		if not ok:
-			rules_panel.say_error("Jev から答えが返らず、始められなかった")
+			_cannot_start("Jev から答えが返らない")
 			return
 		_ritual())
+
+
+## 始められなかった。**一枚の知らせで言う**（設計図の手の行に書くと、行が伸びて紙ごと広がった）。
+## **理由は書かない**——どの AI が使えないかは遊ぶ人にどうにもできないことで、
+## 仕組みの名前を見せることになる。理由は記録（`--echo-log`）にだけ出す
+func _cannot_start(why: String) -> void:
+	if EventLog.echo:
+		print("[始められない] %s" % why)
+	var note = preload("res://scripts/ui/confirm_popup.gd").new()
+	# 題を赤で「エラー」に。本文は何が起きたかと、次にすること。
+	# **エラーは敬語で。** 世界の外から遊ぶ人に向けた言葉なので、紙の上の平叙とは分ける
+	note.setup("エラー", "この世界を始められませんでした。\n少し待ってから、もう一度お試しください。",
+		"", "閉じる", Color(0.72, 0.30, 0.20))
+	# 設計図と同じ層に置く。テーマは自分で持たせる（CanvasLayer は伝えてくれない）
+	note.theme = SimConfig.ui_theme
+	rules_panel.get_parent().add_child(note)
 
 
 ## 技術ツリーを訊いている最中

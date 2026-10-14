@@ -3,6 +3,10 @@ extends Control
 ##
 ## エンジン既定のダイアログは使わない。OSの窓が出ると、そこだけ紙の世界から抜ける。
 ## 幕は後ろへの操作も止める。訊いている最中に世界を触れると、問いが宙に浮く。
+##
+## **知らせるだけの一枚にもなる。** `ok_text` を空にすると、ボタンは `no_text` の1つだけ
+## （始められなかった、のように、選ぶものが無いとき）。
+## エラーを知らせるときは `title_col` に赤を渡す——題の色で、知らせとエラーを見分ける。
 
 signal confirmed
 signal canceled
@@ -11,13 +15,16 @@ var _title := ""
 var _note := ""
 var _ok_text := "終了する"
 var _no_text := "やめる"
+var _title_col := UIKit.HEAD
 
 
-func setup(title: String, note: String, ok_text: String, no_text: String = "やめる") -> void:
+func setup(title: String, note: String, ok_text: String, no_text: String = "やめる",
+		title_col: Color = UIKit.HEAD) -> void:
 	_title = title
 	_note = note
 	_ok_text = ok_text
 	_no_text = no_text
+	_title_col = title_col
 
 
 func _ready() -> void:
@@ -44,7 +51,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", UIKit.GAP)
 	UIKit.body_of(paper).add_child(box)
 
-	var t := UIKit.label(_title, UIKit.FS_HEAD, UIKit.HEAD)
+	var t := UIKit.label(_title, UIKit.FS_HEAD, _title_col)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(t)
 
@@ -59,9 +66,10 @@ func _ready() -> void:
 	var no := UIKit.button(row, _no_text, _on_no)
 	no.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	no.custom_minimum_size = Vector2(0, 38)
-	var ok := UIKit.accent_button(row, _ok_text, _on_ok)
-	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ok.custom_minimum_size = Vector2(0, 38)
+	if _ok_text != "":
+		var ok := UIKit.accent_button(row, _ok_text, _on_ok)
+		ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ok.custom_minimum_size = Vector2(0, 38)
 	# 既定は「やめる」側。開いた瞬間に Enter で終わってしまわないように
 	no.grab_focus.call_deferred()
 

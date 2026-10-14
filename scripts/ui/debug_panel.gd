@@ -56,7 +56,6 @@ func _give_materials() -> void:
 	for v in world.villagers:
 		for item in Schema.world_items():
 			v.add_item(String(item), GIVEN)
-	EventLog.notable("神が全員に持ち物を配った")
 
 
 ## 建った状態をすぐ見るための近道。誰のものでもないので、村の真ん中の空きに置く。
@@ -67,7 +66,6 @@ func _build_one_each() -> void:
 		if c.x < 0:
 			continue
 		world.add_structure(String(b["id"]), c)
-	EventLog.notable("神が建てた")
 
 
 func _close() -> void:

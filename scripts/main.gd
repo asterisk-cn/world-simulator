@@ -169,7 +169,6 @@ func _burn_along() -> void:
 	_close_setup()
 	for v in world.villagers:
 		v.visible = true
-	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 	var tw := create_tween()
 	tw.tween_property(world, "birth", 1.0, BIRTH_SPAN).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(self, "wake", 1.0, 1.1).set_trans(Tween.TRANS_SINE)
@@ -253,7 +252,6 @@ func _start_world() -> void:
 	for v in world.villagers:
 		v.visible = true
 	SimClock.paused = false
-	EventLog.add("村が始まった。%d人。" % world.villagers.size(), Color(0.30, 0.36, 0.52))
 
 
 ## 取り返しがつかないので、終える前に一度だけ訊く。
@@ -503,7 +501,6 @@ func _process(_delta: float) -> void:
 func _on_night(_day: int) -> void:
 	for v in world.villagers:
 		v.on_night()
-	EventLog.add("夜になった。村人たちは記憶を整理している。", Color(0.30, 0.36, 0.58))
 
 
 # ---------------------------------------------------------------------------

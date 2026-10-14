@@ -213,14 +213,6 @@ func here_name() -> String:
 	return String(c[_here]["name"]) if _here < c.size() else "—"
 
 
-## 次へ送る（**押すたびに次へ**——姿や色と同じ送り方）
-func next_choice() -> void:
-	var c := choices()
-	if c.is_empty():
-		return
-	use(( _here + 1) % c.size())
-
-
 func use(i: int) -> void:
 	var c := choices()
 	if i < 0 or i >= c.size():
@@ -320,10 +312,6 @@ func _find_where() -> void:
 ## `who` はこの問いの主（村人のid）。**同じ主の古い問いは置き換える**
 ## `shape` を渡すと、答えの形をその JSON Schema に縛る（Structured Outputs, strict）。
 ## 文で「一覧に無い名前は使わない」と書いても守られなかったところを、形で縛るための口
-## 検証用：便の種類ごとの往復（急ぎ／普通）
-static var lag_quick: Array = []
-static var lag_full: Array = []
-
 func ask(prompt: String, system_text: String, on_done: Callable,
 		max_out: int = MAX_OUT, want_json: bool = false, who: int = -1,
 		shape: Dictionary = {}) -> bool:
@@ -338,7 +326,6 @@ func ask(prompt: String, system_text: String, on_done: Callable,
 		"on_done": on_done,
 		"who": who,
 		"tries": 0,
-		"quick": max_out <= 200 and want_json,
 	}
 	if who >= 0:
 		for i in range(_queue.size()):
@@ -350,14 +337,6 @@ func ask(prompt: String, system_text: String, on_done: Callable,
 	_queue.append(job)
 	_pump()
 	return true
-
-
-## 鍵を差し替える（遊ぶ側が入れる口。いまは呼ぶ場所が無い）
-func set_key(key: String) -> void:
-	var was := available()
-	_key = key.strip_edges()
-	if was != available():
-		ready_changed.emit(available())
 
 
 ## Jev に訊けるか。文章の相手とは別の鍵なので、片方だけ在ることもある
@@ -621,10 +600,6 @@ func _finish_any(lane: int, got) -> void:
 		var at := float(job.get("sent_at", -1.0))
 		if at > 0.0:
 			var took := _now() - at
-			if bool(job.get("quick", false)):
-				lag_quick.append(took)
-			else:
-				lag_full.append(took)
 			_lags.append(took)
 			while _lags.size() > LAG_KEEP:
 				_lags.pop_front()

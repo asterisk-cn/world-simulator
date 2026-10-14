@@ -733,10 +733,6 @@ func param_def(id: String) -> Variant:
 	return null
 
 
-func has_param(id: String) -> bool:
-	return param_def(id) != null
-
-
 func param_label(id: String) -> String:
 	var d = param_def(id)
 	return id if d == null else String(d["label"])
@@ -748,10 +744,6 @@ func param_color(id: String) -> Color:
 	if d == null:
 		return SCOPE_COLORS[SCOPE_SELF]
 	return SCOPE_COLORS.get(String(d["scope"]), SCOPE_COLORS[SCOPE_SELF])
-
-
-func scope_color(scope: String) -> Color:
-	return SCOPE_COLORS.get(scope, SCOPE_COLORS[SCOPE_SELF])
 
 
 func param_min(id: String) -> float:

@@ -44,15 +44,6 @@ func post(author_id: int, author_name: String, text: String) -> Dictionary:
 	return entry
 
 
-func remove_post(post_id: int) -> void:
-	for i in range(posts.size()):
-		if posts[i]["id"] == post_id:
-			posts.remove_at(i)
-			posts_changed.emit()
-			queue_redraw()
-			return
-
-
 func unread_for(mem) -> Array:
 	var out: Array = []
 	for e in posts:

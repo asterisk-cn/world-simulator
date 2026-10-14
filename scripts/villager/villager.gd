@@ -134,23 +134,6 @@ func set_pair_values(theirs: Dictionary) -> void:
 			pp.set_v(String(pid), float(vals[pid]))
 
 
-## 自分の身に何か起きた。**つもりを白紙にして、次の手から考え直す。**
-## 何が「重要か」は判断なので見ない——自分の行動以外で身に起きたことは全部きっかけ
-func stirred() -> void:
-	if _brain == null:
-		return
-	_brain.forget_plan()
-	_why = "出来事"
-	# **止まるのは歩いているときだけ。** 「居合わせる」とは歩き去らないことで、
-	# 採りかけの手を落とすことではない。手を動かしている最中なら続けたまま、
-	# つもりだけ白紙にして訊く——考える2秒が手の中に入る
-	if action_phase == "move":
-		current_action = {}
-		action_phase = "idle"
-	think_again_at = 0.0
-	# **その場で訊く。** 手の終わりまで待つと、話しかけられた人は必ず
-	# 一往復ぶん立ち止まる（会話は頻度が高いので、そこが待ちの主な出どころになる）
-	_brain.think_over()
 var action_phase := "idle"  ## "move" | "act"
 var act_timer := 0.0
 
@@ -212,13 +195,6 @@ func item_count(item: String) -> int:
 
 func add_item(item: String, n: int) -> void:
 	inventory[item] = maxi(0, item_count(item) + n)
-
-
-func carried() -> int:
-	var t := 0
-	for k in inventory:
-		t += int(inventory[k])
-	return t
 
 
 # ---------------------------------------------------------------------------

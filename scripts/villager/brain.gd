@@ -38,8 +38,6 @@ var _heard := 0
 ## この問いだけ枠を広げる。**動いた値と3手ぶんの言葉**が返るので、
 ## 番号1つだけだった頃の枠では途中で切れる
 const OUT := 400
-## 急ぎ便の枠。返す言葉と1手だけなので細い
-const OUT_QUICK := 150
 
 
 func _init(p_villager) -> void:
@@ -125,27 +123,11 @@ func _take_ready(cands: Array) -> Dictionary:
 	return {}
 
 
-## 身に何か起きた。訊いておいた手は捨てる（`Villager.stirred`）——
-## 起きたことを読む前に決めた手なので、いまの本人の考えではない
-func forget_plan() -> void:
-	_next = {}
-
-
 ## 帳面が頭から落ちた（夜、本人が畳んだ）。**読んだ位置も一緒にずらす**——
 ## 「前に考えてから起きたこと」を出来事の位置で覚えているので、
 ## ずらさないと、明日の最初の問いに昨日ぶんが混ざるか、今日ぶんが消える
 func forget_before(dropped: int) -> void:
 	_heard = maxi(_heard - dropped, 0)
-
-
-## その場で考え直す。**手の終わりを待たない**——待つと、話しかけられた人が
-## 必ず一往復ぶん立ち止まる。返事は今の手が終わるまでに戻る
-func think_over() -> void:
-	if v.asking:
-		return
-	var cands := feasible()
-	if cands.size() > 1:
-		_ask(cands, true)   # 急ぎ便。返事を待たせている
 
 
 ## 検証用の数。つもりが尽きた理由を分ける——使い切ったのか、途中で捨てたのか
@@ -167,13 +149,6 @@ func _pick(c: Dictionary) -> Dictionary:
 ##
 ## 答えが読めなかったときはその場でランダムに落として始める——
 ## **答えが来ない相手を待ち続けると、村人は二度と動かない。**
-## `quick` は**急ぎ便**——話しかけられて、返事を待たせている問い。
-## 訊くのは「返す言葉と次の1手」だけで、値の動きも思ったことも載せない。
-## 出力が 120→40 トークンになるぶん、往復が半分になる。
-##
-## **便を増やしてはいない。** 同じ一本の問いの、深さを変えているだけ
-## （出力の項目を減らしているだけ）。値は次の普通便が、
-## そのあいだに起きたこと全部を読んで振り返る（`_heard` を進めない）
 ## **型のついた相手（Jev）に訊く。** 骨は「一覧から1つ選ぶ」なので、
 ## 文章を作らない相手のほうが速い（実測 0.5秒 / 毎秒13.5件）。
 ## 値も**段階**で訊く——増減の申告だと幅の読み方が本人任せになり、
@@ -465,15 +440,14 @@ func _levels_text(mine: Dictionary, only_moved: bool = false) -> String:
 	return " / ".join(out)
 
 
-func _ask(cands: Array, quick: bool = false) -> bool:
+func _ask(cands: Array) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
 	var asked := cands
 	# 紙を作ってから位置を進める（`_ask_jev` と同じ）
-	var said := _prompt(asked, quick)
-	if not quick:
-		_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
-		_thought_at = SimClock.clock_text()
+	var said := _prompt(asked)
+	_heard = v.memory.episodes.size()   # ここから先が、次に訊くときの「起きたこと」
+	_thought_at = SimClock.clock_text()
 	var take := func(text: String) -> void:
 		if not is_instance_valid(v):
 			return
@@ -489,8 +463,7 @@ func _ask(cands: Array, quick: bool = false) -> bool:
 		# 届いた判断はその場面が終わるまで待つ
 		if v.action_phase == "think":
 			v.begin(choose())
-	v.asking = AI.ask(said, _system(quick), take,
-		OUT_QUICK if quick else OUT, true, v.id)
+	v.asking = AI.ask(said, _system(), take, OUT, true, v.id)
 	return v.asking
 
 
@@ -624,22 +597,7 @@ const NAME_MAX := 16
 
 ## **見本は載せない。** 具体例を置くと、値も台詞もそのまま写して返ってくる
 ## （村中が同じ一言を言った）。形は言葉で説明すれば足りる。
-static func _system(quick: bool = false) -> String:
-	if quick:
-		return """あなたは、ある村に住む一人の人間です。
-いま誰かに話しかけられました。**返す言葉**と、**話が終わったら何をするか**を答えます。
-
-返すのは JSON の物1つ。入れるのは「手」だけ——次にすること1つ。
-    「番号」  … 一覧にあるものから。無いものは選べない
-    「していること」… 選んだ手を、自分なら何と言うか。%d字以内。
-                **「〜する」で終わる短い言い方**にする——
-                相手の名前や物の名前だけでは、していることにならない
-    「言うこと」… %d字以内。**そのまま相手に届く言葉**を書く
-                 （「返事をする」のような説明ではなく、言う言葉そのもの）
-
-返すなら、一覧の「話す」を選んで「言うこと」を書く。
-返さずに立ち去るなら、別の手を選ぶ。それも答えのうち。
-説明も理由も書かない。""" % [NAME_MAX, WORDS_MAX]
+static func _system() -> String:
 	return """あなたは、ある村に住む一人の人間です。
 渡された姿と「いまできること」を読んで、
 **前に考えてから起きたこと**（今日あったことの %s の行）**で自分の中がどう動いたか**と、
@@ -679,7 +637,7 @@ static func _system(quick: bool = false) -> String:
 const WORDS_MAX := 40
 
 
-func _prompt(cands: Array, quick: bool = false) -> String:
+func _prompt(cands: Array) -> String:
 	# **前に訊いてから、身に起きたこと**は今日あったことに印で載る。
 	# これで自分の中がどう動いたかを答える
 	var out := PackedStringArray()
@@ -689,10 +647,7 @@ func _prompt(cands: Array, quick: bool = false) -> String:
 	for i in range(cands.size()):
 		out.append("%d. %s%s" % [i + 1, _name_act(cands[i]), _at(cands[i])])
 	out.append("")
-	if quick:
-		out.append("何と返す？ そのあと何をする？")
-	else:
-		out.append("次にすることを1つ。")
+	out.append("次にすることを1つ。")
 	return "\n".join(out)
 
 

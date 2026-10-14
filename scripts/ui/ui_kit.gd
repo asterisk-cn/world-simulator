@@ -445,7 +445,7 @@ static func dot(col: Color, square: bool = false, px: int = 12) -> Control:
 
 
 ## 読み取り専用の行の字。罫線の欄と同じだけ字下げする。
-## これが無いと、世界が始まった瞬間に一覧の字が左へ 6px 飛ぶ。
+## これが無いと、世界が始まった瞬間に一覧の字が左へ `FIELD_INSET` ぶん飛ぶ。
 static func read_only(text: String, size: int = FS_BODY, col: Color = TEXT) -> Control:
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", FIELD_INSET)

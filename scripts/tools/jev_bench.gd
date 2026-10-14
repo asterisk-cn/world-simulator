@@ -153,7 +153,7 @@ static func _act_key(v, c: Dictionary) -> String:
 	var kind := String(c["kind"])
 	var name: String
 	if c.get("obj", null) is Villager:
-		name = "誰かと話す" if kind == "talk" else "誰かのところへ向かう"
+		name = "誰かと話す"
 	else:
 		name = v._brain._name_act(c)
 	match String(c.get("where", "")):

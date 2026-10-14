@@ -2,7 +2,7 @@ class_name TechTree
 ## 【AI差し替え口】この世界の技術ツリー。物ごとの手に入れかた（材料と場所）を Jev に訊く。
 ##
 ## 神が決めるのは**何が在りうるか**（名前と姿）まで。それを何から、どこで手に入れるかは
-## 神には見せず、**世界が始まるときに Jev が答える**（物ごとに1回、全部同時に）。同じ設計図でも、
+## 神には見せず、**世界が始まるときに Jev が答える**（物ごとに1回、全部同時に。数だけは gpt-4o-mini）。同じ設計図でも、
 ## 始めるたびにツリーは変わる。神が夜に物を書き足したら、「続ける」のときに
 ## その物の手に入れかただけを訊いて組み込む（固まった物の枝は組み直さない）。
 ##
@@ -92,6 +92,9 @@ static func grow(on_done: Callable, fresh_only: bool = false) -> bool:
 	return true
 
 
+## 数の上限（`_ask_counts` の答えの形）
+const COUNT_MAX := 4
+
 ## **数だけは文章のモデル（gpt-4o-mini）に訊く。** Jev は数を読まなかった
 ## （どの材料でも同じ分布が返った）。文章のモデルは名前の知識で数を出せる
 ## （家に木4・石2）が、手に入れかたを丸ごと任せると、一覧に無い物を書いたり
@@ -101,8 +104,6 @@ static func grow(on_done: Callable, fresh_only: bool = false) -> bool:
 ## 答えの形は JSON Schema で縛る（`AI.ask` の `shape`）——物の名前も材料の名前も
 ## Jev が選んだものだけ、数は 1〜4 だけ。文で縛っても守られなかったところ。
 ## 繋がっていない／返らないときは、数は1つのまま始める（何を・どこでは揃っているので）
-const COUNT_MAX := 4
-
 static func _ask_counts(things: Array, done: Callable) -> void:
 	var makes: Array = things.filter(func(t): return not Schema.inputs_of(String(t)).is_empty())
 	if makes.is_empty() or not AI.available():

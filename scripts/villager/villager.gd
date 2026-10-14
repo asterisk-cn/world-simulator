@@ -123,7 +123,7 @@ func set_pair_values(theirs: Dictionary) -> void:
 			pp.set_v(String(pid), float(vals[pid]))
 
 
-var action_phase := "idle"  ## "move" | "act"
+var action_phase := "idle"  ## "idle" | "think" | "move" | "act"
 var act_timer := 0.0
 
 var _path: PackedVector2Array = PackedVector2Array()
@@ -452,8 +452,8 @@ func _seal_scene(note: String) -> void:
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
 ## その結果パラメータがどう動くかはここには書かれていない（AIの担当）。
 ##
-## 作る／建てる／使う は、`current_action` に乗った持ち物の動きを適用するだけ。
-## 手に入れる・建てるときの数は手に入れかたにあり、使うぶんは本人の答え（`Brain._decide_how`）。
+## 手に入れる・建てるは、手に入れかた（`Schema.inputs_of`）のとおりに払う。
+## 使うは、`current_action` に乗った持ち物の動き（本人の答え、`Brain._decide_how`）を適用するだけ。
 func _complete_action() -> void:
 	var kind := String(current_action.get("kind", "move"))
 	var target := String(current_action.get("target", ""))
@@ -461,10 +461,6 @@ func _complete_action() -> void:
 	var done := true
 
 	match kind:
-		"move":
-			if (target == "toward" or target == "away") and obj != null \
-					and is_instance_valid(obj):
-				memory.record("移動：%s" % action_label())
 		"use":
 			done = _do_use(target, obj)
 		"make":
@@ -532,13 +528,10 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 		var n := int(moved[iid])
 		if n <= 0:
 			continue
-		if iid == target:
-			# 1つ手に入れたことは、行動の名前（〜を手に入れる）がもう言っている
-			if n > 1:
-				got.append("%dつ手に入れた" % n)
-		else:
-			# 名前が違うもの（井戸から水）は、何を手にしたのかを言う
-			got.append("%sを%dつ手に入れた" % [Schema.item_label(iid), n])
+		# 1つ手に入れたことは、行動の名前（〜を手に入れる）がもう言っている。
+		# 増えるのは手に入れた物そのものだけ（`Schema.make_move`）
+		if n > 1:
+			got.append("%dつ手に入れた" % n)
 
 	var parts: Array = []
 	if not paid.is_empty():
@@ -615,8 +608,8 @@ func _do_use(target: String, obj) -> bool:
 
 
 ## 会話。言った言葉を双方の帳面に残す。
-## 【AI差し替え口】何を話すかは本人の言葉（手と一緒に返る「言うこと」、場面の続きは
-## `villager/talk.gd`）。相手をどう思うようになったかは、次の問いで相手ごとの値として
+## 【AI差し替え口】何を話すかは本人の言葉（1行目も場面の続きも `villager/talk.gd` が訊く。
+## 文章の相手に手を訊いたときだけ、手と一緒に返る「言うこと」が1行目になる）。相手をどう思うようになったかは、次の問いで相手ごとの値として
 ## 本人が答える（`Brain._read_jev`）。
 ## 追っても届かなかった、は空振り。**歩くあいだ相手も歩いている**ので、
 ## 見えなくなるまで離れられたり、道が無かったりすれば届かない
@@ -630,8 +623,8 @@ func _do_talk(other) -> bool:
 	if cell.distance_to(other.cell) > reach:
 		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
 		return false
-	# **何を言うかは本人が手を選んだときに決めている。**
-	# 世界が運ぶのは言葉そのものだけ。ここから先の往復は `Talk` が訊く
+	# 手と一緒に「言うこと」が返っていればそれが1行目（文章の相手に訊いたとき）。
+	# 無ければ `Talk` が1行目から訊く。世界が運ぶのは言葉そのものだけ
 	var words := String(current_action.get("言うこと", ""))
 	# 会ったことがあるという事実だけ、相手ごとの入れ物を作って残す
 	pair_to(other.id)

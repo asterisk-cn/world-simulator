@@ -320,21 +320,6 @@ func nearest_building(def_id: String, from_cell: Vector2,
 	return best
 
 
-## その人のものの中で、いちばん近いもの。「自分のところ」の行き先になる。
-## 何軒持っているかは決まっていないので、「その人の1軒」を指す言い方はしない。
-func nearest_owned(owner_id: int, from_cell: Vector2) -> Structure:
-	var best: Structure = null
-	var best_d := INF
-	for s in structures:
-		if s.owner_id != owner_id:
-			continue
-		var d: float = from_cell.distance_to(s.center_cell())
-		if d < best_d:
-			best_d = d
-			best = s
-	return best
-
-
 ## 名前から引く。**AIが答えるのは名前のほう**なので、世界の側で本人に戻す。
 ## 同じ名前が二人いたら最初の一人（名前は神が付けるので、重複を禁じていない）
 func villager_by_name(name_text: String):
@@ -362,7 +347,7 @@ func neighbors_within(from_cell: Vector2, radius: float, exclude_id: int) -> Arr
 	return out
 
 
-## 建てられる空きマス（村の中心から外へらせん状に探す）。
+## 建てられる空きマス（`near` から外へ、一回りずつ広げて探す）。
 ## 他の村人が立っているマスは避ける（上に建物が建ってしまうので）。
 func find_build_cell(near: Vector2, builder_id: int = -1) -> Vector2i:
 	var start := Vector2i(roundi(near.x), roundi(near.y))
@@ -390,7 +375,7 @@ func _villager_on(c: Vector2i, ignore_id: int) -> bool:
 	return false
 
 
-## 建物どうしが密着すると、通りかかっただけで「侵入」が起き続けてしまうので間隔を空ける
+## 建物どうしの間隔（マス）。密着すると間を通れなくなる（建物は誰も通り抜けられない）
 const BUILD_SPACING := 3
 
 

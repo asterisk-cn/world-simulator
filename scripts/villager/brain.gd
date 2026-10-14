@@ -35,7 +35,7 @@ var _next := {}
 ## 1回の問いのあいだに2〜3手ぶん起きるので、直前の1件だけでは本人に届かない
 var _heard := 0
 
-## この問いだけ枠を広げる。**動いた値と3手ぶんの言葉**が返るので、
+## この問いだけ枠を広げる。**動いた値と思ったこと、手の言葉**が返るので、
 ## 番号1つだけだった頃の枠では途中で切れる
 const OUT := 400
 
@@ -54,7 +54,7 @@ func _init(p_villager) -> void:
 ## いま始める行動を返す。**空を返したら、立ち止まって待つ。**
 ## 返事が来たら `Villager.begin()` が呼ばれて、その場で切り替わる。
 ##
-## **つもりが立っていれば、その次の手を始める。** 尽きたら訊いて、立ち止まって待つ。
+## **訊いておいた次の手（`_next`）があれば、それを始める。** 無ければ訊いて、立ち止まって待つ。
 ## 代わりに適当な手で動かすと、**プログラムが判断していること**になる——
 ## それはこの作品が引いている一線（DESIGN.md §1）の向こう側で、
 ## 遅さを隠すために越えていい線ではない。
@@ -142,17 +142,7 @@ func _pick(c: Dictionary) -> Dictionary:
 	return c
 
 
-## AIに訊く。受け付けられたら true（答えは後から `Villager.begin()` へ）。
-##
-## 答えが読めなかったときはその場でランダムに落として始める——
-## **答えが来ない相手を待ち続けると、村人は二度と動かない。**
-## **型のついた相手（Jev）に訊く。** 骨は「一覧から1つ選ぶ」なので、
-## 文章を作らない相手のほうが速い（実測 0.5秒 / 毎秒13.5件）。
-## 値も**段階**で訊く——増減の申告だと幅の読み方が本人任せになり、
-## 100では薄すぎ、10では張り付いた。段階なら世界が幅に写すだけで済む。
-## 言葉（していること・言うこと）はここでは訊かない。それは文章の相手の仕事で、
-## 手が決まったあとに訊く（話す1行目は `Talk`、貼る文は `Post`）
-## **どの言葉にも当てはまる目盛りにする。** 「感じない／切迫している」は
+## 段階の言い方。**どの言葉にも当てはまる目盛りにする。** 「感じない／切迫している」は
 ## 空腹や不安には合っても、過密・不公平・居住には日本語として噛み合わず、
 ## 1日測って**その3つだけ最大0のまま**だった（答えられない問いには0が返る）。
 ## 言葉を決めるのは神なので、目盛りのほうが言葉を選んではいけない
@@ -167,6 +157,14 @@ func _pick(c: Dictionary) -> Dictionary:
 const LEVELS := ["まったくそう思わない", "あまりそう思わない", "どちらともいえない",
 	"ややそう思う", "とてもそう思う"]
 
+
+## 型のついた相手（Jev）に次の手を訊く。受け付けられたら true（答えは後から `Villager.begin()` へ）。
+##
+## 骨は「一覧から1つ選ぶ」なので、文章を作らない相手のほうが速い（実測 0.5秒 / 毎秒13.5件）。
+## 値も**段階**で訊く（`LEVELS`）——増減の申告だと幅の読み方が本人任せになり、
+## 100では薄すぎ、10では張り付いた。段階なら世界が幅に写すだけで済む。
+## 言葉（していること・言うこと）はここでは訊かない。それは文章の相手の仕事で、
+## 手が決まったあとに訊く（話す1行目は `Talk`、貼る文は `Post`）
 func _ask_jev(cands: Array) -> bool:
 	if not AI.can_decide() or cands.size() <= 1:
 		return false
@@ -437,6 +435,10 @@ func _levels_text(mine: Dictionary, only_moved: bool = false) -> String:
 	return " / ".join(out)
 
 
+## 文章の相手に次の手を訊く。**Jev が使えないときの代わり**（`choose`）。
+## 受け付けられたら true（答えは後から `Villager.begin()` へ）。
+## 値の動き・思ったこと・していること・量・言うことも、この一往復で答える。
+## 答えが読めなかったら一度だけ訊き直し、駄目なら立ち止まる（`_missed`）
 func _ask(cands: Array) -> bool:
 	if not AI.available() or cands.size() <= 1:
 		return false
@@ -528,7 +530,7 @@ func _step_of(e, cands: Array) -> Dictionary:
 
 
 ## 答えを読む。**使えなければ空**を返す（読めなかったのはAIの失敗で、
-## 村人の気まぐれではない）。返るのは `{"つもり": [手, ...]}`
+## 村人の気まぐれではない）。返るのは `{"手": {…}, "動いた": …}`
 func _read(text: String, cands: Array) -> Dictionary:
 	if text == "":
 		return {}
@@ -598,7 +600,7 @@ static func _system() -> String:
 	return """あなたは、ある村に住む一人の人間です。
 渡された姿と「いまできること」を読んで、
 **前に考えてから起きたこと**（今日あったことの %s の行）**で自分の中がどう動いたか**と、
-**この先することを順に**答えます。
+**次にすること**を答えます。
 
 返すのは JSON の物1つ。入れるのは次の4つだけ。
 
@@ -687,7 +689,7 @@ func feasible() -> Array:
 	# **毎回混ぜる。** 一覧に順番の意味は無いのに、並べたままだと先頭が選ばれやすく、
 	# 朝いちばん全員が同じ人のところへ歩き出していた（村人の登録順だったため）。
 	# 距離で並べ替える手もあるが、それは「近い順」という別の偏りを足すだけで、
-	# 近さは各行の「（少し歩く）／（遠い）」がもう言っている
+	# 近さは各行の座標から本人が読める（`_at`）
 	out.shuffle()
 	# **ぶらぶらは、他に何も無いときの手。** 行き先の無い動きは
 	# 一覧の中でただ一つ「相手も物も持たない手」で、Jev はそれを毎回選ぶ
@@ -713,7 +715,7 @@ func feasible() -> Array:
 func _decide_how(c: Dictionary) -> void:
 	var kind := String(c["kind"])
 	if kind == "make":
-		# **手に入れる・建てるときの数は世界の手に入れかたにある**（Jev が組む）（手に入れかた、`Schema.make_move`）
+		# **手に入れる・建てるときの数は世界の手に入れかたにある**（Jev が組む、`Schema.make_move`）
 		c["move"] = Schema.make_move(String(c["target"]))
 	elif kind == "use":
 		# **使うぶんは本人の答え**（つもりに添えてある）。
@@ -784,8 +786,6 @@ func _name_act(c: Dictionary) -> String:
 	var thing := Schema.target_label(String(c["kind"]), String(c["target"]))
 	match String(c["kind"]):
 		"move":
-			if String(c["target"]) == "toward":
-				return "%sのところへ向かう" % other_name
 			return "%sに向かう" % thing
 		"use":
 			return "%sを使う" % thing
@@ -837,32 +837,11 @@ func _way(kind: String, target: String) -> Dictionary:
 	return {"duration": 1.0, "reach": -1.0} if d == null else d
 
 
+## 「動く」の行き先は「適当な場所」だけ（`Schema.TARGETS`）
 func _move(target: String) -> Array:
-	var out: Array = []
-	var way := _way("move", target)
-	match target:
-		"anywhere":
-			out.append(_pack("move", target, _random_spot(), null, way))
-		"mine":
-			# 自分のもののうち、いちばん近いところ。持っていなければ行き先にならない
-			var mine = v.world.nearest_owned(v.id, v.cell)
-			if mine != null:
-				out.append(_pack("move", target, mine.center_cell(), mine, way))
-		"board":
-			if v.world.board != null:
-				out.append(_pack("move", target, Vector2(v.world.board.cell), null, way))
-		"toward":
-			# **見えている人だけ。** 世界中の8人が毎回並ぶと、それは集合知になる
-			# （§5「集合知は存在しない」）。見えない人のところへは、
-			# 誰かに聞くか、歩いて見つけるかしないと行けない
-			for o in v.world.neighbors_within(v.cell, Rules.SIGHT, v.id):
-				out.append(_pack("move", target, o.cell, o, way))
-		_:
-			# 建っているものへ。まだ建っていなければ行き先にならない。
-			var s = _building_for(Schema.move_building(target))
-			if s != null:
-				out.append(_pack("move", target, s.center_cell(), s, way))
-	return out
+	if target != "anywhere":
+		return []
+	return [_pack("move", target, _random_spot(), null, _way("move", target))]
 
 
 ## 使えるのは、手の中のものと建物。そこに在るものから手に入れるのは
@@ -936,7 +915,6 @@ func _place_obj(place: String):
 
 ## その建物の実体。同じものが何軒あっても、いちばん近いところを指す。
 ## **見える範囲だけ。** 島の反対側に建った物を知っているのは、集合知になる
-## （掲示板だけは村の真ん中に在ると誰もが知っているので、見えなくても立つ）
 func _building_for(def_id: String):
 	if def_id == "":
 		return null
@@ -955,6 +933,7 @@ func _talk(target: String) -> Array:
 			for o in v.world.neighbors_within(v.cell, Rules.SIGHT, v.id):
 				out.append(_pack("talk", target, o.cell, o, way))
 		"post":
+			# 掲示板は村の真ん中に在ると誰もが知っているので、見えなくても立つ
 			if board == null:
 				return out
 			out.append(_pack("talk", target, Vector2(board.cell), board, way))

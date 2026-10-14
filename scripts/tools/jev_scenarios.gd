@@ -41,6 +41,8 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	AI.text_off = true
+	# 最初の紙は空なので、シナリオの言葉と持ち物が在る既定の顔ぶれで埋める
+	Schema.load_defaults()
 	_load()
 	if _sc.is_empty():
 		print("[シナリオ] %s にシナリオが無い" % DIR)

@@ -17,19 +17,6 @@ var story := ""
 var read_posts := {}          ## post_id -> {"day": int}
 var last_talk_day := {}       ## villager_id -> day
 
-## **見た場所を覚えている。** 物は動かないので、視界から外れても
-## 「あそこに木があった」は残る（人は動くので覚えない）。
-## 行ってみて無ければ忘れる——覚えているだけで、そこに在るとは限らない
-var seen := {}                ## item_id -> Vector2（最後に見た場所）
-
-
-func saw(item_id: String, at: Vector2) -> void:
-	seen[item_id] = at
-
-
-func gone(item_id: String) -> void:
-	seen.erase(item_id)
-
 
 ## その日の帳面に書く。**一日ぶんは全部持つ**——夜に本人が畳むまでに
 ## 世界が頭から捨てると、本人が見ていないものを世界が忘れさせたことになる。

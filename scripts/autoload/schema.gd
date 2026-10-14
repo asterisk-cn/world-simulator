@@ -122,7 +122,6 @@ const DEFAULT_VILLAGERS := 8
 const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
 
 ## 世界に元から在る場所。何かを手に入れる場所として選べる（建物も選べる）。
-## 茂み・木・岩は、それが生える持ち物（`PLACE_ITEM`）が消されていれば島に無い
 ## 何が採れるかは場所ではなく、手に入るもののほうに書く——
 ## 岩から石も鉄も採れるなら、それは石と鉄の手に入れかたが岩を指しているだけ
 const WORLD_PLACES := {"bush": "茂み", "tree": "木", "rock": "岩"}
@@ -303,7 +302,8 @@ func place_label(place: String) -> String:
 	return building_label(place)
 
 
-## その場所がいまの世界に在るか。茂み・木・岩はもとの持ち物が消されていれば生えない
+## その場所がいまの世界に在るか。建物は書かれているものだけ。
+## 茂み・木・岩は、いまは固定なので常に在る（#35 で消せるようになっても、ここで見る）
 func place_alive(place: String) -> bool:
 	if WORLD_PLACES.has(place):
 		return is_world_item(String(PLACE_ITEM[place]))
@@ -503,8 +503,9 @@ func add_recipe() -> Dictionary:
 	return r2
 
 
-## 消しても、他の物の手に入れかたは直さない。木は始めるときに、
-## そのとき在る物だけから組み直す（`TechTree`）ので、消えた物を指す枝は残らない
+## 消せるのは固まっていない物だけ（始める前か、その夜に書き足した物）。
+## 他の物の手に入れかたは直さない。固まっていない物は、まだどの枝にも指されていない
+## （枝は焼いたときに組む、`TechTree`）ので、消えた物を指す枝は残らない
 func remove_recipe(id: String) -> void:
 	_remove_from(recipes, id)
 	recipes_changed.emit()

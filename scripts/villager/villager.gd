@@ -493,8 +493,8 @@ func _seal_scene(note: String) -> void:
 ## 型 × 対象ごとに、世界で何が起きるかだけを決める。
 ## その結果パラメータがどう動くかはここには書かれていない（AIの担当）。
 ##
-## 作る／建てる／使う は、本人が決めたこと（何を払うか・そこで何をするか）を
-## `current_action` から受け取って適用するだけ。決めているのは Brain のほう。
+## 作る／建てる／使う は、`current_action` に乗った持ち物の動きを適用するだけ。
+## 手に入れる・建てるときの数は手に入れかたにあり、使うぶんは本人の答え（`Brain._decide_how`）。
 func _complete_action() -> void:
 	var kind := String(current_action.get("kind", "move"))
 	var target := String(current_action.get("target", ""))
@@ -519,7 +519,7 @@ func _complete_action() -> void:
 				"read":
 					_do_read_board()
 
-	# 使うのは空振りすることがあり（採り尽くされていた）、
+	# 使うのは空振りすることがあり（手に無かった・建物が無くなっていた）、
 	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
 	if done:
 		say(kind, target)

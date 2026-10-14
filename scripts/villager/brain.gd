@@ -84,7 +84,7 @@ func choose() -> Dictionary:
 	# **この手を始めた瞬間に、次の手を訊いておく。**
 	# 手は5〜6秒、往復は2秒なので、終わる頃には届いている。
 	# ただし話す手では訊かない——答えが届く頃には相手の言葉が来ていて、
-	# その答えは古い（話すあいだの訊き時は `Villager` が持つ）
+	# その答えは古い。話し終えてから、手持ちが無いときと同じく訊いて待つ
 	if not _is_talk_step(got):
 		if not _ask_jev(cands):
 			_ask(cands)
@@ -136,16 +136,6 @@ func forget_plan() -> void:
 ## ずらさないと、明日の最初の問いに昨日ぶんが混ざるか、今日ぶんが消える
 func forget_before(dropped: int) -> void:
 	_heard = maxi(_heard - dropped, 0)
-
-
-## 話している最中に訊く（返事が届いた／待ちきる直前）。
-## つもりは白紙にしない——いまの手は続いていて、これはその**次**の手を訊く問い
-func think_next() -> void:
-	if v.asking:
-		return
-	var cands := feasible()
-	if cands.size() > 1:
-		_ask(cands)
 
 
 ## その場で考え直す。**手の終わりを待たない**——待つと、話しかけられた人が

@@ -150,6 +150,8 @@ var _tagging := false   ## 訊いている最中（口は1本なので重ねら�
 var _tagged := false    ## 一度訊いた。紙を開くたびに訊き直さない
 ## AIを使わない。**穴のままの世界**を見るための、検証用の選択肢
 var off := false
+## 文章の相手だけ使わない（Jev は使う）。Jev を測るとき、作者の財布から出るほうを止める
+var text_off := false
 
 
 func _ready() -> void:
@@ -170,7 +172,7 @@ func _ready() -> void:
 ## 訊ける状態か。**この機械の中に訊くなら鍵は要らない**。
 ## 運びが続けて駄目だったあいだは「居ない」——世界は今までどおり穴として動く
 func available() -> bool:
-	if off or (not local and _key == ""):
+	if off or text_off or (not local and _key == ""):
 		return false
 	return not down()
 

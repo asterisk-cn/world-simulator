@@ -171,7 +171,7 @@ func _build(d: Dictionary, file: String) -> Dictionary:
 		"self": feel, "pairs": others}
 
 
-## 「木を使う（そこに在る 12, 5）」→「木を使う（そこに在る）」。座標だけ落とす
+## 「木を手に入れる（木 12, 5）」→「木を手に入れる（木）」。座標だけ落とす
 static func _key_of(text: String) -> String:
 	var re := RegEx.new()
 	re.compile("\\s*-?\\d+,\\s*-?\\d+")

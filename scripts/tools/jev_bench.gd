@@ -159,8 +159,6 @@ static func _act_key(v, c: Dictionary) -> String:
 	match String(c.get("where", "")):
 		"hand":
 			name += "（手の中）"
-		"world":
-			name += "（そこに在る）"
 		"building":
 			name += "（建物）"
 	return name

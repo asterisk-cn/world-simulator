@@ -232,7 +232,7 @@ func jev_questions(asked: Array) -> Dictionary:
 	return jev_questions_for(_criteria(asked))
 
 
-## 手の一覧を、もう文にしたもので（`{"1": "木を使う（そこに在る 12, 5）", …}`）。
+## 手の一覧を、もう文にしたもので（`{"1": "木を手に入れる（木 12, 5）", …}`）。
 ## ベンチの決めたシナリオは、世界の手ではなく文で一覧を持つ
 func jev_questions_for(criteria: Dictionary) -> Dictionary:
 	var qs := {ACT_KEY: {
@@ -710,9 +710,8 @@ func _prompt(cands: Array, quick: bool = false) -> String:
 ## こちらが刻んでしまっていて（8マスで線を引いた）、それは判断に近い。
 ## いまいる場所は紙のほうに書いてあるので、遠いかどうかは引き算で出る。
 ##
-## **何に対する手かも添える。** 同じ「木を使う」が一覧に二つ並ぶことがあり
-## （手の中の木と、そこに生えている木）、座標だけでは見分けがつかない。
-## 手の中のものと、そこに在るものと、建っているものは、別の手
+## **何に対する手かも添える。** 手の中のものと、建っているものは、別の手。
+## 手に入れる手には、何が減るかと、どこで手に入れるかを添える
 func _at(c: Dictionary) -> String:
 	var where := String(c.get("where", ""))
 	if where == "hand":

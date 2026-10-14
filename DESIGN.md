@@ -1152,8 +1152,10 @@ mise exec -- godot --path .
 Godot 4.7.2 を `mise.toml` で固定している。ヘッドレスで観察するには：
 
 ```bash
-mise exec -- godot --headless --fixed-fps 60 --quit-after 40000 -- --echo-log --autostart
+mise exec -- godot --headless --quit-after 40000 -- --echo-log --autostart
 ```
+
+実時間で回す。`--fixed-fps` で早回しすると、AIの答えを待つ時間まで早回しで数えられ、答えが来る前に時間切れになる。
 
 `--autostart` はセットアップ画面を飛ばして既定の定義のまま始める。
 

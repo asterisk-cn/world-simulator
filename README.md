@@ -138,8 +138,10 @@ mise exec -- godot --path .
 ヘッドレスで観察する：
 
 ```bash
-mise exec -- godot --headless --fixed-fps 60 --quit-after 40000 -- --echo-log --autostart
+mise exec -- godot --headless --quit-after 40000 -- --echo-log --autostart
 ```
+
+実時間で回す。`--fixed-fps` で早回しすると、AIの答えを待つ時間まで早回しで数えられ、答えが来る前に時間切れになる。
 
 | 操作 | 動作 |
 |---|---|

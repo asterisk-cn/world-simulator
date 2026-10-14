@@ -23,6 +23,8 @@ extends Node
 ## 動かしているあいだ、`Brain._read_jev` から呼ばれる
 static var active := false
 static var _live: Array = []
+## 手を閉じたときの結果（したか、空振りか）。`Villager` が閉じるたびに呼ぶ
+static var _closed: Array = []
 static var _t0 := 0.0
 
 var world
@@ -57,6 +59,7 @@ func _ready() -> void:
 		return
 	AI.text_off = not args.has("--with-text")
 	_live = []
+	_closed = []
 	print("[ベンチ] %.0f秒動かす（速さ ×%.1f）、同じ姿の訊き直し %d回、文章の相手 %s"
 		% [secs, speed, repeat, "使う" if not AI.text_off else "使わない"])
 
@@ -96,6 +99,10 @@ static func heard(v, ans: Dictionary, cands: Array, before: Dictionary) -> void:
 	var r := _read(ans, _offered(v, cands), v._brain._criteria(cands).values())
 	r["t"] = _now() - _t0
 	r["who"] = String(v.vname)
+	# 選んだ手の行き先までの距離（どれだけ遠くを選ぶか、#16）
+	var pick := int(r["pick"])
+	if pick >= 0 and pick < cands.size():
+		r["dist"] = v.cell.distance_to(Vector2(cands[pick]["target_cell"]))
 	for id in before:
 		var label := _self_label(String(id))
 		if r["scores"].has(label):
@@ -171,6 +178,11 @@ static func _self_label(id: String) -> String:
 	return id
 
 
+## `Villager` が手を閉じたところで呼ぶ。`why` は空振りの理由（したときは空）
+static func closed(kind: String, done: bool, why: String) -> void:
+	_closed.append({"t": _now() - _t0, "kind": kind, "done": done, "why": why})
+
+
 # ---------------------------------------------------------------------------
 # 同じ姿を R 回
 # ---------------------------------------------------------------------------
@@ -222,10 +234,74 @@ func _finish() -> void:
 		f.close()
 	var j := FileAccess.open("%s/%s.json" % [dir, stamp], FileAccess.WRITE)
 	if j != null:
-		j.store_string(JSON.stringify({"live": _live, "repeat": _rep, "snaps": _snaps}, "\t"))
+		j.store_string(JSON.stringify({"live": _live, "repeat": _rep, "snaps": _snaps, "closed": _closed}, "\t"))
 		j.close()
 	print("[ベンチ] 書き出した：%s/%s.md" % [ProjectSettings.globalize_path(dir), stamp])
 	get_tree().quit()
+
+
+## 選んだ手の行き先までの距離
+func _dist_table(rs: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	out.append("選んだ手の行き先までの距離（マス）")
+	out.append("")
+	out.append("| 手 | 選ばれた | 平均 | 最大 |")
+	out.append("|---|---:|---:|---:|")
+	var by := {}
+	for r in rs:
+		if not r.has("dist"):
+			continue
+		var k := String(r["act"])
+		if not by.has(k):
+			by[k] = []
+		by[k].append(float(r["dist"]))
+	var keys := by.keys()
+	keys.sort_custom(func(a, b) -> bool: return by[a].size() > by[b].size())
+	for k in keys:
+		var ds: Array = by[k]
+		var sum := 0.0
+		var top := 0.0
+		for d in ds:
+			sum += d
+			top = maxf(top, d)
+		out.append("| %s | %d | %.1f | %.1f |" % [k, ds.size(), sum / ds.size(), top])
+	return out
+
+
+## 手を閉じたときに、したか空振りか。理由は人や物の名前を落として数える
+func _miss_table(cs: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	out.append("閉じた手 %d件のうち空振り" % cs.size())
+	out.append("")
+	out.append("| 型 | 閉じた | 空振り | 割合 | 多い理由 |")
+	out.append("|---|---:|---:|---:|---|")
+	var by := {}
+	for c in cs:
+		var k := String(c["kind"])
+		if not by.has(k):
+			by[k] = {"n": 0, "miss": 0, "why": {}}
+		by[k]["n"] += 1
+		if not bool(c["done"]):
+			by[k]["miss"] += 1
+			var w := _why_key(String(c["why"]))
+			by[k]["why"][w] = int(by[k]["why"].get(w, 0)) + 1
+	for k in by:
+		var e: Dictionary = by[k]
+		var ws: Array = e["why"].keys()
+		ws.sort_custom(func(a, b) -> bool: return e["why"][a] > e["why"][b])
+		var top := PackedStringArray()
+		for w in ws.slice(0, 2):
+			top.append("%s ×%d" % [w, e["why"][w]])
+		out.append("| %s | %d | %d | %s | %s |"
+			% [k, e["n"], e["miss"], _pct(int(e["miss"]), int(e["n"])), "、".join(top)])
+	return out
+
+
+## 空振りの文から、頭の人や物の名前を落とした形（名前の後ろは半角の空き）。
+## 「ミナ を追ったが、見失った」→「を追ったが、見失った」
+static func _why_key(why: String) -> String:
+	var at := why.find(" ")
+	return why.substr(at + 1) if at >= 0 else why
 
 
 func _report() -> String:
@@ -243,6 +319,10 @@ func _report() -> String:
 	out.append_array(_act_table(_live))
 	out.append("")
 	out.append_array(_pos_table(_live))
+	out.append("")
+	out.append_array(_dist_table(_live))
+	out.append("")
+	out.append_array(_miss_table(_closed))
 	out.append("")
 	out.append("## 感情の数値変動（動かしているあいだ）")
 	out.append("")

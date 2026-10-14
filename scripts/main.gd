@@ -61,6 +61,12 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--autostart"):
 		wake = 1.0
 		_start_world.call_deferred()
+	# Jev の答えを数える（`tools/jev_bench.gd`）。`--autostart` と一緒に使う
+	if OS.get_cmdline_user_args().has("--jev-bench"):
+		add_child(JevBench.new(world))
+	# 決めた姿を投げる（`tools/jev_scenarios.gd`）。村は始めない
+	if OS.get_cmdline_user_args().has("--jev-scenarios"):
+		add_child(JevScenarios.new())
 
 
 

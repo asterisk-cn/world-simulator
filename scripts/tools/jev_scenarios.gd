@@ -205,8 +205,10 @@ func _send(si: int) -> void:
 			order.shuffle()
 		var crit := {}
 		var offered: Array = []
+		var lines: Array = []
 		for j in range(order.size()):
 			crit[str(j + 1)] = String(sc["lines"][order[j]])
+			lines.append(String(sc["lines"][order[j]]))
 			offered.append(String(sc["keys"][order[j]]))
 		var qs: Dictionary = sc["brain"].jev_questions_for(crit)
 		if i == 0:
@@ -215,7 +217,9 @@ func _send(si: int) -> void:
 			_pending -= 1
 			if typeof(ans) != TYPE_DICTIONARY:
 				return
-			_got[si].append(JevBench._read(ans, offered))
+			if not sc.has("raw"):
+				sc["raw"] = ans
+			_got[si].append(JevBench._read(ans, offered, lines))
 		if AI.decide(String(sc["state"]), qs, cb, -1):
 			_pending += 1
 
@@ -260,7 +264,8 @@ func _finish() -> void:
 	var raw: Array = []
 	for si in range(_sc.size()):
 		raw.append({"name": _sc[si]["name"], "state": _sc[si]["state"],
-			"questions": _sc[si].get("questions", {}), "answers": _got[si]})
+			"questions": _sc[si].get("questions", {}), "raw": _sc[si].get("raw", {}),
+			"answers": _got[si]})
 	var j := FileAccess.open("%s/scenarios-%s.json" % [dir, stamp], FileAccess.WRITE)
 	if j != null:
 		j.store_string(JSON.stringify(raw, "\t"))
@@ -299,22 +304,25 @@ func _one(si: int) -> PackedStringArray:
 	# 手。書いた順に、選ばれなかったものも出す
 	var chosen := {}
 	var conf := {}
+	var prob := {}
 	for r in rs:
+		for k in r.get("probs", {}):
+			prob[k] = float(prob.get(k, 0.0)) + float(r["probs"][k])
 		if int(r["pick"]) < 0:
 			continue
 		var a := String(r["act"])
 		chosen[a] = int(chosen.get(a, 0)) + 1
 		conf[a] = float(conf.get(a, 0.0)) + float(r["conf"])
-	out.append("| 手 | 選ばれた | 割合 | 確信 |")
-	out.append("|---|---:|---:|---:|")
+	out.append("| 手 | 確率（平均） | 選ばれた | 割合 | 確信 |")
+	out.append("|---|---:|---:|---:|---:|")
 	var seen := {}
 	for k in sc["keys"]:
 		if seen.has(k):
 			continue
 		seen[k] = true
 		var c := int(chosen.get(k, 0))
-		out.append("| %s | %d | %s | %s |" % [k, c, JevBench._pct(c, n),
-			"%.2f" % (float(conf[k]) / c) if c > 0 else "-"])
+		out.append("| %s | %.2f | %d | %s | %s |" % [k, float(prob.get(k, 0.0)) / maxi(n, 1),
+			c, JevBench._pct(c, n), "%.2f" % (float(conf[k]) / c) if c > 0 else "-"])
 	out.append("")
 
 	# 自分の言葉。渡した値と、答えた段階をゲームと同じ写し方で寄せた先

@@ -93,7 +93,7 @@ static func _now() -> float:
 
 ## `Brain._read_jev` が値を書き終えたところで呼ぶ。`before` は書く前の自分の値
 static func heard(v, ans: Dictionary, cands: Array, before: Dictionary) -> void:
-	var r := _read(ans, _offered(v, cands))
+	var r := _read(ans, _offered(v, cands), v._brain._criteria(cands).values())
 	r["t"] = _now() - _t0
 	r["who"] = String(v.vname)
 	for id in before:
@@ -112,17 +112,23 @@ static func _offered(v, cands: Array) -> Array:
 	return out
 
 
-## 答え1つを、数えられる形に。`offered` は一覧の並びどおりの手の名前
-static func _read(ans: Dictionary, offered: Array) -> Dictionary:
+## 答え1つを、数えられる形に。`offered` は一覧の並びどおりの手の名前、
+## `lines` は投げた一覧の文（答えの番号と確率を引くのに使う）
+static func _read(ans: Dictionary, offered: Array, lines: Array) -> Dictionary:
 	var r := {"n": offered.size(), "offered": offered, "pick": -1, "act": "",
 		"conf": 0.0, "scores": {}, "pairs": {}, "pair_by": {}}
-	var pick = ans.get("手", null)
-	if typeof(pick) == TYPE_DICTIONARY:
-		var n := int(str(pick.get("choice", "0"))) - 1
-		if n >= 0 and n < offered.size():
-			r["pick"] = n
-			r["act"] = offered[n]
-			r["conf"] = float(pick.get("confidence", 0.0))
+	# 手ごとの確率（同じ名前の手が複数あれば足す）
+	var probs := {}
+	var each := Brain.jev_probs(ans, lines)
+	for i in range(mini(each.size(), offered.size())):
+		probs[offered[i]] = float(probs.get(offered[i], 0.0)) + float(each[i])
+	r["probs"] = probs
+	var picked := Brain.jev_pick(ans, lines)
+	var n := int(picked["i"])
+	if n >= 0 and n < offered.size():
+		r["pick"] = n
+		r["act"] = offered[n]
+		r["conf"] = float(picked["conf"])
 	for key in ans:
 		var a = ans[key]
 		if typeof(a) != TYPE_DICTIONARY or String(a.get("type", "")) != "score":
@@ -192,7 +198,7 @@ func _start_repeat() -> void:
 				_pending -= 1
 				if typeof(ans) != TYPE_DICTIONARY or not is_instance_valid(v):
 					return
-				var r := _read(ans, _offered(v, order))
+				var r := _read(ans, _offered(v, order), brain._criteria(order).values())
 				r["snap"] = si
 				_rep.append(r)
 			if AI.decide(state, qs, cb, -1):

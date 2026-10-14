@@ -234,7 +234,7 @@ func jev_questions(asked: Array) -> Dictionary:
 ## 手の一覧を、もう文にしたもので（`{"1": "木を使う（そこに在る 12, 5）", …}`）。
 ## ベンチの決めたシナリオは、世界の手ではなく文で一覧を持つ
 func jev_questions_for(criteria: Dictionary) -> Dictionary:
-	var qs := {"手": {
+	var qs := {ACT_KEY: {
 		"type": "choice",
 		"instructions": "次にすることを1つ選ぶ",
 		"criteria": criteria,
@@ -261,6 +261,33 @@ func jev_questions_for(criteria: Dictionary) -> Dictionary:
 				"criteria": LEVELS,
 			}
 	return qs
+
+
+## 手を訊く問いの名前
+const ACT_KEY := "手"
+
+
+## 一覧の行ごとの確率。Jev は選んだ1つと一緒に、
+## どの手にどれだけ傾いているかも返す（`probabilities`、番号ごと）
+static func jev_probs(ans: Dictionary, lines: Array) -> Array:
+	var pick = ans.get(ACT_KEY, null)
+	var pr: Dictionary = pick.get("probabilities", {}) \
+		if typeof(pick) == TYPE_DICTIONARY else {}
+	var out: Array = []
+	for i in range(lines.size()):
+		out.append(float(pr.get(str(i + 1), 0.0)))
+	return out
+
+
+## 答えから選ばれた手。{"i": 番号(0〜), "conf": 確信}
+static func jev_pick(ans: Dictionary, lines: Array) -> Dictionary:
+	var pick = ans.get(ACT_KEY, null)
+	if typeof(pick) != TYPE_DICTIONARY:
+		return {"i": -1, "conf": 0.0}
+	var n := int(str(pick.get("choice", "0"))) - 1
+	if n < 0 or n >= lines.size():
+		return {"i": -1, "conf": 0.0}
+	return {"i": n, "conf": float(pick.get("confidence", 0.0))}
 
 
 ## 候補を Jev の形に。**番号は世界のもの**（答えもこの番号で返る）
@@ -335,14 +362,12 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 	if JevBench.active:
 		JevBench.heard(v, ans, cands, before)
 
-	var pick = ans.get("手", null)
-	if typeof(pick) != TYPE_DICTIONARY:
-		return
-	var n := int(str(pick.get("choice", "0"))) - 1
+	var got := jev_pick(ans, _criteria(cands).values())
+	var n := int(got["i"])
 	if n < 0 or n >= cands.size():
 		return
 	var c: Dictionary = cands[n]
-	c["確信"] = float(pick.get("confidence", 0.0))
+	c["確信"] = float(got["conf"])
 	var step := _pick(c)
 	step["by"] = "Jev"
 	EventLog.mind(v.vname, "つぎ：%s（確信 %.2f）" % [_name_act(c), c["確信"]])

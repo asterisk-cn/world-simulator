@@ -66,15 +66,68 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--autostart"):
 		Schema.load_defaults()
 		wake = 1.0
-		_start_world.call_deferred()
+		_autostart.call_deferred()
+	# 確率に従って引くのをやめ、いちばん高いものを取る（比べる用、`Brain.sample`）
+	Brain.sample = not OS.get_cmdline_user_args().has("--jev-argmax")
+	# Jev の答えを数える（`tools/jev_bench.gd`）。`--autostart` と一緒に使う
+	if OS.get_cmdline_user_args().has("--jev-bench"):
+		add_child(JevBench.new(world))
+	# 決めた姿を投げる（`tools/jev_scenarios.gd`）。村は始めない
+	if OS.get_cmdline_user_args().has("--jev-scenarios"):
+		add_child(JevScenarios.new())
 
 
 
-## 「この世界を始める」を押してから、実際に時間が動き出すまでの一拍。
+## 「この世界を始める」を押した。**まず技術ツリーを Jev に組ませる。**
+##
+## 村人の最初の考えは「いま何が手に入るか」の一覧を読むので、
+## 木が先に組み上がっていないと考えはじめられない。だから儀式と重ねず、先に訊く
+## （Jev の往復は 0.5秒ほど）。**Jev が使えなければ始めない**——
+## 手に入れかたの無い世界は、根の3つしか手に入らない別の世界になる。
+func _begin_ritual() -> void:
+	if started or _starting or _growing:
+		return
+	if not AI.can_decide():
+		_cannot_start("Jev が使えない")
+		return
+	_growing = true
+	rules_panel.set_waiting(true)
+	TechTree.grow(func(ok: bool) -> void:
+		_growing = false
+		rules_panel.set_waiting(false)
+		if not ok:
+			_cannot_start("Jev から答えが返らない")
+			return
+		_ritual())
+
+
+## 始められなかった。**一枚の知らせで言う**（設計図の手の行に書くと、行が伸びて紙ごと広がった）。
+## **理由は書かない**——どの AI が使えないかは遊ぶ人にどうにもできないことで、
+## 仕組みの名前を見せることになる。理由は記録（`--echo-log`）にだけ出す
+func _cannot_start(why: String) -> void:
+	if EventLog.echo:
+		print("[始められない] %s" % why)
+	var note = preload("res://scripts/ui/confirm_popup.gd").new()
+	# 題を赤で「エラー」に。本文は何が起きたかと、次にすること。
+	# **エラーは敬語で。** 世界の外から遊ぶ人に向けた言葉なので、紙の上の平叙とは分ける
+	# 夜の紙で止まったときは「始める」ではなく「続ける」話
+	note.setup("エラー", "%s。\n少し待ってから、もう一度お試しください。"
+		% ("続けられませんでした" if _night else "この世界を始められませんでした"),
+		"", "閉じる", Color(0.72, 0.30, 0.20))
+	# 設計図と同じ層に置く。テーマは自分で持たせる（CanvasLayer は伝えてくれない）
+	note.theme = SimConfig.ui_theme
+	rules_panel.get_parent().add_child(note)
+
+
+## 技術ツリーを訊いている最中
+var _growing := false
+
+
+## 木が組み上がってから、実際に時間が動き出すまでの一拍。
 ##
 ## 確認のダイアログは挟まない（「間違えないか」の話になってしまう）。
 ## 紙に封蝋が押され、青く沈んでいた世界が目を覚ます、それだけを見せる。
-func _begin_ritual() -> void:
+func _ritual() -> void:
 	if started or _starting:
 		return
 	_starting = true
@@ -268,7 +321,19 @@ func _close_setup() -> void:
 	rules_panel.set_editable(false)
 
 
-## 儀式を通らずに来たとき（`--autostart`）。一息に建てて動かす
+## 儀式を通らずに来たとき（`--autostart`）。木を組ませてから、一息に建てて動かす。
+## Jev が使えなければ、儀式のときと同じく始めない
+func _autostart() -> void:
+	var ok := TechTree.grow(func(grown: bool) -> void:
+		if grown:
+			_start_world()
+		else:
+			push_error("Jev から答えが返らず、始められなかった"))
+	if not ok:
+		push_error("Jev が使えないので、始められない")
+
+
+## 儀式を通らずに来たとき。一息に建てて動かす（木はもう組んである）
 func _start_world() -> void:
 	if started:
 		return
@@ -582,8 +647,30 @@ func _open_night() -> void:
 	create_tween().tween_property(rules_panel, "modulate:a", 1.0, 0.45)
 
 
-## 「続ける」。始める一拍と同じ火で焼く。島は崩さない——同じ世界の続きなので
+## 「続ける」。**まず書き足した物の手に入れかたを Jev に訊く**（始めるときと同じ理由——
+## 村人の考えは「いま何が手に入るか」を読むので、枝が先に要る）。
+## 固まった物の枝は組み直さない（`TechTree.grow` の `fresh_only`）。
+## 書き足した物が無ければ訊かずに進む。Jev が使えなければ、夜の紙のまま止まる
 func _night_ritual() -> void:
+	if not _night or _burning or _starting or _growing:
+		return
+	_growing = true
+	rules_panel.set_waiting(true)
+	var asked := TechTree.grow(func(ok: bool) -> void:
+		_growing = false
+		rules_panel.set_waiting(false)
+		if not ok:
+			_cannot_start("Jev から答えが返らない")
+			return
+		_night_burn(), true)
+	if not asked:
+		_growing = false
+		rules_panel.set_waiting(false)
+		_cannot_start("Jev が使えない")
+
+
+## 枝が組めたら、始める一拍と同じ火で焼く。島は崩さない——同じ世界の続きなので
+func _night_burn() -> void:
 	if not _night or _burning or _starting:
 		return
 	_starting = true

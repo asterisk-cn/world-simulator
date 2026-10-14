@@ -2,7 +2,7 @@ extends Node
 ## この世界に何が存在するかの定義。プレイヤー（神）が実行中に書き換える。
 ##
 ## - parameters: パラメータ。対象範囲が「自分」か「相手ごと」かが違うだけで、扱いは同じ。
-## - recipes / buildings: つくりかた。作れるものと建てられるもの。名前と姿だけを持つ。
+## - recipes / buildings: 手に入るものと建てられるもの。名前と姿と、手に入れかた（材料・場所）。
 ##
 ## アクションの定義は無い。型（動く・使う・作る・話す）は世界に元からあり、
 ## 対象はここにある物から導かれるので、並べて持つ意味がない。
@@ -36,10 +36,10 @@ const SCOPE_LABEL := {
 # 動詞は世界に元からある。だから「ふるまいの一覧」という定義は存在せず、
 # いま何ができるかは 型 × 対象 から毎回そのまま導かれる（`Brain.feasible`）。
 #
-# 採る は 使う に畳んだ。そこに生っている木の実に何かするのも、
-# 手の中の木の実に何かするのも、その人にとっては同じ「使う」で、
-# 違うのは世界の側で何が増えて何が減るかだけ。
-# 建てる は 作る に畳んだ。持てるものを作るか、建つものを作るかの違いしかない。
+# 採る と 作る は1つの「手に入れる」に畳んだ。茂みで木の実を手に入れるのも、
+# 木と石で道具を手に入れるのも、材料が空か、場所が要るかの違いしかない。
+# 建てる もこの型の中にある（手に入るのではなく、世界の上に建つ）。
+# 「使う」に残るのは、手の中のものと建物に向けた手だけ。
 # ---------------------------------------------------------------------------
 
 const BEHAVIORS := {
@@ -76,8 +76,8 @@ const TARGETS := {
 }
 
 ## 「使う」は、それがどこにあるかで間合いと時間が変わる。
-## 何をするか（採る / 食べる / 祈る）ではなく、どこにあるかだけで決まる。
-## 作る・建てる・そこへ向かうのにかかる時間。**対象では変えない。**
+## 何をするか（食べる / 祈る）ではなく、どこにあるかだけで決まる。
+## 手に入れる・建てる・そこへ向かうのにかかる時間。**対象では変えない。**
 ## 何を作るのが大変かをプログラムは知らない——知っているのは神が付けた名前だけで、
 ## 名前から手間は読めない（籠と家で時間が違うはず、と決めるのは世界の越権）。
 const MAKE_SEC := 3.2
@@ -85,7 +85,6 @@ const BUILD_SEC := 5.0
 const GO_SEC := 0.8
 
 const USE_WAYS := {
-	"world": {"duration": 2.8, "reach": 1.6},     # そこに在るもののそばで使う
 	"hand": {"duration": 1.6, "reach": 999.0},    # 手の中のものを使う
 	"building": {"duration": 8.0, "reach": 1.6},  # 建物のそばで使う
 }
@@ -114,13 +113,22 @@ const MAX_VILLAGERS := 12
 const DEFAULT_VILLAGERS := 8
 
 
-## 島に在る持ち物と、その姿。世界に在るそれを「使う」と手に入る。
+## 島に在る持ち物と、その姿。茂み・木・岩へ行くと、材料なしで手に入る（技術ツリーの根）。
 ##
 ## **いまは固定。** 設計図が空から始まっても、この3つだけは最初から在り、
 ## 名前も姿も変えられず、消せない（どう扱うかは #35 で決める）。
 ## 定義は他のもちものと同じ一覧（`recipes`）に並ぶ。
 ## 姿は選べない——茂みが壺の絵で手に入ったら、世界の上の姿と手の中の姿が食い違う
 const WORLD_ARTS := {"food": "berry", "wood": "tree", "stone": "rock"}
+
+## 世界に元から在る場所。何かを手に入れる場所として選べる（建物も選べる）。
+## 茂み・木・岩は、それが生える持ち物（`PLACE_ITEM`）が消されていれば島に無い
+## 何が採れるかは場所ではなく、手に入るもののほうに書く——
+## 岩から石も鉄も採れるなら、それは石と鉄の手に入れかたが岩を指しているだけ
+const WORLD_PLACES := {"bush": "茂み", "tree": "木", "rock": "岩"}
+
+## 世界の場所が、どの持ち物から生えるか（`HarvestNode.KIND_ITEM` と同じ対応）
+const PLACE_ITEM := {"bush": "food", "tree": "wood", "rock": "stone"}
 
 # ---------------------------------------------------------------------------
 # 姿
@@ -198,33 +206,49 @@ func _remove_from(list: Array, id: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# つくりかた（作れるもの / 建てられるもの）
+# 手に入れかた（技術ツリー）
 #
-# 定義が持つのは 名前 と 姿 だけ。
+# 物ごとに持つのは 名前・姿 と、**手に入れかた**——材料（何をいくつ）と場所の2つだけ。
 #
-# 【前提】判断はAIが行う。
-# 何をどれだけ使って作るかは、作る人が自分の持ち物を見て決める。
-# だからここに材料は書かれていない。プログラムは「持っていないものは払えない」しか見ない。
+#   材料 … 手に入れるときに手の中から減るもの。数も決まっている（Jev が答える）。
+#          道具も材料の1つ（減る）。減らない道具という区別は持たない
+#   場所 … そこへ行って行う。世界に元から在る場所（茂み・木・岩）か、建物。
+#          空ならどこでも（手の中で済む）
+#
+# 材料が空なら「採る」、あれば「作る」——だが世界はそれを分けない。
+# どちらも1回の手で1つ手に入る（`make_move`）。
+#
+# 他の物を材料や場所に指せるので、物どうしが段になって木の形になる。
+# **材料も場所も無いものは手に入らない**（無から物は生まれない）。
+# 輪になる指し方（道具の材料に道具が要る、のような）は受け付けない（`can_need`）。
+#
+# **手に入れかたを決めるのは神ではなく Jev。** 神が決めるのは名前と姿だけで、
+# 根（木の実・木・石）以外の手に入れかたは、世界が始まるときに Jev が1回で答える
+# （`world/tech_tree.gd`）。だからここでは空で生まれる。
+#
+# 【FutureWork】世界に1本のツリーではなく、一人ひとりのAIが自分の作り方を持つ
+# （DESIGN.md §12）。
 # ---------------------------------------------------------------------------
 
 func _default_recipes() -> void:
 	recipes = _world_recipes()
-	recipes.append({"id": "tool", "label": "ハンマー", "art": "tool"})
+	recipes.append({"id": "tool", "label": "ハンマー", "art": "tool", "inputs": {}, "place": ""})
 
 
-## 島に在るもの。固定なので、生まれたときから固まっている
+## 島に在るもの（技術ツリーの根）。固定なので、生まれたときから固まっている
 func _world_recipes() -> Array:
 	return [
-		{"id": "food", "label": "木の実", "art": "berry", "fixed": true},
-		{"id": "wood", "label": "木", "art": "tree", "fixed": true},
-		{"id": "stone", "label": "石", "art": "rock", "fixed": true},
+		{"id": "food", "label": "木の実", "art": "berry", "inputs": {}, "place": "bush", "fixed": true},
+		{"id": "wood", "label": "木", "art": "tree", "inputs": {}, "place": "tree", "fixed": true},
+		{"id": "stone", "label": "石", "art": "rock", "inputs": {}, "place": "rock", "fixed": true},
 	]
 
 
 ## 家も、ただの「建てるもの」の1つ。建てた人のものになるが、何軒建つかは決まっていない。
+## 建てるものは建つ先が場所なので、手に入れかたは材料だけ。
 func _default_buildings() -> void:
 	buildings = [
-		{"id": "b1", "label": "家", "art": "house"},
+		{"id": "b1", "label": "家", "art": "house", "inputs": {}},
 	]
 
 
@@ -246,12 +270,155 @@ func is_building(id: String) -> bool:
 	return building_def(id) != null
 
 
+func thing_def(id: String) -> Variant:
+	var r = recipe_def(id)
+	return r if r != null else building_def(id)
+
+
 ## もちものの一覧。島に在るものも、作るものも同じ一覧にある
 func all_items() -> Array:
 	var out: Array = []
 	for r in recipes:
 		out.append(String(r["id"]))
 	return out
+
+
+# --- 手に入れかた ---------------------------------------------------------
+
+## 材料。{持ち物のid: 数}
+func inputs_of(id: String) -> Dictionary:
+	var d = thing_def(id)
+	return {} if d == null else d.get("inputs", {})
+
+
+## 場所。世界の場所（`WORLD_PLACES`）か建物のid。空ならどこでも。建てるものは常に空
+func place_of(id: String) -> String:
+	var r = recipe_def(id)
+	return "" if r == null else String(r.get("place", ""))
+
+
+func place_label(place: String) -> String:
+	if WORLD_PLACES.has(place):
+		return String(WORLD_PLACES[place])
+	return building_label(place)
+
+
+## その場所がいまの世界に在るか。茂み・木・岩はもとの持ち物が消されていれば生えない
+func place_alive(place: String) -> bool:
+	if WORLD_PLACES.has(place):
+		return is_world_item(String(PLACE_ITEM[place]))
+	return building_def(place) != null
+
+
+func set_input(id: String, item: String, n: int) -> void:
+	var d = thing_def(id)
+	if d == null or not can_need(id, item):
+		return
+	var inputs: Dictionary = d.get("inputs", {})
+	if n <= 0:
+		inputs.erase(item)
+	else:
+		inputs[item] = n
+	d["inputs"] = inputs
+	_changed(id)
+
+
+func set_place(id: String, place: String) -> void:
+	var r = recipe_def(id)
+	if r == null or (place != "" and not WORLD_PLACES.has(place) and not can_need(id, place)):
+		return
+	r["place"] = place
+	_changed(id)
+
+
+func _changed(id: String) -> void:
+	if is_building(id):
+		buildings_changed.emit()
+	else:
+		recipes_changed.emit()
+
+
+## a を手に入れるのに、どこかの段で b が要るか（材料にも場所にも辿る）
+func needs(a: String, b: String) -> bool:
+	return _needs(a, b, {})
+
+
+func _needs(a: String, b: String, seen: Dictionary) -> bool:
+	if seen.has(a):
+		return false
+	seen[a] = true
+	var deps: Array = inputs_of(a).keys()
+	if place_of(a) != "":
+		deps.append(place_of(a))
+	for x in deps:
+		if String(x) == b or _needs(String(x), b, seen):
+			return true
+	return false
+
+
+## a の材料・場所に b を指してよいか。**輪になる指し方は選べない**——
+## 道具を手に入れるのに道具が要るなら、その世界で道具は永遠に手に入らない
+func can_need(a: String, b: String) -> bool:
+	if WORLD_PLACES.has(b):
+		return true
+	return thing_def(b) != null and a != b and not needs(b, a)
+
+
+## いまの定義で、いつか手に入るか。材料も場所も無い物と、
+## そこから辿った先にそういう物がある物は、手に入らない
+func obtainable(id: String) -> bool:
+	return _obtainable(id, {})
+
+
+func _obtainable(id: String, seen: Dictionary) -> bool:
+	if WORLD_PLACES.has(id):
+		return place_alive(id)
+	if seen.has(id):
+		return false
+	seen[id] = true
+	if thing_def(id) == null:
+		return false
+	var inputs := inputs_of(id)
+	var place := place_of(id)
+	# 無から物は生まれない。建つものは建つ先が場所なので、材料が要る
+	if inputs.is_empty() and (place == "" or is_building(id)):
+		return false
+	for x in inputs:
+		if not _obtainable(String(x), seen.duplicate()):
+			return false
+	return place == "" or _obtainable(place, seen.duplicate())
+
+
+## 材料を「木×2・石×1」と言う
+func inputs_text(id: String) -> String:
+	var parts: Array = []
+	var inputs := inputs_of(id)
+	for x in inputs:
+		parts.append("%s×%d" % [item_label(String(x)), int(inputs[x])])
+	return "・".join(parts)
+
+
+## 手に入れかたを1行で（「木×1・石×1」「茂みで」「鉄×2・炉で」）
+func recipe_text(id: String) -> String:
+	var parts: Array = []
+	var cost := inputs_text(id)
+	if cost != "":
+		parts.append(cost)
+	if place_of(id) != "":
+		parts.append("%sで" % place_label(place_of(id)))
+	return "　".join(parts)
+
+
+## 手に入れる1回で、持ち物がどう動くか。**数は手に入れかたにある**（本人は決めない）。
+## 材料は減り、手に入るものは1つ増える（建つものは持ち物にならない）
+func make_move(id: String) -> Dictionary:
+	var move := {}
+	var inputs := inputs_of(id)
+	for x in inputs:
+		move[String(x)] = -int(inputs[x])
+	if not is_building(id):
+		move[id] = 1
+	return move
 
 
 ## 島に在るもちものか
@@ -327,13 +494,17 @@ func add_recipe() -> Dictionary:
 	var taken: Array = []
 	for r in recipes:
 		taken.append(String(r["id"]))
+	# 手に入れかたは空で生まれる。世界が始まるときに Jev が組み込む（`TechTree`）
 	var r2 := {"id": _unique_id("r", taken), "label": "新しいもの",
-		"art": CRAFT_ARTS[(recipes.size() - world_items().size()) % CRAFT_ARTS.size()]}
+		"art": CRAFT_ARTS[(recipes.size() - world_items().size()) % CRAFT_ARTS.size()],
+		"inputs": {}, "place": ""}
 	recipes.append(r2)
 	recipes_changed.emit()
 	return r2
 
 
+## 消しても、他の物の手に入れかたは直さない。木は始めるときに、
+## そのとき在る物だけから組み直す（`TechTree`）ので、消えた物を指す枝は残らない
 func remove_recipe(id: String) -> void:
 	_remove_from(recipes, id)
 	recipes_changed.emit()
@@ -351,7 +522,8 @@ func add_building() -> Dictionary:
 	for b in buildings:
 		taken.append(String(b["id"]))
 	var b2 := {"id": _unique_id("b", taken), "label": "新しい建物",
-		"art": BUILDING_ARTS[buildings.size() % BUILDING_ARTS.size()]}
+		"art": BUILDING_ARTS[buildings.size() % BUILDING_ARTS.size()],
+		"inputs": {}}
 	buildings.append(b2)
 	buildings_changed.emit()
 	return b2
@@ -615,9 +787,8 @@ func remove_param(id: String) -> void:
 # ---------------------------------------------------------------------------
 
 ## 型ごとに選べる対象。
-##   使う … 世界にある物と持ち物（同じもの）＋ 建物
-##          そこに在るのを使うのか手の中のを使うのかは、候補を作るときに分かれる
-##   作る … つくりかたにあるもの（持てるもの / 建てるもの）。島に在るものは採るだけで、作らない
+##   使う … 手の中の持ち物 ＋ 建物
+##   作る … 手に入るもの（持てるもの）と建てるもの。採るのもここ（材料が空なだけ）
 ##   動く … 建てられるものぶんだけ行き先が増える（同じものが何軒あっても、いちばん近いところへ）。
 ##          「自分のところ」は元からある行き先で、自分が建てたもののうち近いところ
 func targets_of(kind: String) -> Dictionary:
@@ -629,10 +800,9 @@ func targets_of(kind: String) -> Dictionary:
 			for b in buildings:
 				out[String(b["id"])] = _target(String(b["label"]))
 		"make":
+			# 場所が要る物はそこまで歩いてから行う（候補に座標が入る）
 			for r in recipes:
-				if is_world_item(String(r["id"])):
-					continue
-				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, 999.0)
+				out[String(r["id"])] = _target(String(r["label"]), MAKE_SEC, -1.0)
 			for b in buildings:
 				out[String(b["id"])] = _target(String(b["label"]), BUILD_SEC, 1.6)
 		"move":

@@ -150,6 +150,8 @@ var _tagging := false   ## 訊いている最中（口は1本なので重ねら�
 var _tagged := false    ## 一度訊いた。紙を開くたびに訊き直さない
 ## AIを使わない。**穴のままの世界**を見るための、検証用の選択肢
 var off := false
+## 文章の相手だけ使わない（Jev は使う）。Jev を測るとき、作者の財布から出るほうを止める
+var text_off := false
 
 
 func _ready() -> void:
@@ -170,7 +172,7 @@ func _ready() -> void:
 ## 訊ける状態か。**この機械の中に訊くなら鍵は要らない**。
 ## 運びが続けて駄目だったあいだは「居ない」——世界は今までどおり穴として動く
 func available() -> bool:
-	if off or (not local and _key == ""):
+	if off or text_off or (not local and _key == ""):
 		return false
 	return not down()
 
@@ -316,19 +318,23 @@ func _find_where() -> void:
 ## `want_json` を立てると、返るのが JSON の物1つになる。
 ## 返り値は「受け付けたか」——鍵が無い・溢れたときは false
 ## `who` はこの問いの主（村人のid）。**同じ主の古い問いは置き換える**
+## `shape` を渡すと、答えの形をその JSON Schema に縛る（Structured Outputs, strict）。
+## 文で「一覧に無い名前は使わない」と書いても守られなかったところを、形で縛るための口
 ## 検証用：便の種類ごとの往復（急ぎ／普通）
 static var lag_quick: Array = []
 static var lag_full: Array = []
 
 func ask(prompt: String, system_text: String, on_done: Callable,
-		max_out: int = MAX_OUT, want_json: bool = false, who: int = -1) -> bool:
+		max_out: int = MAX_OUT, want_json: bool = false, who: int = -1,
+		shape: Dictionary = {}) -> bool:
 	if not available() or prompt == "":
 		return false
 	var job := {
 		"prompt": prompt,
 		"system": system_text,
 		"max": max_out,
-		"json": want_json,
+		"json": want_json or not shape.is_empty(),
+		"shape": shape,
 		"on_done": on_done,
 		"who": who,
 		"tries": 0,
@@ -464,7 +470,11 @@ func _send(lane: int, job: Dictionary) -> void:
 	var effort := LOCAL_REASONING if local else REASONING
 	if effort != "":
 		body["reasoning_effort"] = effort
-	if bool(job["json"]):
+	var shape: Dictionary = job.get("shape", {})
+	if not shape.is_empty():
+		body["response_format"] = {"type": "json_schema", "json_schema": {
+			"name": "answer", "strict": true, "schema": shape}}
+	elif bool(job["json"]):
 		body["response_format"] = {"type": "json_object"}
 
 	var headers := ["content-type: application/json"]

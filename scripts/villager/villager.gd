@@ -534,25 +534,15 @@ func _complete_action() -> void:
 		EventLog.mind(vname, "空振り：%s" % why)
 
 
-## 本人が答えたぶん（`Brain._how_much`）を、そのまま世界に映す。
+## 使うぶん（`Brain._how_much`）を、そのまま世界に映す。
 ##
-## **量については何も見ない。** いくつ取るか、何をどれだけ使うか、いくつできるかは
-## 全部その人の答えで、世界の物は尽きないし、上限もどこにも無い。
-## プログラムが見るのは、**それが何であるか**にまつわる3つだけ。
+## **量については何も見ない。** いくつ使うかはその人の答えで、上限もどこにも無い。
+## プログラムが見るのは**無いものは払えない**——減らせるのは、持っているぶんまで。
 ##
-##   無いものは払えない       — 減らせるのは、持っているぶんまで
-##   世界に無い物は生まれない — 名前があるのは、神がこの世界に置いた物だけ
-##   増えるのは、世界の物に触れているときか、作っているとき
-##       手の中のものを「使う」だけで物が増えるなら、「作る」という型が要らなくなる。
-##       これは量の話ではなく、動詞の意味の話。
-##
-## 何が寄越されるかも、それが何かを知っている側が答える。
-##   世界に元から在るもの（茂み・木・岩）… プログラムはそれが何かを知っているので、
-##       寄越すのはその物だけ
-##   建てたもの … プログラムは神がつけた名前しか知らないので、何を寄越すかは
-##       名前を読んだ本人が答える（井戸と水が並んでいれば、汲めると分かる）
-##   作る … 何ができるかも本人の答え。削りかすが一緒に出てもいい
-func _apply(want: Dictionary, kind: String, target: String, obj) -> Dictionary:
+## **使うだけでは何も増えない。** 物が手に入るのは「手に入れる」の手だけで、
+## 何がどこでいくつの材料で手に入るかは、Jev が組んだ手に入れかたにある（`_do_make`）。
+## 手の中のものを使うだけで物が増えるなら、手に入れかたという枝が要らなくなる。
+func _apply(want: Dictionary) -> Dictionary:
 	var moved := {}
 	for item in want:
 		var n := int(want[item])
@@ -563,19 +553,6 @@ func _apply(want: Dictionary, kind: String, target: String, obj) -> Dictionary:
 			continue
 		add_item(String(item), -pay)
 		moved[String(item)] = -pay
-
-	var touching = obj if obj != null and is_instance_valid(obj) else null
-	for item in want:
-		var n := int(want[item])
-		var iid := String(item)
-		if n <= 0 or not Schema.all_items().has(iid):
-			continue
-		if touching is HarvestNode and iid != target:
-			continue  # 茂みが寄越すのは木の実だけ
-		if touching == null and kind != "make":
-			continue  # 手の中のものを使っただけでは増えない
-		add_item(iid, n)
-		moved[iid] = int(moved.get(iid, 0)) + n
 	return moved
 
 
@@ -597,7 +574,8 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 		if n <= 0:
 			continue
 		if iid == target:
-			if n > 1 or paid.is_empty():
+			# 1つ手に入れたことは、行動の名前（〜を手に入れる）がもう言っている
+			if n > 1:
 				got.append("%dつ手に入れた" % n)
 		else:
 			# 名前が違うもの（井戸から水）は、何を手にしたのかを言う
@@ -610,54 +588,68 @@ func _moved_text(moved: Dictionary, target: String) -> String:
 	return "" if parts.is_empty() else "（%s）" % "、".join(parts)
 
 
-## 払ったぶんが、手の中の1つになるか、世界の上に建つ。
+## 手に入れかたのとおりに、材料が減って、手の中の1つになるか、世界の上に建つ。
+## 採るのも作るのもここ（材料が空なら採る、というだけ）。
+##
+## **材料は数だけそろっていないと払わない。** 半分だけ減って何もできないのは、
+## 手に入れかたを決めた世界の側の言い分にならない。
+## 歩いているあいだに他の手で減らしていたら、着いた先で足りないことがある。
 ##
 ## 何軒建つかは誰も決めていない。見るのは置ける場所が空いているかだけで、
 ## 建てはじめてから建て終わるまでにそこが埋まっていれば、その人は建てられなかった。
 func _do_make(target: String) -> bool:
-	if not Schema.is_building(target):
-		if Schema.recipe_def(target) == null:
+	if Schema.thing_def(target) == null:
+		return false
+	var building := Schema.is_building(target)
+	var name_text := Schema.target_label("make", target)
+	var inputs := Schema.inputs_of(target)
+	for x in inputs:
+		if item_count(String(x)) < int(inputs[x]):
+			_miss = "%s を手に入れようとしたが、%sが足りなかった" % [name_text,
+				Schema.item_label(String(x))]
 			return false
-		var moved := _apply(current_action.get("move", {}), "make", target, null)
-		if moved.is_empty():
-			_miss = "%s を作ろうとしたが、払うものが無かった" % Schema.item_label(target)
+	var place := Schema.place_of(target)
+	if place != "":
+		var at = current_action.get("obj", null)
+		if at == null or not is_instance_valid(at):
+			_miss = "%s で %s を手に入れようとしたが、もう無かった" % [
+				Schema.place_label(place), name_text]
 			return false
-		memory.record("制作：%s%s" % [action_label(), _moved_text(moved, target)])
+	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
+	if building and (c.x < 0 or not world._can_build_at(c)):
+		_miss = "%s を建てようとしたが、置ける場所が無かった" % name_text
+		return false
+
+	var moved := {}
+	for x in inputs:
+		add_item(String(x), -int(inputs[x]))
+		moved[String(x)] = -int(inputs[x])
+	if not building:
+		add_item(target, 1)
+		moved[target] = 1
+		memory.record("入手：%s%s" % [action_label(), _moved_text(moved, target)])
 		return true
 
-	if Schema.building_def(target) == null:
-		return false
-	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
-	if c.x < 0 or not world._can_build_at(c):
-		_miss = "%s を建てようとしたが、置ける場所が無かった" % Schema.target_label("make", target)
-		return false
-	var paid := _apply(current_action.get("move", {}), "make", target, null)
-	if paid.is_empty():
-		# 持ち物が何も動かないなら、その人は建てなかった
-		_miss = "%s を建てようとしたが、払うものが無かった" % Schema.target_label("make", target)
-		return false
 	var s: Structure = world.add_structure(target, c, id, color)
-	memory.record("建築：%s%s" % [action_label(), _moved_text(paid, target)])
+	memory.record("建築：%s%s" % [action_label(), _moved_text(moved, target)])
 	EventLog.notable("%s が%sを建てた" % [vname, s.label()],
 		{vname: "v:%d" % id, s.label(): "s:%d" % s.id})
 	return true
 
 
-## 使う。何をしたか（採る／食べる／祈る）は本人の言葉（`Brain._name_act`）で、
+## 使う。何をしたか（食べる／祈る）は本人の言葉（`Brain._name_act`）で、
 ## 世界の側で起きるのは「どこにあるものを使ったか」だけで決まる。
-##   そこに在るもの … 1つ手に入る（採るのはこれ）
-##   手の中のもの   … 1つ減る
-##   建物           … 何も減らない
+##   手の中のもの … 本人が決めたぶん減る
+##   建物         … 何も減らない（置いていくなら減る）。何も手に入らない
 func _do_use(target: String, obj) -> bool:
 	var where := String(current_action.get("where", "hand"))
 	if where == "building" and (obj == null or not is_instance_valid(obj)):
 		_miss = "%s へ着いたが、もう無かった" % Schema.target_label("use", target)
 		return false
-	var moved := _apply(current_action.get("move", {}), "use", target, obj)
+	var moved := _apply(current_action.get("move", {}))
 	# 建物に入るように、持ち物が何も動かない使い方もある。それは空振りではない。
 	if where != "building" and moved.is_empty():
-		_miss = "%s を採ろうとしたが、残っていなかった" % Schema.item_label(target) \
-			if where == "world" else "%s を使おうとしたが、手に無かった" % Schema.item_label(target)
+		_miss = "%s を使おうとしたが、手に無かった" % Schema.item_label(target)
 		return false
 	memory.record("使用：%s%s" % [action_label(), _moved_text(moved, target)])
 	return true

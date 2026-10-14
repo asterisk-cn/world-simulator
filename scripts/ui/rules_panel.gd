@@ -165,6 +165,13 @@ func _on_start() -> void:
 	started.emit()
 
 
+## 世界の支度（技術ツリー）を待っているあいだは、二度押せない
+func set_waiting(on: bool) -> void:
+	_start_btn.disabled = on
+	if not on:
+		_refresh_start()
+
+
 func _close() -> void:
 	closed.emit()
 
@@ -223,16 +230,14 @@ func _rebuild() -> void:
 	_params_of(Schema.SCOPE_PAIR)
 
 	_chapter("もちもの",
-		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
-		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。\n"
+		"手に持てるもの。名前と姿を決める。\n"
 		+ "木の実・木・石は島に在って、採れる。この3つはいまは変えられない。",
 		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
 	_chapter("たてもの",
 		"世界の上に建つもの。建てた人のものになる（屋根がその人の色になる）。\n"
-		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。\n"
-		+ "何を寄越すか（井戸なら水）は、名前を読んだ本人が答える。",
+		+ "何軒建つかは決まっていないし、他人のものを使うのも世界は止めない。",
 		Schema.buildings.is_empty())
 	_things(Schema.buildings, Schema.BUILDING_ARTS, "＋ たてものを増やす",
 		_add_building, _del_building, _rename_building)
@@ -332,8 +337,9 @@ func _write(title: String, fields: Array, on_done: Callable) -> void:
 # ---------------------------------------------------------------------------
 # もちもの / たてもの
 #
-# 定義が持つのは 名前 と 姿 だけ。材料の欄はない。
-# 何をどれだけ使うかは、作る人が自分の持ち物を見て決める（DESIGN.md §1）。
+# 神が書くのは 名前 と 姿 だけ。
+# **手に入れかた（材料と場所）は神に見せない。** それは世界の側の定義
+# （`Schema` の技術ツリー）で、設計図には出さない。
 # ---------------------------------------------------------------------------
 
 ## もちもの／たてもの、どちらも「名前と姿」だけなので同じ形で並べる

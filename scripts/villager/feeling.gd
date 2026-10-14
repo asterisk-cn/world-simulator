@@ -31,14 +31,12 @@ const MAX_OUT := 200
 static func ask(v) -> void:
 	if v == null or not is_instance_valid(v) or not AI.available():
 		return
-	var act := String(v.action_label())
 	var now := float(Time.get_ticks_msec()) / 1000.0
 	# **していることが同じでも訊き直す。** 同じ手を続けているあいだに
 	# 気持ちが動かないのは、身体の話であって心の話ではない
 	if now - v.feeling_at < COOL:
 		return
 	v.feeling_at = now
-	v.feeling_for = act
 	# 返るまでに選び直されている／死んでいることがあるので、本人か確かめる
 	var id: int = v.id
 	var take := func(text: String) -> void:

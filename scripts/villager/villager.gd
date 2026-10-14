@@ -31,7 +31,6 @@ var inventory := {}  ## item_id -> 個数。何が持てるかは Schema が決�
 ## 世界が知っているのは何が起きたかだけなので、どう感じているかはAIが答える。
 ## 繋がっていなければ空のまま——紙にはその行が出ない。
 var feeling := ""
-var feeling_for := ""   ## その一言を作ったときの `action_label()`
 var feeling_at := 0.0   ## 最後に訊いた実時間。同じ人に訊き直す間隔の底
 
 var current_action := {}
@@ -42,16 +41,6 @@ var think_again_at := 0.0
 
 ## 空振りの理由。**世界が見たこと**を、そのまま帳面に書くために持つ
 var _miss := ""
-
-## 立ち止まりの正体を分けて測る（検証用）。
-## `think` に入る道は2つ——出来事に呼ばれた（話しかけられた）と、
-## つもりが尽きて時機で訊いた。どちらがどれだけ止めているかで、直す場所が変わる
-static var think_event := 0.0
-static var think_timing := 0.0
-## 手が見込みより早く閉じた回数（話す手が返事で閉じる、など）
-static var act_early := 0
-static var act_full := 0
-var _why := ""
 
 
 ## 話す手のいま。会話は**2往復で1つの場面**で、この手のあいだに閉じる
@@ -206,11 +195,6 @@ func _process(delta: float) -> void:
 	# 考え込んでいても、息をしていない人は置物に見える。
 	# ここだけは世界の時間ではなく本当の時間で動く
 	_bob += delta * (3.0 if SimClock.paused or action_phase == "think" else 6.0)
-	if action_phase == "think":
-		if _why == "出来事":
-			think_event += delta
-		else:
-			think_timing += delta
 	if SimClock.paused or action_phase == "think":
 		queue_redraw()
 	if SimClock.paused:
@@ -292,7 +276,6 @@ func begin(c: Dictionary) -> void:
 	_beat = 0.0
 	_wrote = false
 	_writing = false
-	_why = ""
 	current_action = c
 	action_phase = "move"
 	act_timer = 0.0

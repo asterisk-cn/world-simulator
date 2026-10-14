@@ -117,9 +117,7 @@ var url := OPENAI_URL
 var local := false
 ## 最後に失敗した理由。出すのは検証用（`--echo-log`）だけで、紙には出さない
 var last_error := ""
-## 最後に使った量。**費用の見当を立てるため**だけに持つ（紙には出さない）
-var last_usage := {}
-## 投げた数・失敗した数・捨てた数。同じく見当のため
+## 投げた数・失敗した数・捨てた数。費用の見当を立てるため（紙には出さない）
 var sent := 0
 var failed := 0
 var dropped := 0
@@ -490,9 +488,6 @@ func _on_done(result: int, code: int, _headers: PackedStringArray,
 		else:
 			_fail(lane, why)
 		return
-	var u = got.get("usage", {})
-	if typeof(u) == TYPE_DICTIONARY:
-		last_usage = u
 	_misses = 0
 
 	# 型のついた答えは、そのまま呼び側へ渡す（文章ではないので読み方が違う）

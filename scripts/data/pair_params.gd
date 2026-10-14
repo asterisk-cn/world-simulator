@@ -9,14 +9,11 @@ extends RefCounted
 var target_id: int = -1
 var values := {}
 
-var first_met_day: int = 1
-
 
 func _init(p_target_id: int = -1) -> void:
 	target_id = p_target_id
 	for d in Schema.pair_params():
 		values[String(d["id"])] = 0.0
-	first_met_day = SimClock.day
 
 
 func get_v(key: String) -> float:

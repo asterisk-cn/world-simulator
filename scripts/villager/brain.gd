@@ -130,9 +130,6 @@ func forget_before(dropped: int) -> void:
 	_heard = maxi(_heard - dropped, 0)
 
 
-## 検証用の数。つもりが尽きた理由を分ける——使い切ったのか、途中で捨てたのか
-
-
 ## 検証用の通し番号。どの手がどこから来たかを数えるためだけに持つ
 static var _serial := 0
 

@@ -20,8 +20,11 @@ extends PanelContainer
 ## 名詞の章は**単語を2列**に割る。1列に積むと9語のじぶんだけで1画面が終わり、
 ## この世界にどんな言葉があるかを一目で見られない。
 ##
-## 編集できるのは開始前だけ。始まったあとは前の4章だけが閲覧用に残り、
-## 村人は村人の窓、世界の目盛りはオプションが持つ（同じものを2か所に置かない）。
+## **最初は何もない。** 神は毎晩この紙に書き足す（DESIGN.md §7）。
+## 夜に戻ってきた紙では、前の日までに書いたものは固まっていて（`Schema.fix_all`）、
+## 触れるのはその夜に書き足したものだけ。世界の目盛り（詳細）は始まる前だけ。
+## 昼のあいだは前の4章だけが閲覧用に残り、村人は村人の窓が持つ
+## （同じものを2か所に置かない）。
 
 signal started
 signal closed
@@ -38,6 +41,8 @@ const SCOPE_TIP := {
 
 var world = null
 var editable := true
+## 夜に戻ってきた紙か。書き足せるが、書いてあるものは変えられない
+var night := false
 
 var _body: VBoxContainer
 var _scroll: ScrollContainer
@@ -125,14 +130,23 @@ func _ready() -> void:
 	_rebuild()
 
 
-func set_editable(on: bool) -> void:
+func set_editable(on: bool, p_night: bool = false) -> void:
 	editable = on
+	night = on and p_night
 	_title.text = "設計図" if on else "ことば"
-	UIKit.set_help(_help_btn, "この世界にある言葉と、そこに置く人を決める。\n"
-		+ "始めたあとは、もう変えられない。" if on
-		else "始まった世界の言葉は、もう変えられない。\n見るだけの窓。")
+	if night:
+		UIKit.set_help(_help_btn, "夜のあいだに、言葉と人を書き足す。\n"
+			+ "前の日までに書いたものは、もう変えられない。")
+	elif on:
+		UIKit.set_help(_help_btn, "この世界にある言葉と、そこに置く人を決める。\n"
+			+ "始めたあとは、毎晩書き足せる。書いたものは変えられない。")
+	else:
+		UIKit.set_help(_help_btn, "書いた言葉は、もう変えられない。\n"
+			+ "夜になると、書き足せる。")
+	_start_btn.text = "続ける" if night else "この世界を始める"
 	_start_btn.visible = on
-	_reset_btn.visible = on
+	# 夜に「はじめに戻す」と、固まった言葉まで消えることになる
+	_reset_btn.visible = on and not night
 	_close_btn.visible = not on
 	_head_row.visible = on
 	# 開始前は主役の紙（題は中央に大きく）、進行中は見る窓の1枚（他の窓と同じ顔）
@@ -165,6 +179,17 @@ func _on_delete_toggled(on: bool) -> void:
 
 func _can_delete() -> bool:
 	return editable and _delete_mode
+
+
+## 書き直せない行か。始まる前の紙では何も固まっていない
+func _locked(def: Dictionary) -> bool:
+	return not editable or Schema.is_fixed(def)
+
+
+## 誰もいない世界は観察できないので、始めるのは一人目を書いてから。
+## 夜は書き足さなくても続けられる
+func _refresh_start() -> void:
+	_start_btn.disabled = editable and not night and Schema.villagers.is_empty()
 
 
 func _reset_all() -> void:
@@ -200,7 +225,7 @@ func _rebuild() -> void:
 	_chapter("もちもの",
 		"手に持てるもの。名前と姿だけを決める。材料の欄はない。\n"
 		+ "何をどれだけ使うかは、作る人が自分の持ち物を見て決める。\n"
-		+ "茂み・木・岩の姿のものは島に在って、採れる。消せば島にも生えない。",
+		+ "木の実・木・石は島に在って、採れる。この3つはいまは変えられない。",
 		Schema.recipes.is_empty())
 	_things(Schema.recipes, Schema.CRAFT_ARTS, "＋ もちものを増やす",
 		_add_recipe, _del_recipe, _rename_recipe)
@@ -217,11 +242,14 @@ func _rebuild() -> void:
 			"この世界に置く人。\n名前も性格も、その人がどう振る舞うかの素になる。",
 			Schema.villagers.is_empty())
 		_people()
-		# 目盛りは普段いじらないので、畳んでおく（`詳細`）
-		_detail()
+		# 目盛りは普段いじらないので、畳んでおく（`詳細`）。
+		# 始まったら変えられない（1日の長さは村人が覚えた昼の長さの前提）
+		if not night:
+			_detail()
 
 	UIKit.spacer(_body, UIKit.PAD_L)
 	_index.rebuild()
+	_refresh_start()
 
 
 ## 章の見出し。目次の行き先としても覚えておく。
@@ -265,7 +293,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 
 	# 消すものを選んでいるあいだは鉛筆を隠す。押せる印が2つ並ぶと、
 	# どちらを押すのか迷う
-	if editable and not _can_delete():
+	if not _locked(def) and not _can_delete():
 		UIKit.pencil_button(row, "%s を書き直す" % label_text,
 			_write_param.bind(def))
 
@@ -273,7 +301,7 @@ func _build_param(box: Node, def: Dictionary) -> void:
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(mid)
 
-	if _can_delete():
+	if _can_delete() and not _locked(def):
 		UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 			_del_param.bind(pid), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
@@ -326,7 +354,7 @@ func _things(defs: Array, arts: Array, add_text: String,
 		var row := UIKit.list_row(rows, _art_picker(def, arts))
 		# 姿は絵が語っているので、名前の横に姿の名を添えない
 		row.add_child(UIKit.read_only(label_text))
-		if editable and not _can_delete():
+		if not _locked(def) and not _can_delete():
 			UIKit.pencil_button(row, "%s を書き直す" % label_text,
 				func() -> void: _write("名前を書く",
 					[{"label": "", "text": label_text}],
@@ -334,7 +362,7 @@ func _things(defs: Array, arts: Array, add_text: String,
 		var mid := Control.new()
 		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(mid)
-		if _can_delete():
+		if _can_delete() and not _locked(def):
 			UIKit.icon_button(row, "✕", "%s を消す" % label_text,
 				func() -> void: on_del.call(did), 30, UIKit.ROW_H, UIKit.FS_SUB)
 
@@ -349,8 +377,8 @@ func _art_picker(def: Dictionary, arts: Array) -> Control:
 	var art := String(def["art"])
 	var tint: Color = (Schema.building_color(String(def["id"]))
 		if Schema.is_building(String(def["id"])) else ItemIcon.NO_TINT)
-	# 島に在るものの姿は選べない（世界の上の姿と手の中の姿を揃える）
-	if not editable or Schema.WORLD_ARTS.has(String(def["id"])):
+	# 固まったものの姿は変えられない（島に生えた茂みが、壺の絵に化けてしまう）
+	if _locked(def):
 		var seen := ItemIcon.of_art(art, 20)
 		seen.accent = tint
 		seen.tooltip_text = String(Schema.ART_LABEL.get(art, ""))
@@ -426,18 +454,19 @@ func _build_person(h: Dictionary) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", UIKit.GAP_S)
 	box.add_child(head)
-	head.add_child(_color_swatch(h))
+	var locked := _locked(h)
+	head.add_child(_color_chip(h) if locked else _color_swatch(h))
 
 	# 名前と一言は**1枚の紙で一緒に書く**。同じ人のことなので、鉛筆も1人に1つ。
 	var nm := String(h["name"])
 	head.add_child(UIKit.read_only(nm, UIKit.FS_SUB, Color(h["color"]).darkened(0.42)))
 	head.add_child(UIKit.read_only(String(h["quirk"]), UIKit.FS_NOTE, UIKit.TEXT_DIM))
 
-	if _can_delete():
+	if locked or _can_delete():
 		var mid := Control.new()
 		mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(mid)
-		if Schema.villagers.size() > 1:
+		if not locked:
 			UIKit.icon_button(head, "✕", "%s を消す" % nm,
 				_del_villager.bind(hid), 30, UIKit.ROW_H, UIKit.FS_SUB)
 	else:
@@ -462,6 +491,11 @@ func _build_person(h: Dictionary) -> void:
 			UIKit.hairline(rows)
 		first = false
 		var key := String(a[0])
+		# もう村に居る人の性格は、見る側と同じ読むだけの積み木
+		if locked:
+			UIKit.pole_row(UIKit.row_pad(rows), String(a[2]), String(a[3]),
+				float(h["axes"].get(key, 0.5)))
+			continue
 		UIKit.pole_slider(UIKit.row_pad(rows), String(a[2]), String(a[3]),
 			float(h["axes"].get(key, 0.5)),
 			func(x: float) -> void: h["axes"][key] = x)
@@ -486,6 +520,19 @@ func _color_swatch(h: Dictionary) -> Button:
 		h["color"] = Schema.next_color(Color(h["color"]))
 		paint.call(Color(h["color"])))
 	return b
+
+
+## 押せない色の札。もう村に居る人の色は、世界の上での見分けなので動かさない
+func _color_chip(h: Dictionary) -> Control:
+	var p := Panel.new()
+	p.custom_minimum_size = Vector2(UIKit.ROW_H, UIKit.ROW_H)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(h["color"])
+	sb.set_corner_radius_all(5)
+	sb.border_color = Color(0.46, 0.33, 0.21, 0.45)
+	sb.set_border_width_all(1)
+	p.add_theme_stylebox_override("panel", sb)
+	return p
 
 
 func _add_villager() -> void:

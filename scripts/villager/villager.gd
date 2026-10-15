@@ -472,6 +472,8 @@ func _complete_action() -> void:
 
 	# 使うのは空振りすることがあり（手に無かった・建物が無くなっていた）、
 	# 作るのは払えないことがある。実際に起きたときだけ世界の上に見せる。
+	if JevBench.active:
+		JevBench.closed(target if kind == "talk" else kind, done, "" if done else _miss)
 	if done:
 		say(kind, target)
 		EventLog.mind(vname, "した：%s" % action_label())

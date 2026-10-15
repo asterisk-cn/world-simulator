@@ -630,6 +630,10 @@ func _on_night(_day: int) -> void:
 func _open_night() -> void:
 	if not started or _ending or _night:
 		return
+	# ヘッドレス観察（`--autostart`）では書き足す人がいないので、紙を開かずに朝へ進む。
+	# 止めるとベンチの村が1日目の夜で止まったままになる
+	if OS.get_cmdline_user_args().has("--autostart"):
+		return
 	_night = true
 	_starting = false
 	SimClock.paused = true

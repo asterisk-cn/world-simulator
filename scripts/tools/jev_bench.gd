@@ -298,7 +298,7 @@ func _miss_table(cs: Array) -> PackedStringArray:
 
 
 ## 空振りの文から、頭の人や物の名前を落とした形（名前の後ろは半角の空き）。
-## 「ミナ を追ったが、見失った」→「を追ったが、見失った」
+## 「ミナ のところへ着いたが、もう間合いに居なかった」→「のところへ着いたが、もう間合いに居なかった」
 static func _why_key(why: String) -> String:
 	var at := why.find(" ")
 	return why.substr(at + 1) if at >= 0 else why

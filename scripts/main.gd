@@ -631,8 +631,10 @@ func _open_night() -> void:
 	if not started or _ending or _night:
 		return
 	# ヘッドレス観察（`--autostart`）では書き足す人がいないので、紙を開かずに朝へ進む。
-	# 止めるとベンチの村が1日目の夜で止まったままになる
+	# 止めるとベンチの村が1日目の夜で止まったままになる。
+	# 遊ぶときと同じく夜は回さない——回すと、遊びでは起きない夜の手まで数えてしまう
 	if OS.get_cmdline_user_args().has("--autostart"):
+		SimClock.skip_to_morning()
 		return
 	_night = true
 	_starting = false
@@ -686,7 +688,7 @@ func _night_burn() -> void:
 	tw.tween_callback(func() -> void: _burning = true)
 
 
-## 夜の紙が焼け切った。書き足された人が現れ、時間が動き出す
+## 夜の紙が焼け切った。書き足された人が現れ、朝から時間が動き出す
 func _morning_after() -> void:
 	_night = false
 	_starting = false
@@ -696,6 +698,7 @@ func _morning_after() -> void:
 			# 村の記録には載せない（記録は建物・貼り紙・会話の4種だけ、#24）
 			v.visible = true
 	_waiting = []
+	SimClock.skip_to_morning()
 	SimClock.paused = false
 
 

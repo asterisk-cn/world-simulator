@@ -642,13 +642,17 @@ func _on_night(_day: int) -> void:
 func _open_night() -> void:
 	if not started or _ending or _night:
 		return
-	# 流れのシナリオでは、紙の代わりにファイルの書き足しを入れる（無ければ朝へ進む）
+	# 流れのシナリオでは、紙の代わりにファイルの書き足しを入れる。
+	# 無ければ `--autostart` と同じく夜は回さずに朝へ進む
 	if flow != null:
-		flow.night(SimClock.day)
+		if not flow.night(SimClock.day):
+			SimClock.skip_to_morning()
 		return
 	# ヘッドレス観察（`--autostart`）では書き足す人がいないので、紙を開かずに朝へ進む。
-	# 止めるとベンチの村が1日目の夜で止まったままになる
+	# 止めるとベンチの村が1日目の夜で止まったままになる。
+	# 遊ぶときと同じく夜は回さない——回すと、遊びでは起きない夜の手まで数えてしまう
 	if OS.get_cmdline_user_args().has("--autostart"):
+		SimClock.skip_to_morning()
 		return
 	_night = true
 	_starting = false
@@ -703,7 +707,7 @@ func _night_burn() -> void:
 
 
 ## 流れのシナリオの夜（`FlowRun.night`）。**夜の紙と同じ順で、絵を通さずに**入れる——
-## 書き足した物の手に入れかたを Jev に訊き、書き足した人を置いて考えさせ、固めて、時間を動かす。
+## 書き足した物の手に入れかたを Jev に訊き、書き足した人を置いて考えさせ、固めて、朝から時間を動かす。
 ## `done` は手に入れかたが組めたかを受ける
 func night_quiet(done: Callable) -> void:
 	SimClock.paused = true
@@ -714,13 +718,14 @@ func night_quiet(done: Callable) -> void:
 		for v in _spawn_villagers():
 			v.think_now()
 		Schema.fix_all()
+		SimClock.skip_to_morning()
 		SimClock.paused = false
 		done.call(true), true)
 	if not asked:
 		done.call(false)
 
 
-## 夜の紙が焼け切った。書き足された人が現れ、時間が動き出す
+## 夜の紙が焼け切った。書き足された人が現れ、朝から時間が動き出す
 func _morning_after() -> void:
 	_night = false
 	_starting = false
@@ -730,6 +735,7 @@ func _morning_after() -> void:
 			# 村の記録には載せない（記録は建物・貼り紙・会話の4種だけ、#24）
 			v.visible = true
 	_waiting = []
+	SimClock.skip_to_morning()
 	SimClock.paused = false
 
 

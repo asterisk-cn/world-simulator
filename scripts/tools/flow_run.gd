@@ -11,7 +11,7 @@ extends Node
 ## 始めるのは `--autostart` と同じ道（`main._autostart`）で、`Schema.load_defaults` の代わりに
 ## ファイルから組む。夜は、書き足しがあれば**夜の紙と同じ順で絵を通さずに**入れる
 ## （`main.night_quiet`）：書き足した物の手に入れかたを Jev に訊く → 書き足した人を置いて考えさせる
-## → 固める → 時間を動かす。書き足しの無い夜は、そのまま朝へ進む。
+## → 固める → 朝から時間を動かす。書き足しの無い夜も、遊ぶときと同じく夜は回さずに朝へ進む。
 ##
 ## 終わりは**村の中の日**で決める（`終わり.日` の次の日になったら止める）。実時間の秒では数えない——
 ## 夜に Jev を待って止まっているあいだも秒は進むので。
@@ -290,11 +290,12 @@ static func _check_night(part, taken: Dictionary) -> Array:
 # 夜
 # ---------------------------------------------------------------------------
 
-## `main._open_night` から呼ばれる。書き足しがあれば入れ、無ければ何もしない（朝へ進む）
-func night(day: int) -> void:
+## `main._open_night` から呼ばれる。書き足しがあれば入れて true（朝へ進めるのは `main.night_quiet`）。
+## 無ければ false で、呼んだ側がそのまま朝へ進める
+func night(day: int) -> bool:
 	var part = _d.get("夜", {}).get(str(day), null)
 	if part == null or _phase != "live":
-		return
+		return false
 	var errors: Array = []
 	var said := _add_words(part, errors, "夜 %d" % day)
 	_added[day] = said
@@ -302,6 +303,7 @@ func night(day: int) -> void:
 	main.night_quiet(func(ok: bool) -> void:
 		if not ok:
 			_night_failed = "%d日目の夜：Jev から手に入れかたが返らない" % day)
+	return true
 
 
 # ---------------------------------------------------------------------------

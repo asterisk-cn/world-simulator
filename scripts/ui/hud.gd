@@ -33,6 +33,9 @@ var _win_btns := {}
 const BAR_PAD := 14
 const BAR_ROW_H := 27
 
+## 村の記録の上端を溶かす高さ。切れた行がちょうど隠れるくらい
+const TOP_HEM_H := 30.0
+
 ## 速さは3段。「1x 2x 4x 8x 16x 32x」の6連は再生プレイヤーの記号で、
 ## 画面の上端に常駐すると、そこだけ動画編集ソフトになる。
 const SPEEDS := [1.0, 4.0, 16.0]
@@ -263,17 +266,39 @@ func _build_log() -> void:
 	add_child(panel)
 
 	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", UIKit.GAP_S)
 	UIKit.body_of(panel).add_child(box)
 	box.add_child(UIKit.label("村の記録", UIKit.FS_NOTE, Color(0.34, 0.28, 0.20)))
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true
 	_log.scroll_following = true
-	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_log.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_log.clip_contents = true
 	_log.add_theme_font_size_override("normal_font_size", UIKit.FS_BODY)
 	# 下線は「ここには行き先がある」の印。全行に付けないので飾りにならない。
 	_log.meta_underlined = true
-	box.add_child(_log)
+	# 記録は下へ送り続けるので、一番上の行はたいてい途中で切れている。
+	# 切れたまま見出しの真下に並ぶと、見出しに重なって見えた。上端を紙へ溶かす
+	var holder := Control.new()
+	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(holder)
+	holder.add_child(_log)
+	var hem := HemFade.new()
+	hem.setup(UIKit.BG, UIKit.grain_texture())
+	hem.anchor_right = 1.0
+	hem.offset_bottom = TOP_HEM_H
+	hem.pivot_offset = Vector2(0, TOP_HEM_H / 2.0)
+	hem.scale = Vector2(1, -1)
+	holder.add_child(hem)
+	# 溶かすのは上に続きがあるあいだだけ
+	var bar := _log.get_v_scroll_bar()
+	var follow := func() -> void:
+		hem.modulate.a = clampf(bar.value / 20.0, 0.0, 1.0)
+	bar.value_changed.connect(func(_v: float) -> void: follow.call())
+	bar.changed.connect(follow)
+	follow.call()
 	_log.meta_clicked.connect(_on_log_meta)
 	_log.meta_hover_started.connect(_on_meta_hover)
 	_log.meta_hover_ended.connect(_on_meta_unhover)

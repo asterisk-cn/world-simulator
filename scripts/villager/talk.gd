@@ -76,6 +76,19 @@ static func _one_line(text: String) -> String:
 	for pair in [["「", "」"], ["\"", "\""], ["'", "'"]]:
 		if s.begins_with(String(pair[0])) and s.ends_with(String(pair[1])):
 			s = s.substr(1, s.length() - 2).strip_edges()
+	if _is_silence(s):
+		return ""
 	if s.length() > MAX_CHARS:
 		s = s.substr(0, MAX_CHARS)
 	return s
+
+
+## 黙ることを、言葉で返してくることがある。「黙る」という語そのものや
+## 「...」だけの行は、台詞ではなく沈黙として扱う（14日の村で「黙る」が2回、「...」だけが6回出た）
+const _SILENT_WORDS := ["黙る", "黙っている", "沈黙", "無言", "何も言わない", "空"]
+
+static func _is_silence(s: String) -> bool:
+	var core := s
+	for c in ["(", ")", "（", "）", "[", "]", "［", "］", "*", ".", "。", "…", "・", "、", "‥", " ", "　", "-", "ー", "―"]:
+		core = core.replace(c, "")
+	return core == "" or _SILENT_WORDS.has(core)

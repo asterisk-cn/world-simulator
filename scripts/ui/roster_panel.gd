@@ -14,9 +14,13 @@ const COL_W := 54
 ## 持っていないことを示す薄さ。差だけが読めるようにする。
 const EMPTY := Color(0.30, 0.22, 0.14, 0.22)
 
+## 窓の下に空けておく高さ。村の記録（下から190px）に掛からないところまで
+const BOTTOM_ROOM := 202.0
+
 var world = null
 
 var _rows: VBoxContainer
+var _scroll: ScrollContainer
 var _head_row: HBoxContainer
 var _item_count := -1
 var _summary: Label
@@ -41,14 +45,14 @@ func _ready() -> void:
 	_build_head()
 	UIKit.hairline(root)
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(_scroll)
 	_rows = VBoxContainer.new()
 	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rows.add_theme_constant_override("separation", UIKit.GAP_S)
-	scroll.add_child(_rows)
+	_scroll.add_child(_rows)
 
 
 func _close() -> void:
@@ -109,6 +113,20 @@ func _rebuild() -> void:
 			cell.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			cell.tooltip_text = Schema.item_label(String(item))
 			have.add_child(cell)
+	_fit()
+
+
+## 窓の高さを人数に合わせる。決めた高さのままだと8人目から巻物の下に隠れ、
+## 10人いると3人が見えなかった。下は村の記録の上で止め、それより多ければ巻物にする
+func _fit() -> void:
+	var n: int = world.villagers.size()
+	var want := n * (UIKit.ROW_H + UIKit.GAP_S)
+	var room := get_viewport_rect().size.y - BOTTOM_ROOM - global_position.y \
+		- (size.y - _scroll.size.y)
+	_scroll.custom_minimum_size.y = clampf(float(want), float(UIKit.ROW_H), maxf(room, UIKit.ROW_H))
+	var w := size.x
+	reset_size()
+	size.x = w
 
 
 func _refresh() -> void:

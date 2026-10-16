@@ -555,19 +555,19 @@ func _do_make(target: String) -> bool:
 	var inputs := Schema.inputs_of(target)
 	for x in inputs:
 		if item_count(String(x)) < int(inputs[x]):
-			_miss = "%s を手に入れようとしたが、%sが足りなかった" % [name_text,
+			_miss = "%sを手に入れようとしたが、%sが足りなかった" % [name_text,
 				Schema.item_label(String(x))]
 			return false
 	var place := Schema.place_of(target)
 	if place != "":
 		var at = current_action.get("obj", null)
 		if at == null or not is_instance_valid(at):
-			_miss = "%s で %s を手に入れようとしたが、もう無かった" % [
+			_miss = "%sで%sを手に入れようとしたが、もう無かった" % [
 				Schema.place_label(place), name_text]
 			return false
 	var c: Vector2i = current_action.get("build_cell", Vector2i(-1, -1))
 	if building and (c.x < 0 or not world._can_build_at(c)):
-		_miss = "%s を建てようとしたが、置ける場所が無かった" % name_text
+		_miss = "%sを建てようとしたが、置ける場所が無かった" % name_text
 		return false
 
 	var moved := {}
@@ -594,12 +594,12 @@ func _do_make(target: String) -> bool:
 func _do_use(target: String, obj) -> bool:
 	var where := String(current_action.get("where", "hand"))
 	if where == "building" and (obj == null or not is_instance_valid(obj)):
-		_miss = "%s へ着いたが、もう無かった" % Schema.target_label("use", target)
+		_miss = "%sへ着いたが、もう無かった" % Schema.target_label("use", target)
 		return false
 	var moved := _apply(current_action.get("move", {}))
 	# 建物に入るように、持ち物が何も動かない使い方もある。それは空振りではない。
 	if where != "building" and moved.is_empty():
-		_miss = "%s を使おうとしたが、手に無かった" % Schema.item_label(target)
+		_miss = "%sを使おうとしたが、手に無かった" % Schema.item_label(target)
 		return false
 	memory.record("使用：%s%s" % [action_label(), _moved_text(moved, target)])
 	return true
@@ -616,7 +616,7 @@ func _do_talk(other) -> bool:
 	var way = Schema.target_def("talk", "talk")
 	var reach: float = float(way["reach"]) if way != null else 2.2
 	if cell.distance_to(other.cell) > reach:
-		_miss = "%s のところへ着いたが、もう間合いに居なかった" % other.vname
+		_miss = "%sのところへ着いたが、もう間合いに居なかった" % other.vname
 		return false
 	# 手と一緒に「言うこと」が返っていればそれが1行目（文章の相手に訊いたとき）。
 	# 無ければ `Talk` が1行目から訊く。世界が運ぶのは言葉そのものだけ

@@ -49,6 +49,19 @@ func _process(delta: float) -> void:
 			morning_started.emit(day)
 
 
+## 夜を飛ばして次の日の朝にする。世界が始まるときと同じ 8:00 から。
+## 夜の紙で「続ける」を押したあと、20:00〜翌6:00 を回しても
+## 暗いだけで昼と同じことが起きていた（村人は寝も休みもせず話し続ける、#56）
+func skip_to_morning() -> void:
+	if time_of_day >= _night_start():
+		day += 1
+		day_changed.emit(day)
+	time_of_day = STARTS_AT
+	if is_night:
+		is_night = false
+		morning_started.emit(day)
+
+
 ## 夜が始まる位置を 0..1 で。設定は時計と同じ「時刻」で持っているので、
 ## いくつにすれば何時になるのかが設定画面から読める。
 func _night_start() -> float:

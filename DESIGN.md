@@ -683,6 +683,9 @@ scripts/
   tools/
 	jev_bench.gd     村を動かして Jev の答えを数える（検証用）
 	jev_scenarios.gd 決めた姿を Jev に投げて数える（検証用）
+	flow_run.gd      流れのシナリオ（顔ぶれと夜ごとの書き足し）で村を通しで動かす（検証用）
+	expect.gd        シナリオの「期待」を判定する（単発と流れで共通）
+	check_run.gd     実機テスト。単発と流れを別のプロセスで順に流して判定する
   main.gd            セットアップ → 開始 → 進行 → 夜の流れ
 ```
 

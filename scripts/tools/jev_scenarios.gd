@@ -2,7 +2,7 @@ class_name JevScenarios
 extends Node
 ## **決めた姿を Jev に投げて数える**（検証用）。村は動かさない。
 ##
-##   godot --headless --path . -- --jev-scenarios [--repeat=30] [--fixed-order] [--only=名前]
+##   godot --headless --path . -- --jev-scenarios [--repeat=30] [--fixed-order] [--only=名前] [--judge]
 ##
 ## シナリオは `res://bench/scenarios/*.json`。1つの姿（感情・相手・持ち物・
 ## 今感じていること・今日あったこと…）と手の一覧を書いておくと、
@@ -14,12 +14,16 @@ extends Node
 ## そのときは**まったく同じ問い**が R 回飛ぶ（答えが揺れるかどうかを見る）。
 ##
 ## 結果は標準出力と `user://jev_bench/`。投げた姿もそのまま .md に載せる。
+##
+## シナリオに `期待` があれば判定して表に載せる（`Expect`）。`--judge` を付けると、
+## 失敗が1つでもあれば終わりのコードを1にし、判定を `user://jev_bench/check/` にも残す。
 
 const DIR := "res://bench/scenarios"
 
 var repeat := 30
 var fixed := false
 var only := ""
+var check := false
 
 var _sc: Array = []      ## [{name, aim, state, criteria(並びどおりの文), keys, persona}]
 var _got: Array = []     ## [[record…] シナリオごと]
@@ -36,6 +40,8 @@ func _ready() -> void:
 			only = s.get_slice("=", 1)
 		elif s == "--fixed-order":
 			fixed = true
+		elif s == "--judge":
+			check = true
 	if not AI.can_decide():
 		print("[シナリオ] Jev の鍵が無い（TYPESAFE_API_KEY か res://.typesafe-key）")
 		get_tree().quit(1)
@@ -170,7 +176,7 @@ func _build(d: Dictionary, file: String) -> Dictionary:
 	return {"name": String(d.get("名前", file)), "file": file,
 		"aim": String(d.get("ねらい", "")), "state": state,
 		"lines": lines, "keys": keys, "brain": brain, "persona": p,
-		"self": feel, "pairs": others}
+		"self": feel, "pairs": others, "expect": d.get("期待", [])}
 
 
 ## 「木を手に入れる（木 12, 5）」→「木を手に入れる（木）」。座標だけ落とす
@@ -238,8 +244,11 @@ func _finish() -> void:
 		% [_sc.size(), repeat, "固定" if fixed else "毎回混ぜる", AI.sent, AI.failed])
 	out.append("- 手の選び方は%s" % ("確率に従って引く" if Brain.sample else "いちばん高いもの"))
 	out.append("")
-	out.append("| シナリオ | 答え | いちばん多い手 | その割合 | 出た手の種類 | 先頭を選んだ |")
-	out.append("|---|---:|---|---:|---:|---:|")
+	var verdicts: Array = []
+	for si in range(_sc.size()):
+		verdicts.append(_judge(si))
+	out.append("| シナリオ | 期待 | 答え | いちばん多い手 | その割合 | 出た手の種類 | 先頭を選んだ |")
+	out.append("|---|---|---:|---|---:|---:|---:|")
 	for si in range(_sc.size()):
 		var rs: Array = _got[si]
 		var acts := _count(rs)
@@ -248,12 +257,13 @@ func _finish() -> void:
 		for r in rs:
 			if int(r["pick"]) == 0:
 				first += 1
-		out.append("| %s | %d | %s | %s | %d | %s |" % [_sc[si]["name"], rs.size(), top,
+		out.append("| %s | %s | %d | %s | %s | %d | %s |" % [_sc[si]["name"],
+			Expect.worst(verdicts[si]) if not verdicts[si].is_empty() else "-", rs.size(), top,
 			JevBench._pct(int(acts.get(top, 0)), rs.size()), acts.size(),
 			JevBench._pct(first, rs.size())])
 	for si in range(_sc.size()):
 		out.append("")
-		out.append_array(_one(si))
+		out.append_array(_one(si, verdicts[si]))
 	var md := "\n".join(out)
 	print("\n" + md)
 
@@ -274,7 +284,51 @@ func _finish() -> void:
 		j.store_string(JSON.stringify(raw, "\t"))
 		j.close()
 	print("[シナリオ] 書き出した：%s/scenarios-%s.md" % [ProjectSettings.globalize_path(dir), stamp])
-	get_tree().quit()
+	var failed := false
+	if check:
+		var rows: Array = []
+		for si in range(_sc.size()):
+			if verdicts[si].is_empty():
+				continue
+			var w := Expect.worst(verdicts[si])
+			failed = failed or w == Expect.FAIL
+			rows.append({"name": _sc[si]["name"], "verdict": w, "rows": verdicts[si]})
+		Expect.save_check("scenarios", rows, "%s/scenarios-%s.md" % [dir, stamp])
+	get_tree().quit(1 if failed else 0)
+
+
+## 期待を判定する。動きは、答えた段階をゲームと同じ写し方で寄せたときにいくつ動くか
+func _judge(si: int) -> Array:
+	var sc: Dictionary = _sc[si]
+	if sc["expect"].is_empty():
+		return []
+	var p = sc["persona"]
+	var move_of := func(r: Dictionary, kind: String, key: String):
+		var got: Dictionary = r["scores"][key] if kind == "self" else r["pair_by"][key]
+		var id := ""
+		var was := 0.0
+		if kind == "self":
+			id = Schema.self_param_by_label(key)
+			if id == "":
+				return null
+			was = p.params.get_v(id)
+		else:
+			var at := key.find(" の ")
+			var who := key.substr(0, at)
+			id = Schema.pair_param_by_label(key.substr(at + 3))
+			if id == "":
+				return null
+			for oid in p.names:
+				if p.names[oid] == who:
+					was = p.pairs[oid].get_v(id)
+		var t := float(got["level"]) / float(Brain.LEVELS.size() - 1)
+		var to := Schema.param_min(id) + (Schema.param_max(id) - Schema.param_min(id)) * t
+		return (to - was) * clampf(float(got["conf"]), 0.0, 1.0)
+	var sum := Expect.summarize(_got[si], move_of)
+	var out: Array = []
+	for e in sc["expect"]:
+		out.append(Expect.judge(e, sum))
+	return out
 
 
 func _count(rs: Array) -> Dictionary:
@@ -293,7 +347,7 @@ static func _top(acts: Dictionary) -> String:
 	return top
 
 
-func _one(si: int) -> PackedStringArray:
+func _one(si: int, verdicts: Array) -> PackedStringArray:
 	var sc: Dictionary = _sc[si]
 	var rs: Array = _got[si]
 	var n := rs.size()
@@ -303,6 +357,9 @@ func _one(si: int) -> PackedStringArray:
 		out.append("")
 		out.append("ねらい：%s" % sc["aim"])
 	out.append("")
+	if not verdicts.is_empty():
+		out.append_array(Expect.table(verdicts))
+		out.append("")
 
 	# 手。書いた順に、選ばれなかったものも出す
 	var chosen := {}

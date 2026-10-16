@@ -98,6 +98,7 @@ static func _now() -> float:
 static func heard(v, ans: Dictionary, cands: Array, before: Dictionary) -> void:
 	var r := _read(ans, _offered(v, cands), v._brain._criteria(cands).values())
 	r["t"] = _now() - _t0
+	r["day"] = SimClock.day
 	r["who"] = String(v.vname)
 	# 選んだ手の行き先までの距離（どれだけ遠くを選ぶか、#16）
 	var pick := int(r["pick"])

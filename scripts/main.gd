@@ -34,6 +34,9 @@ var _next_id := 1
 ## 言葉が決まった後の土地を作ったか。作り直しは一度だけ
 var _land_made := false
 
+## 流れのシナリオ（`tools/flow_run.gd`）。`--flow=名前` のときだけ在る
+var flow: FlowRun = null
+
 
 func _ready() -> void:
 	randomize()
@@ -67,6 +70,12 @@ func _ready() -> void:
 		Schema.load_defaults()
 		wake = 1.0
 		_autostart.call_deferred()
+	# 流れのシナリオを通しで動かす。顔ぶれはファイルから組み、始めるのも流れが呼ぶ
+	for a in OS.get_cmdline_user_args():
+		if String(a).begins_with("--flow="):
+			wake = 1.0
+			flow = FlowRun.new(world, self, String(a).get_slice("=", 1))
+			add_child(flow)
 	# 確率に従って引くのをやめ、いちばん高いものを取る（比べる用、`Brain.sample`）
 	Brain.sample = not OS.get_cmdline_user_args().has("--jev-argmax")
 	# Jev の答えを数える（`tools/jev_bench.gd`）。`--autostart` と一緒に使う
@@ -75,6 +84,9 @@ func _ready() -> void:
 	# 決めた姿を投げる（`tools/jev_scenarios.gd`）。村は始めない
 	if OS.get_cmdline_user_args().has("--jev-scenarios"):
 		add_child(JevScenarios.new())
+	# 実機テスト。単発と流れを別のプロセスで順に流し、期待を判定する（`tools/check_run.gd`）
+	if OS.get_cmdline_user_args().has("--check"):
+		add_child(CheckRun.new())
 
 
 
@@ -630,6 +642,10 @@ func _on_night(_day: int) -> void:
 func _open_night() -> void:
 	if not started or _ending or _night:
 		return
+	# 流れのシナリオでは、紙の代わりにファイルの書き足しを入れる（無ければ朝へ進む）
+	if flow != null:
+		flow.night(SimClock.day)
+		return
 	# ヘッドレス観察（`--autostart`）では書き足す人がいないので、紙を開かずに朝へ進む。
 	# 止めるとベンチの村が1日目の夜で止まったままになる
 	if OS.get_cmdline_user_args().has("--autostart"):
@@ -684,6 +700,24 @@ func _night_burn() -> void:
 	var tw := create_tween()
 	tw.tween_property(burn_paper, "burn", 0.03, 0.35).set_trans(Tween.TRANS_SINE)
 	tw.tween_callback(func() -> void: _burning = true)
+
+
+## 流れのシナリオの夜（`FlowRun.night`）。**夜の紙と同じ順で、絵を通さずに**入れる——
+## 書き足した物の手に入れかたを Jev に訊き、書き足した人を置いて考えさせ、固めて、時間を動かす。
+## `done` は手に入れかたが組めたかを受ける
+func night_quiet(done: Callable) -> void:
+	SimClock.paused = true
+	var asked := TechTree.grow(func(ok: bool) -> void:
+		if not ok:
+			done.call(false)
+			return
+		for v in _spawn_villagers():
+			v.think_now()
+		Schema.fix_all()
+		SimClock.paused = false
+		done.call(true), true)
+	if not asked:
+		done.call(false)
 
 
 ## 夜の紙が焼け切った。書き足された人が現れ、時間が動き出す

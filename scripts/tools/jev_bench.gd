@@ -31,6 +31,8 @@ var world
 var secs := 90.0
 var repeat := 0
 var speed := 1.0
+## 書き出す名前に足す。並べて走らせたときに取り違えないように
+var tag := ""
 
 var _phase := "wait"
 var _clock := 0.0
@@ -53,6 +55,8 @@ func _ready() -> void:
 			repeat = int(s.get_slice("=", 1))
 		elif s.begins_with("--speed="):
 			speed = float(s.get_slice("=", 1))
+		elif s.begins_with("--tag="):
+			tag = s.get_slice("=", 1)
 	if not AI.can_decide():
 		print("[ベンチ] Jev の鍵が無い（TYPESAFE_API_KEY か res://.typesafe-key）")
 		get_tree().quit(1)
@@ -103,6 +107,8 @@ static func heard(v, ans: Dictionary, cands: Array, before: Dictionary) -> void:
 	var pick := int(r["pick"])
 	if pick >= 0 and pick < cands.size():
 		r["dist"] = v.cell.distance_to(Vector2(cands[pick]["target_cell"]))
+	# 前に考えてから増えた行（出来事のあとで値がどう動いたかを見る、#7）
+	r["fresh"] = v._brain.asked_fresh.duplicate()
 	for id in before:
 		var label := _self_label(String(id))
 		if r["scores"].has(label):
@@ -228,6 +234,8 @@ func _finish() -> void:
 	var dir := "user://jev_bench"
 	DirAccess.make_dir_recursive_absolute(dir)
 	var stamp := Time.get_datetime_string_from_system().replace(":", "").replace("-", "")
+	if tag != "":
+		stamp += "_" + tag
 	var f := FileAccess.open("%s/%s.md" % [dir, stamp], FileAccess.WRITE)
 	if f != null:
 		f.store_string(md)
@@ -416,6 +424,7 @@ func _pos_table(rs: Array) -> PackedStringArray:
 func _score_table(rs: Array) -> PackedStringArray:
 	var out := PackedStringArray()
 	out.append("段階は %s" % " / ".join(Brain.LEVELS))
+	out.append("（2回めからは %s。分布は両方を混ぜている）" % " / ".join(Brain.MOVES))
 	out.append("")
 	out.append("| 言葉 | 答え | 段階の分布 | 確信 | 1回の動き（平均の大きさ） | 値の最小〜最大 |")
 	out.append("|---|---:|---|---:|---:|---|")

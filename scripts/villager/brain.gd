@@ -157,12 +157,25 @@ func _pick(c: Dictionary) -> Dictionary:
 const LEVELS := ["まったくそう思わない", "あまりそう思わない", "どちらともいえない",
 	"ややそう思う", "とてもそう思う"]
 
+## **2回めからは、前に考えたときからの動きで訊く**（#7）。
+## 値を見せずに段階で訊くと、手がかりが出来事だけになって真ん中か「やや」に寄り、
+## 何も起きていない相手の値までずれた（村の 600秒で、じぶんの確信 0.10〜0.27）。
+## 動きなら、いまの値を知らなくても答えられ、何も起きなければ「変わらない」が返る。
+## 写し方は「増えた」が端まで、「やや」がその半分——**残りの幅に対して**寄せるので、
+## 世界が「1回でいくつ動く」を決めずに済む。
+## そのことばを初めて訊くときは「前」が無いので、段階で訊く
+const MOVES := ["減った", "やや減った", "変わらない", "やや増えた", "増えた"]
+
+var _asked_once := {}   ## 一度でも訊いた言葉（「前」があるか）。"self:id" / "pair:相手:id"
+## いま訊いている問いの★の行（ベンチが数える用）
+var asked_fresh: Array = []
+
 
 ## 型のついた相手（Jev）に次の手を訊く。受け付けられたら true（答えは後から `Villager.begin()` へ）。
 ##
 ## 骨は「一覧から1つ選ぶ」なので、文章を作らない相手のほうが速い（実測 0.5秒 / 毎秒13.5件）。
-## 値も**段階**で訊く（`LEVELS`）——増減の申告だと幅の読み方が本人任せになり、
-## 100では薄すぎ、10では張り付いた。段階なら世界が幅に写すだけで済む。
+## 値も**段階**で訊く（初めは `LEVELS`、2回めからは動きの `MOVES`）——数で増減を申告させると
+## 幅の読み方が本人任せになり、100では薄すぎ、10では張り付いた。段階なら世界が幅に写すだけで済む。
 ## 言葉（していること・言うこと）はここでは訊かない。それは文章の相手の仕事で、
 ## 手が決まったあとに訊く（話す1行目は `Talk`、貼る文は `Post`）
 func _ask_jev(cands: Array) -> bool:
@@ -173,6 +186,7 @@ func _ask_jev(cands: Array) -> bool:
 	# **紙を作ってから位置を進める。** 先に進めると、印の付く行（前に考えてから
 	# 起きたこと）がいつも空になり、前に考えた時刻もいまと同じになる
 	var said := _state(asked)
+	asked_fresh = _fresh_rows()
 	_heard = v.memory.episodes.size()
 	_thought_at = SimClock.clock_text()
 	var take := func(ans) -> void:
@@ -181,7 +195,7 @@ func _ask_jev(cands: Array) -> bool:
 		v.asking = false
 		if typeof(ans) != TYPE_DICTIONARY:
 			return
-		_read_jev(ans, asked)
+		_read_jev(ans, asked, qs)
 	v.asking = AI.decide(said, qs, take, v.id)
 	return v.asking
 
@@ -200,13 +214,21 @@ func jev_questions_for(criteria: Dictionary) -> Dictionary:
 		"instructions": "次にすることを1つ選ぶ",
 		"criteria": criteria,
 	}}
-	# 自分の中の言葉は、いまどのくらいかを段階で
+	# 自分の中の言葉は、前からどう動いたか（初めては、いまどのくらいか）を段階で
 	for d in Schema.self_params():
-		qs[String(d["label"])] = {
-			"type": "score",
-			"instructions": "いま、あなたは「%s」を感じている" % String(d["label"]),
-			"criteria": LEVELS,
-		}
+		var label := String(d["label"])
+		if _moves_for("self:%s" % String(d["id"])):
+			qs[label] = {
+				"type": "score",
+				"instructions": "前に考えたときから、あなたの「%s」は" % label,
+				"criteria": MOVES,
+			}
+		else:
+			qs[label] = {
+				"type": "score",
+				"instructions": "いま、あなたは「%s」を感じている" % label,
+				"criteria": LEVELS,
+			}
 	# **相手ごとの言葉も同じ一回で訊く。** 別便にすると、手を選んだときの
 	# 自分と、値を答えた自分が食い違う。会ったことのある相手ぶんだけ
 	# （紙の「知っている相手」に並んでいる顔ぶれと同じ）
@@ -215,17 +237,30 @@ func jev_questions_for(criteria: Dictionary) -> Dictionary:
 		if other == null:
 			continue
 		for d in Schema.pair_params():
+			var moves := _moves_for("pair:%d:%s" % [int(oid), String(d["id"])])
 			qs["%s の %s" % [String(other.vname), String(d["label"])]] = {
 				"type": "score",
-				"instructions": "いま、あなたは %s に「%s」を持っている"
+				"instructions": ("前に考えたときから、あなたが %s に持つ「%s」は" if moves
+					else "いま、あなたは %s に「%s」を持っている")
 					% [String(other.vname), String(d["label"])],
-				"criteria": LEVELS,
+				"criteria": MOVES if moves else LEVELS,
 			}
 	return qs
 
 
 ## 手を訊く問いの名前
 const ACT_KEY := "手"
+
+## その言葉を動きで訊くか。**一度訊いたことがあるときだけ**（初めては「前」が無い）
+func _moves_for(key: String) -> bool:
+	return _asked_once.has(key)
+
+
+## 前に考えてから増えた行。紙の★と同じ範囲（初めて考えるときは今日の全部）
+func _fresh_rows() -> Array:
+	var rows: Array = v.memory.episodes
+	var from: int = _heard if _thought_at != "" else 0
+	return rows.slice(clampi(from, 0, rows.size()))
 
 
 ## 一覧の行ごとの確率。Jev は選んだ1つと一緒に、
@@ -298,6 +333,13 @@ func _state(_cands: Array) -> String:
 func _seen() -> String:
 	var out := PackedStringArray()
 	out.append(Inner.of(v, _heard if _thought_at != "" else -1, true))
+	# **「使う」の但し書き。** Jev の手の名前は型と対象のまま（`_name_act`）なので、
+	# 木の実を食べても「木の実を使う」と書かれる。決めた姿では、食べた直後の空腹を
+	# 「変わらない」（確信 0.03）と答えた（#7）。何に使ったかは言わない——世界が言えるのは、
+	# 手の中のものは使うと身に取り込まれてなくなる、というところまで
+	out.append("")
+	out.append("# 言葉の但し書き")
+	out.append("「〜を使う」は、手の中のものなら、それを自分の身に使ったこと（食べ物なら食べた）。建物なら、そこに入って過ごしたこと")
 	# **前に考えた時刻を渡す。** 何も起きなくても時間は経っていて、
 	# それは世界が知っている事実。読んで何が動くかは本人が決める
 	# （秒では尺度にならないので、世界の時計で渡す）
@@ -307,8 +349,8 @@ func _seen() -> String:
 	return "\n".join(out)
 
 
-## 型のついた答えを読む。**選んだ手**と、**いまの値**
-func _read_jev(ans: Dictionary, cands: Array) -> void:
+## 型のついた答えを読む。**選んだ手**と、**値の動き**（初めては、いまの値）
+func _read_jev(ans: Dictionary, cands: Array, qs: Dictionary = {}) -> void:
 	var before: Dictionary = v.params.values.duplicate()
 	var mine := {}
 	var theirs := {}
@@ -316,25 +358,28 @@ func _read_jev(ans: Dictionary, cands: Array) -> void:
 		var a = ans[key]
 		if typeof(a) != TYPE_DICTIONARY:
 			continue
+		# どの目盛りで訊いたか（段階か、動きか）。答えには載らないので、投げた問いから
+		var crit = qs.get(key, {}).get("criteria", [])
+		var moves: bool = typeof(crit) == TYPE_ARRAY and crit == MOVES
 		if String(a.get("type", "")) == "score":
 			# 「トウ の 好感」は相手ごとの言葉。名前で引いて、その人の欄に入れる
 			var pair := _pair_key(str(key))
 			if not pair.is_empty():
-				_blend_pair(theirs, pair, a)
+				_asked_once["pair:%d:%s" % [int(pair["who"]), String(pair["param"])]] = true
+				_blend_pair(theirs, pair, a, moves)
 				continue
 			# 0〜(段階-1) を、その言葉の幅に写すだけ。読み方は世界が決めない
 			var id := Schema.self_param_by_label(str(key))
 			if id == "":
 				continue
-			var t: float = float(a.get("score", 0.0)) / float(LEVELS.size() - 1)
-			var to: float = Schema.param_min(id) \
-				+ (Schema.param_max(id) - Schema.param_min(id)) * clampf(t, 0.0, 1.0)
+			_asked_once["self:%s" % id] = true
+			var was: float = v.params.get_v(id)
+			var to := _target(id, was, float(a.get("score", 0.0)), moves)
 			# **迷っているぶんは動かさない。** 毎回まるごと書き換えると、
 			# 答えの揺れがそのまま値の揺れになる。どれだけ確かかは
 			# 本人が一緒に答えているので（`confidence`）、その重みだけ寄せる——
 			# 世界が「このくらいで動くはず」と決めているのではない
 			var sure := clampf(float(a.get("confidence", 0.5)), 0.0, 1.0)
-			var was: float = v.params.get_v(id)
 			mine[id] = was + (to - was) * sure
 	if not mine.is_empty():
 		var moved := _levels_text(mine, true)
@@ -382,16 +427,27 @@ func _pair_key(key: String) -> Dictionary:
 	return {} if pid == "" else {"who": other.id, "param": pid}
 
 
+## 答えた段階が指す値。段階なら幅の上の位置、動きなら**残りの幅に対して**
+## 「増えた」は上の端、「やや増えた」はその半分（減るほうも同じ）
+func _target(id: String, was: float, score: float, moves: bool) -> float:
+	var lo := Schema.param_min(id)
+	var hi := Schema.param_max(id)
+	if not moves:
+		var t: float = score / float(LEVELS.size() - 1)
+		return lo + (hi - lo) * clampf(t, 0.0, 1.0)
+	var mid := float(MOVES.size() - 1) / 2.0
+	var m := clampf((score - mid) / mid, -1.0, 1.0)
+	return was + ((hi if m > 0.0 else lo) - was) * absf(m)
+
+
 ## 相手ごとの段階を幅に写して、確かなぶんだけ寄せる（自分の言葉と同じやり方）
-func _blend_pair(theirs: Dictionary, pair: Dictionary, a: Dictionary) -> void:
+func _blend_pair(theirs: Dictionary, pair: Dictionary, a: Dictionary, moves := false) -> void:
 	var pid := String(pair["param"])
 	var who := int(pair["who"])
-	var t: float = float(a.get("score", 0.0)) / float(LEVELS.size() - 1)
-	var to: float = Schema.param_min(pid) \
-		+ (Schema.param_max(pid) - Schema.param_min(pid)) * clampf(t, 0.0, 1.0)
 	var sure := clampf(float(a.get("confidence", 0.5)), 0.0, 1.0)
 	var pp = v.pair_peek(who)
 	var was: float = pp.get_v(pid) if pp != null else 0.0
+	var to := _target(pid, was, float(a.get("score", 0.0)), moves)
 	if not theirs.has(who):
 		theirs[who] = {}
 	theirs[who][pid] = was + (to - was) * sure

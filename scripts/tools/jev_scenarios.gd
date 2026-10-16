@@ -20,6 +20,8 @@ const DIR := "res://bench/scenarios"
 var repeat := 30
 var fixed := false
 var only := ""
+## 書き出す名前に足す。並べて走らせたときに取り違えないように
+var tag := ""
 
 var _sc: Array = []      ## [{name, aim, state, criteria(並びどおりの文), keys, persona}]
 var _got: Array = []     ## [[record…] シナリオごと]
@@ -36,6 +38,8 @@ func _ready() -> void:
 			only = s.get_slice("=", 1)
 		elif s == "--fixed-order":
 			fixed = true
+		elif s.begins_with("--tag="):
+			tag = s.get_slice("=", 1)
 	if not AI.can_decide():
 		print("[シナリオ] Jev の鍵が無い（TYPESAFE_API_KEY か res://.typesafe-key）")
 		get_tree().quit(1)
@@ -155,6 +159,13 @@ func _build(d: Dictionary, file: String) -> Dictionary:
 	var brain := Brain.new(p)
 	brain._heard = heard
 	brain._thought_at = String(d.get("前に考えたのは", ""))
+	# 前に考えたことがあるなら、どの言葉も一度訊いてある（2回めなので動きで訊く）
+	if brain._thought_at != "":
+		for dd in Schema.self_params():
+			brain._asked_once["self:%s" % String(dd["id"])] = true
+		for o in p.pairs:
+			for dd in Schema.pair_params():
+				brain._asked_once["pair:%d:%s" % [int(o), String(dd["id"])]] = true
 	var state: String = brain._state([])
 
 	var lines: Array = []
@@ -260,6 +271,8 @@ func _finish() -> void:
 	var dir := "user://jev_bench"
 	DirAccess.make_dir_recursive_absolute(dir)
 	var stamp := Time.get_datetime_string_from_system().replace(":", "").replace("-", "")
+	if tag != "":
+		stamp += "_" + tag
 	var f := FileAccess.open("%s/scenarios-%s.md" % [dir, stamp], FileAccess.WRITE)
 	if f != null:
 		f.store_string(md)
@@ -330,6 +343,11 @@ func _one(si: int) -> PackedStringArray:
 
 	# 自分の言葉。渡した値と、答えた段階をゲームと同じ写し方で寄せた先
 	var p = sc["persona"]
+	var qs: Dictionary = sc.get("questions", {})
+	var brain = sc["brain"]
+	if String(brain._thought_at) != "":
+		out.append("段階は %s" % " / ".join(Brain.MOVES))
+		out.append("")
 	out.append("| 自分の言葉 | 渡した値 | 段階の分布 | 確信 | 写した先（平均） |")
 	out.append("|---|---:|---|---:|---:|")
 	for d in Schema.self_params():
@@ -347,8 +365,7 @@ func _one(si: int) -> PackedStringArray:
 			m += 1
 			hist[clampi(int(s["level"]), 0, 4)] += 1
 			cs += float(s["conf"])
-			var t := float(s["level"]) / float(Brain.LEVELS.size() - 1)
-			var to := Schema.param_min(id) + (Schema.param_max(id) - Schema.param_min(id)) * t
+			var to: float = brain._target(id, was, float(s["level"]), _moves(qs, label))
 			to_sum += was + (to - was) * clampf(float(s["conf"]), 0.0, 1.0)
 		if m == 0:
 			continue
@@ -384,9 +401,7 @@ func _one(si: int) -> PackedStringArray:
 				m += 1
 				hist[clampi(int(s["level"]), 0, 4)] += 1
 				cs += float(s["conf"])
-				var t := float(s["level"]) / float(Brain.LEVELS.size() - 1)
-				var to := Schema.param_min(pid) \
-					+ (Schema.param_max(pid) - Schema.param_min(pid)) * t
+				var to: float = brain._target(pid, was, float(s["level"]), _moves(qs, String(k)))
 				to_sum += was + (to - was) * clampf(float(s["conf"]), 0.0, 1.0)
 			out.append("| %s | %.0f | %s | %.2f | %.1f |" % [k, was,
 				JevBench._hist_text(hist, m), cs / m, to_sum / m])
@@ -451,3 +466,9 @@ class Other:
 
 	func _init(n: String) -> void:
 		vname = n
+
+
+## その言葉を動きで訊いたか（投げた問いの目盛りで見る）
+static func _moves(qs: Dictionary, key: String) -> bool:
+	var crit = qs.get(key, {}).get("criteria", [])
+	return typeof(crit) == TYPE_ARRAY and crit == Brain.MOVES
